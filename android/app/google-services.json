@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "800500466642",
+    "project_id": "printingshop-7fd66",
+    "storage_bucket": "printingshop-7fd66.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:800500466642:android:d4fb5b41aac2ff8e16fe0b",
+        "android_client_info": {
+          "package_name": "com.example.printingshop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKO5ly6T-iDjwXs37_bOS6cZmjRoyh-os"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
