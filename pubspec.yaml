@@ -9,10 +9,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
-  firebase_core: ^3.12.1
-  firebase_auth: ^5.5.1
-  cloud_firestore: ^5.6.5
+  cloud_firestore: ^5.4.3
+  file_picker: ^8.1.2
+  firebase_core: ^3.15.2
+  firebase_storage: ^12.3.6
+  url_launcher: ^6.3.0
+  sqflite: ^2.3.3+1          # Local SQLite Database
+  path: ^1.9.0               # Path helper para sa local DB file
+  connectivity_plus: ^6.0.5  # Para ma-detect kung online o offline
 
 dev_dependencies:
   flutter_test:

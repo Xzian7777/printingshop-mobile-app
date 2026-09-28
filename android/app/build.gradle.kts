@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.printingshop"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -47,4 +47,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+subprojects {
+    afterEvaluate {
+        project.extensions.findByType(com.android.build.gradle.BaseExtension::class.java)?.apply {
+            compileSdkVersion(36)
+        }
+    }
 }

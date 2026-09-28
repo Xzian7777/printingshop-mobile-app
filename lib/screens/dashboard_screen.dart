@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'store_screen.dart';
+import 'place_order_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userEmail;
@@ -13,7 +15,6 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0;
-  int _adminSubTab = 0;
   String _statusFilter = 'All Active';
   String _selectedServiceCategory = 'All Services';
   bool _isListView = true;
@@ -22,7 +23,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool get _isAdmin => widget.userEmail.toLowerCase().contains('admin');
 
-  // Firestore reference sa eksaktong path ng Web System orders
   CollectionReference get _ordersRef => FirebaseFirestore.instance
       .collection('artifacts')
       .doc('printcraft-pro')
@@ -35,9 +35,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return val.toString().toLowerCase().replaceAll('-', '').replaceAll('_', '').replaceAll(' ', '').trim();
   }
 
-  // Helper para i-format ang Date & Time mula sa Firestore
   String _formatDateTime(dynamic rawDate) {
-    if (rawDate == null) return 'Sep 16, 2026 • 03:47 AM';
+    if (rawDate == null) return 'Sep 28, 2026 • 09:47 PM';
     if (rawDate is Timestamp) {
       final dt = rawDate.toDate();
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -129,7 +128,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_isAdmin) {
       switch (_currentNavIndex) {
         case 0:
-          return _buildAdminDashboard();
+          return _buildCustomerHomeTab();
         case 1:
           return const StoreScreen(isAdmin: true, userEmail: 'Admin');
         case 2:
@@ -137,7 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         case 3:
           return _buildCustomersAndProfileView();
         default:
-          return _buildAdminDashboard();
+          return _buildCustomerHomeTab();
       }
     } else {
       switch (_currentNavIndex) {
@@ -155,66 +154,196 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- ADMIN DASHBOARD ---
-  Widget _buildAdminDashboard() {
-    return Column(
-      children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+  // --- WEB-MATCHED HOMEPAGE TAB ---
+  Widget _buildCustomerHomeTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildAdminTabButton('Manage Orders', 0, Icons.list_alt_rounded),
-                _buildAdminTabButton('Customers & Profile', 1, Icons.people_rounded),
-                _buildAdminTabButton('Live Chat', 2, Icons.chat_rounded),
-                _buildAdminTabButton('Analytics', 3, Icons.analytics_rounded),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1F2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Kez C-Em Zek Printing Service Web System',
+                    style: TextStyle(color: Color(0xFFE11D48), fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Streamlined Printing Orders with Real-Time Tracking & RFID Rewards',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'A clean, unified web solution for modern print shops: instant file proofing, accurate price calculations, stage-by-stage order monitoring, customer-staff live chat, RFID loyalty tapping, and real-time paper stock level sensors.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => setState(() => _currentNavIndex = 2),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE11D48),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('View Orders →', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => setState(() => _currentNavIndex = 1),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        ),
+                        child: const Text('Store Supplies', style: TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
+          const SizedBox(height: 24),
+          const Text('OUR SERVICES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFE11D48), letterSpacing: 1.2)),
+          const SizedBox(height: 4),
+          const Text('Everything your business needs printed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+          const Text('Pick a service to see options and pricing.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.85,
+            children: [
+              _buildWebServiceCard('Standard Document Print', 'Short, Long, A4 paper in Black & White or Full Color.', 'Starts at ₱3.00 / page', Icons.description_rounded, const Color(0xFFFFF1F2), const Color(0xFFE11D48)),
+              _buildWebServiceCard('PVC ID & Badge Printing', 'Durable waterproof PVC cards for school or work IDs.', 'Starts at ₱50.00 / card', Icons.badge_rounded, const Color(0xFFFEF3C7), const Color(0xFFD97706)),
+              _buildWebServiceCard('Sticker & Label Printing', 'Glossy, Matte, or Vinyl die-cut stickers for packaging.', 'Starts at ₱45.00 / sheet', Icons.auto_awesome_rounded, const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+              _buildWebServiceCard('Store & Office Supplies', 'Notebooks, pens, clear books, folders, and paper packs.', 'Available in Store Tab', Icons.storefront_rounded, const Color(0xFFDCFCE7), const Color(0xFF16A34A)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              children: [
+                const Text('SIMPLE PROCESS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFE11D48), letterSpacing: 1.2)),
+                const SizedBox(height: 4),
+                const Text('How It Works', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const Text('Submit your print job online in 3 easy steps without waiting in line.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B)), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                _buildHowItWorksStep('1', 'Upload Your Document', 'Select paper stock, color mode, page counts, and upload your PDF or image file.'),
+                const Divider(height: 24),
+                _buildHowItWorksStep('2', 'Track Live Production', 'Monitor order status in real-time as staff approves and prints your job.'),
+                const Divider(height: 24),
+                _buildHowItWorksStep('3', 'Pickup or Pay Online', 'Receive notifications when ready for pickup at the store counter.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebServiceCard(String title, String desc, String price, IconData icon, Color bgColor, Color iconColor) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, size: 20, color: iconColor),
+          ),
+          const SizedBox(height: 8),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Expanded(
+            child: Text(desc, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)), maxLines: 3, overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(height: 4),
+          Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF059669))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHowItWorksStep(String num, String title, String desc) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE11D48)]),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Text(num, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
         ),
-        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+        const SizedBox(width: 12),
         Expanded(
-          child: _adminSubTab == 0
-              ? _buildManageOrdersView()
-              : _adminSubTab == 1
-              ? _buildCustomersAndProfileView()
-              : _adminSubTab == 2
-              ? _buildSingleChatView()
-              : _buildPlaceholderView('Analytics & Store Intelligence', Icons.analytics_rounded),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+              const SizedBox(height: 2),
+              Text(desc, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildAdminTabButton(String title, int index, IconData icon) {
-    final isSelected = _adminSubTab == index;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: InkWell(
-        onTap: () => setState(() => _adminSubTab = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF64748B)),
-              const SizedBox(width: 6),
-              Text(title, style: TextStyle(color: isSelected ? Colors.white : const Color(0xFF334155), fontWeight: FontWeight.bold, fontSize: 12)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
+  // --- ADMIN DASHBOARD ---
+  // --- ADMIN DASHBOARD ---
   Widget _buildManageOrdersView() {
     return StreamBuilder<QuerySnapshot>(
-      stream: _ordersRef.snapshots(),
+      // NAKALAGAY DITO ANG OPTION 2: .orderBy('createdAt', descending: false)
+      stream: _ordersRef.orderBy('createdAt', descending: false).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -224,6 +353,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         final docs = snapshot.data!.docs;
+        // ... ang natitirang bahagi ng iyong code
 
         int approvalCount = 0;
         int printingCount = 0;
@@ -251,7 +381,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           bool matchesSearch = queryClean.isEmpty;
           if (!matchesSearch) {
-            String fullDocString = _cleanStr(doc.id) + ' ' + _cleanStr(data.toString());
+            String fullDocString = '${_cleanStr(doc.id)} ${_cleanStr(data.toString())}';
             if (fullDocString.contains(queryClean)) {
               matchesSearch = true;
             }
@@ -280,7 +410,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header Banner
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -338,8 +467,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Search Bar
             TextField(
               controller: _searchController,
               onChanged: (_) => setState(() {}),
@@ -355,8 +482,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Services Dropdown & View Switch Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -401,8 +526,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 12),
-
-            // Status Filter Chips
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -424,8 +547,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 14),
-
-            // Orders Display
             if (filteredDocs.isEmpty)
               Container(
                 padding: const EdgeInsets.all(32),
@@ -456,8 +577,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 final status = (data['status'] ?? 'Order Submitted').toString();
                 final payment = (data['payment'] ?? data['payment_method'] ?? 'GCash').toString();
-
-                // Order Date & Time String
                 final dateTimeStr = _formatDateTime(data['createdAt'] ?? data['created_at'] ?? data['timestamp'] ?? data['date'] ?? data['time']);
 
                 return _isListView
@@ -494,7 +613,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // 1. CARDS VIEW ITEM (WITH TIME & DATE)
   Widget _buildOrderCardItem(String docId, String refId, String service, String customer, String total, String status, String payment, String dateTimeStr, Map<String, dynamic> data) {
     final statusCategory = _getStatusCategory(status);
     Color statusBgColor;
@@ -554,8 +672,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 10),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 10),
-
-          // Customer
           Row(
             children: [
               const Icon(Icons.person_outline_rounded, size: 15, color: Color(0xFF64748B)),
@@ -566,8 +682,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 4),
-
-          // Service Specs
           Row(
             children: [
               const Icon(Icons.print_outlined, size: 15, color: Color(0xFF64748B)),
@@ -578,8 +692,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 4),
-
-          // Time & Date Display
           Row(
             children: [
               const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF94A3B8)),
@@ -588,8 +700,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // Payment, Price & Action Buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -618,7 +728,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // 2. LIST VIEW ITEM (WITH TIME & DATE)
   Widget _buildOrderListItem(String docId, String refId, String service, String customer, String total, String status, String payment, String dateTimeStr, Map<String, dynamic> data) {
     final statusCategory = _getStatusCategory(status);
     Color accentColor;
@@ -657,7 +766,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header: Ref ID, Payment, Price
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -676,13 +784,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-
-                      // Customer & Service
                       Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155)), maxLines: 1, overflow: TextOverflow.ellipsis),
                       Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
-
-                      // Time and Date String Display
                       Row(
                         children: [
                           const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF94A3B8)),
@@ -691,8 +795,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // Status Badge & Dynamic Actions
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -775,7 +877,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // --- UPDATED DIALOG WITH FILE DISPLAY & DOWNLOAD LINK ---
   void _showReviewSpecsDialog(BuildContext context, Map<String, dynamic> data, String refId, String dateTimeStr) {
+    final String fileName = (data['file'] ?? data['fileName'] ?? 'Walang in-attach na file').toString();
+    final String? fileUrl = (data['fileUrl'] ?? data['file_url'] ?? data['url']) as String?;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -805,6 +911,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text('Total Amount: ₱${data['total'] ?? '30.00'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
               const SizedBox(height: 6),
               Text('Current Status: ${data['status'] ?? 'Order Submitted'}', style: const TextStyle(fontSize: 13, color: Color(0xFFD97706))),
+              const Divider(height: 20),
+
+              // ATTACHED FILE CONTAINER & OPEN BUTTON
+              const Text('Attached Customer File:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.insert_drive_file_rounded, color: Color(0xFF2563EB), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        fileName,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (fileUrl != null && fileUrl.startsWith('http')) ...[
+                      const SizedBox(width: 6),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final Uri uri = Uri.parse(fileUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Hindi mabuksan ang file URL.')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
+                        label: const Text('Open', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -818,7 +975,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // UPDATED JOB SLIP DIALOG WITH DATE & TIME
   void _showPrintJobSlipDialog(BuildContext context, Map<String, dynamic> data, String refId, String dateTimeStr) {
     showDialog(
       context: context,
@@ -1023,55 +1179,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSingleChatView() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
+  // --- HIWALAY NA CUSTOMER ORDERS TAB NA MAY "PLACE NEW ORDER" BUTTON ---
+  Widget _buildCustomerOrdersTab() {
+    return Column(
       children: [
-        const Text('Live Customer Chats', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF1F5F9))),
-          child: const Text('Active chat threads from customers will show here.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+                );
+              },
+              icon: const Icon(Icons.add_circle_rounded, color: Colors.white),
+              label: const Text('Place New Print Order', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE11D48),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _ordersRef.where('email', isEqualTo: widget.userEmail).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final docs = snapshot.data!.docs;
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'Wala ka pang order. Pindutin ang button sa itaas para umorder!',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  ),
+                );
+              }
+              return ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: docs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(data['id'] ?? 'PRNT-xxxx', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(6)),
+                              child: Text(data['status'] ?? 'Submitted', style: const TextStyle(fontSize: 10, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(data['service'] ?? 'Print Service', style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+                        const SizedBox(height: 4),
+                        Text('Total: ₱${data['total'] ?? '30.00'} • Payment: ${data['payment'] ?? 'GCash'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
         ),
       ],
     );
-  }
-
-  Widget _buildPlaceholderView(String title, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: const Color(0xFFCBD5E1)),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCustomerHomeTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE11D48)]),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text('Welcome to Kez C-Em Zek Printing Shop!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCustomerOrdersTab() {
-    return const Center(child: Text('Your Orders Tab'));
   }
 
   Widget _buildProfileTab() {
