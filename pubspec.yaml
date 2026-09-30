@@ -17,6 +17,8 @@ dependencies:
   sqflite: ^2.3.3+1          # Local SQLite Database
   path: ^1.9.0               # Path helper para sa local DB file
   connectivity_plus: ^6.0.5  # Para ma-detect kung online o offline
+  mailer: ^6.1.0
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

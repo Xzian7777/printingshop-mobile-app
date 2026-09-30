@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'store_screen.dart';
 import 'place_order_screen.dart';
+import 'admin_products_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userEmail;
@@ -18,6 +19,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _statusFilter = 'All Active';
   String _selectedServiceCategory = 'All Services';
   bool _isListView = true;
+
+  // KUMPLETONG LISTAHAN NG SERVICES KAPAREHO NG SA WEB ADMIN
+  final List<String> _serviceCategories = [
+    'All Services',
+    'Standard A4 Print',
+    'Business Cards',
+    'Tarpaulins',
+    'Flyers & Leaflets',
+    'Stickers & Labels',
+    'Invitations',
+    'Shirt Printing',
+    'Photo & Canvas',
+    'Booklets & Menus',
+    'Mug Printing',
+    'In-Store Supplies',
+  ];
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -62,6 +79,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else {
       return 'approval';
     }
+  }
+
+  // SMART FLEXIBLE SERVICE MATCHING LOGIC FOR FLUTTER
+  bool _checkServiceCategoryMatch(String serviceName, String categoryFilter, Map<String, dynamic> data) {
+    if (categoryFilter == 'All Services') return true;
+
+    final s = serviceName.toLowerCase();
+    final cat = categoryFilter.toLowerCase();
+
+    if (cat.contains('standard') || cat.contains('a4')) {
+      return s.contains('standard') || s.contains('a4') || s.contains('document');
+    } else if (cat.contains('card')) {
+      return s.contains('card') || s.contains('business');
+    } else if (cat.contains('tarp')) {
+      return s.contains('tarp') || s.contains('banner');
+    } else if (cat.contains('flyer') || cat.contains('leaflet')) {
+      return s.contains('flyer') || s.contains('leaflet');
+    } else if (cat.contains('sticker') || cat.contains('label')) {
+      return s.contains('sticker') || s.contains('label');
+    } else if (cat.contains('invitat')) {
+      return s.contains('invitat');
+    } else if (cat.contains('shirt')) {
+      return s.contains('shirt') || s.contains('dtf') || s.contains('apparel');
+    } else if (cat.contains('photo') || cat.contains('canvas')) {
+      return s.contains('photo') || s.contains('canvas');
+    } else if (cat.contains('booklet') || cat.contains('menu')) {
+      return s.contains('booklet') || s.contains('menu');
+    } else if (cat.contains('mug')) {
+      return s.contains('mug');
+    } else if (cat.contains('store') || cat.contains('supply') || cat.contains('in-store')) {
+      final paperSize = (data['paperSize'] ?? '').toString().toLowerCase();
+      return s.contains('store') || s.contains('supply') || s.contains('in-store') || paperSize.contains('store');
+    }
+
+    return s.contains(cat);
   }
 
   @override
@@ -154,7 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- WEB-MATCHED HOMEPAGE TAB ---
+  // --- HOMEPAGE TAB ---
   Widget _buildCustomerHomeTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -339,10 +391,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // --- ADMIN DASHBOARD ---
-  // --- ADMIN DASHBOARD ---
   Widget _buildManageOrdersView() {
     return StreamBuilder<QuerySnapshot>(
-      // NAKALAGAY DITO ANG OPTION 2: .orderBy('createdAt', descending: false)
       stream: _ordersRef.orderBy('createdAt', descending: false).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -353,7 +403,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         final docs = snapshot.data!.docs;
-        // ... ang natitirang bahagi ng iyong code
 
         int approvalCount = 0;
         int printingCount = 0;
@@ -376,8 +425,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           final serviceName = (data['service'] ?? data['serviceName'] ?? '').toString();
 
-          bool matchesCategory = _selectedServiceCategory == 'All Services' ||
-              _cleanStr(serviceName).contains(_cleanStr(_selectedServiceCategory));
+          // IN-UPDATE NA SERVICE CATEGORY MATCHING
+          bool matchesCategory = _checkServiceCategoryMatch(serviceName, _selectedServiceCategory, data);
 
           bool matchesSearch = queryClean.isEmpty;
           if (!matchesSearch) {
@@ -494,13 +543,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: _selectedServiceCategory,
+                      value: _serviceCategories.contains(_selectedServiceCategory) ? _selectedServiceCategory : 'All Services',
                       icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF0F172A)),
                       style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold),
                       onChanged: (val) {
                         if (val != null) setState(() => _selectedServiceCategory = val);
                       },
-                      items: ['All Services', 'Standard Print', 'Store Supply', 'PVC ID', 'Stickers', 'Photos']
+                      items: _serviceCategories
                           .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                           .toList(),
                     ),
@@ -552,7 +601,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.all(32),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF1F5F9))),
-                child: const Text('No matching orders found.', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
+                child: Text('No matching orders found under "$_selectedServiceCategory".', style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
               )
             else
               ...filteredDocs.map((doc) {
@@ -877,7 +926,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- UPDATED DIALOG WITH FILE DISPLAY & DOWNLOAD LINK ---
   void _showReviewSpecsDialog(BuildContext context, Map<String, dynamic> data, String refId, String dateTimeStr) {
     final String fileName = (data['file'] ?? data['fileName'] ?? 'Walang in-attach na file').toString();
     final String? fileUrl = (data['fileUrl'] ?? data['file_url'] ?? data['url']) as String?;
@@ -912,8 +960,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 6),
               Text('Current Status: ${data['status'] ?? 'Order Submitted'}', style: const TextStyle(fontSize: 13, color: Color(0xFFD97706))),
               const Divider(height: 20),
-
-              // ATTACHED FILE CONTAINER & OPEN BUTTON
               const Text('Attached Customer File:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
               const SizedBox(height: 6),
               Container(
@@ -1179,7 +1225,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- HIWALAY NA CUSTOMER ORDERS TAB NA MAY "PLACE NEW ORDER" BUTTON ---
   Widget _buildCustomerOrdersTab() {
     return Column(
       children: [
