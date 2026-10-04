@@ -17,10 +17,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final TextEditingController _loginEmailController = TextEditingController();
   final TextEditingController _loginPasswordController = TextEditingController();
   bool _obscureLoginPassword = true;
+  bool _loginAgreeTerms = false; // State para sa Login T&C Checkbox
 
   late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+  late Animation<double> _bgFadeAnimation;
+  late Animation<Offset> _logoPosAnimation;
+  late Animation<double> _textFadeAnimation;
+  late Animation<Offset> _buttonsSlideAnimation;
+  late Animation<double> _buttonsFadeAnimation;
+
+  bool _showFormCard = false;
 
   @override
   void initState() {
@@ -28,18 +34,48 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 2000),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeIn),
+    _bgFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.25, 0.65, curve: Curves.easeIn),
+      ),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.12),
+    _logoPosAnimation = Tween<Offset>(
+      begin: const Offset(0.0, 0.22),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.20, 0.70, curve: Curves.easeInOutCubic),
+      ),
+    );
+
+    _textFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.55, 0.85, curve: Curves.easeIn),
+      ),
+    );
+
+    _buttonsSlideAnimation = Tween<Offset>(
+      begin: const Offset(0.0, 0.40),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.60, 1.00, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _buttonsFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.60, 0.95, curve: Curves.easeIn),
+      ),
     );
 
     _animController.forward();
@@ -53,16 +89,60 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // ===========================================================================
-  // SMTP EMAIL SENDER HELPER FUNCTION
-  // ===========================================================================
+  // --- TERMS & CONDITIONS DIALOG ---
+  void _showTermsAndConditionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.gavel_rounded, color: Color(0xFFE11D48)),
+            SizedBox(width: 8),
+            Text("Terms & Conditions", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text("1. Account Responsibility", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              SizedBox(height: 2),
+              Text("Users are responsible for keeping account credentials confidential and providing accurate contact information for order notifications.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              SizedBox(height: 10),
+              Text("2. Printing Orders & Proofing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              SizedBox(height: 2),
+              Text("Customers must verify file contents, document sizes, and spelling prior to submitting orders. Printing custom jobs cannot be cancelled once processing begins.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              SizedBox(height: 10),
+              Text("3. Unclaimed Print Items Disposal", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              SizedBox(height: 2),
+              Text("Printed materials left unclaimed at the shop after 30 calendar days will be disposed of without refund eligibility.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              SizedBox(height: 10),
+              Text("4. Data Privacy & RFID Tapping", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              SizedBox(height: 2),
+              Text("Personal details and RFID card taps are securely recorded strictly for order fulfillment, account authentication, and store loyalty reward tracking.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("I Understand & Agree"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _sendEmailOTP({
     required String recipientEmail,
     required String otpCode,
     required String subjectText,
   }) async {
-    const String senderEmail = 'yourprintshop@gmail.com';
-    const String appPassword = 'xxxx xxxx xxxx xxxx'; // 16-character Gmail App Password
+    const String senderEmail = 'xdawinan@gmail.com';
+    const String appPassword = 'oplc shee myfd xpdy';
 
     final smtpServer = gmail(senderEmail, appPassword);
 
@@ -76,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           <p>Hello,</p>
           <p>Your verification code is:</p>
           <h1 style="color: #0f172a; letter-spacing: 5px;">$otpCode</h1>
-          <p style="color: #64748b; font-size: 12px;">This code will expire in 5 minutes. If you did not request this, please ignore this email.</p>
+          <p style="color: #64748b; font-size: 12px;">This code will expire in 5 minutes.</p>
         </div>
       ''';
 
@@ -96,17 +176,40 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   void _handleLogin() {
     if (_loginFormKey.currentState!.validate()) {
+      if (!_loginAgreeTerms) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please accept the Terms & Conditions to log in.'),
+            backgroundColor: Color(0xFFE11D48),
+          ),
+        );
+        return;
+      }
+
       final email = _loginEmailController.text.trim();
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => DashboardScreen(userEmail: email)),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => DashboardScreen(userEmail: email),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.0, 0.05),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                child: child,
+              ),
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
       );
     }
   }
 
-  // ===========================================================================
-  // 1. CREATE NEW ACCOUNT MODAL (WITH SMOOTH ENTRY ANIMATION)
-  // ===========================================================================
   void _showRegisterModal(BuildContext context) {
     final registerFormKey = GlobalKey<FormState>();
     final nameController = TextEditingController();
@@ -128,212 +231,196 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              tween: Tween<double>(begin: 0.0, end: 1.0),
-              builder: (context, animValue, child) {
-                return Transform.translate(
-                  offset: Offset(0, (1 - animValue) * 40),
-                  child: Opacity(
-                    opacity: animValue,
-                    child: child,
-                  ),
-                );
-              },
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  padding: const EdgeInsets.all(20.0),
-                  child: SingleChildScrollView(
-                    child: Form(
-                      key: registerFormKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                padding: const EdgeInsets.all(20.0),
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: registerFormKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Create New Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: nameController,
+                          decoration: _buildInputDecoration('Full Name *', Icons.person_outline_rounded),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter your full name' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: _buildInputDecoration('Email Address *', Icons.email_outlined),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Please enter your email address';
+                            final reg = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                            if (!reg.hasMatch(v.trim())) return 'Please enter a valid email address';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 11,
+                          decoration: _buildInputDecoration('Contact Number (09XX...) *', Icons.phone_android_rounded).copyWith(counterText: ''),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Please enter your contact number';
+                            final phReg = RegExp(r'^09\d{9}$');
+                            if (!phReg.hasMatch(v.trim())) return 'Must start with 09 and contain 11 digits';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: passwordController,
+                          obscureText: obscurePass,
+                          decoration: _buildInputDecoration('Password *', Icons.lock_outline_rounded).copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
+                              onPressed: () => setModalState(() => obscurePass = !obscurePass),
+                            ),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Please enter a password';
+                            if (v.length < 6) return 'Must be at least 6 characters';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: confirmPasswordController,
+                          obscureText: obscureConfirmPass,
+                          decoration: _buildInputDecoration('Confirm Password *', Icons.lock_reset_rounded).copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
+                              onPressed: () => setModalState(() => obscureConfirmPass = !obscureConfirmPass),
+                            ),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Please confirm your password';
+                            if (v != passwordController.text) return 'Passwords do not match';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: termsErrorMsg != null ? const Color(0xFFE11D48) : const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Create New Account',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              Checkbox(
+                                value: agreeToTerms,
+                                activeColor: const Color(0xFFE11D48),
+                                onChanged: (val) {
+                                  setModalState(() {
+                                    agreeToTerms = val ?? false;
+                                    if (agreeToTerms) termsErrorMsg = null;
+                                  });
+                                },
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          TextFormField(
-                            controller: nameController,
-                            decoration: _buildInputDecoration('Full Name *', Icons.person_outline_rounded),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter your full name' : null,
-                          ),
-                          const SizedBox(height: 12),
-
-                          TextFormField(
-                            controller: emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: _buildInputDecoration('Email Address *', Icons.email_outlined),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return 'Please enter your email address';
-                              final reg = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                              if (!reg.hasMatch(v.trim())) return 'Please enter a valid email address';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          TextFormField(
-                            controller: phoneController,
-                            keyboardType: TextInputType.phone,
-                            maxLength: 11,
-                            decoration: _buildInputDecoration('Contact Number (09XX...) *', Icons.phone_android_rounded).copyWith(counterText: ''),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return 'Please enter your contact number';
-                              final phReg = RegExp(r'^09\d{9}$');
-                              if (!phReg.hasMatch(v.trim())) return 'Must start with 09 and contain 11 digits';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          TextFormField(
-                            controller: passwordController,
-                            obscureText: obscurePass,
-                            decoration: _buildInputDecoration('Password *', Icons.lock_outline_rounded).copyWith(
-                              suffixIcon: IconButton(
-                                icon: Icon(obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
-                                onPressed: () => setModalState(() => obscurePass = !obscurePass),
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return 'Please enter a password';
-                              if (v.length < 6) return 'Must be at least 6 characters';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          TextFormField(
-                            controller: confirmPasswordController,
-                            obscureText: obscureConfirmPass,
-                            decoration: _buildInputDecoration('Confirm Password *', Icons.lock_reset_rounded).copyWith(
-                              suffixIcon: IconButton(
-                                icon: Icon(obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
-                                onPressed: () => setModalState(() => obscureConfirmPass = !obscureConfirmPass),
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) return 'Please confirm your password';
-                              if (v != passwordController.text) return 'Passwords do not match';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: termsErrorMsg != null ? const Color(0xFFE11D48) : const Color(0xFFE2E8F0)),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Checkbox(
-                                  value: agreeToTerms,
-                                  activeColor: const Color(0xFFE11D48),
-                                  onChanged: (val) {
-                                    setModalState(() {
-                                      agreeToTerms = val ?? false;
-                                      if (agreeToTerms) termsErrorMsg = null;
-                                    });
-                                  },
-                                ),
-                                const Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(top: 8.0),
-                                    child: Text(
-                                      'I agree to the Terms & Conditions (Unclaimed printed items after 30 days will be automatically disposed of).',
-                                      style: TextStyle(fontSize: 10.5, color: Color(0xFF334155), height: 1.3),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: GestureDetector(
+                                    onTap: () => _showTermsAndConditionsDialog(context),
+                                    child: const Text.rich(
+                                      TextSpan(
+                                        text: "I agree to the ",
+                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF334155), height: 1.3),
+                                        children: [
+                                          TextSpan(
+                                            text: "Terms & Conditions",
+                                            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48), decoration: TextDecoration.underline),
+                                          ),
+                                          TextSpan(text: " (Unclaimed printed items after 30 days will be disposed of)."),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          if (termsErrorMsg != null)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8, top: 4),
-                              child: Text(termsErrorMsg!, style: const TextStyle(color: Color(0xFFE11D48), fontSize: 11)),
-                            ),
-
-                          const SizedBox(height: 18),
-
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: isLoading
-                                  ? null
-                                  : () async {
-                                setModalState(() {
-                                  termsErrorMsg = agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
-                                });
-
-                                if (registerFormKey.currentState!.validate() && agreeToTerms) {
-                                  setModalState(() => isLoading = true);
-
-                                  final otp = _generate6DigitOTP();
-                                  final recipient = emailController.text.trim();
-
-                                  bool sent = await _sendEmailOTP(
-                                    recipientEmail: recipient,
-                                    otpCode: otp,
-                                    subjectText: 'Account Verification - Kez C-Em Zek',
-                                  );
-
-                                  setModalState(() => isLoading = false);
-
-                                  if (mounted) {
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          sent
-                                              ? 'Account registered! Verification code sent to $recipient'
-                                              : 'Failed to send verification email. Please try again.',
-                                        ),
-                                        backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFE11D48),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE11D48),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                elevation: 0,
                               ),
-                              child: isLoading
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Text('Register Account', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                            ),
+                            ],
                           ),
-                          const SizedBox(height: 10),
-                        ],
-                      ),
+                        ),
+                        if (termsErrorMsg != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 4),
+                            child: Text(termsErrorMsg!, style: const TextStyle(color: Color(0xFFE11D48), fontSize: 11)),
+                          ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: isLoading
+                                ? null
+                                : () async {
+                              setModalState(() {
+                                termsErrorMsg = agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
+                              });
+
+                              if (registerFormKey.currentState!.validate() && agreeToTerms) {
+                                setModalState(() => isLoading = true);
+                                final otp = _generate6DigitOTP();
+                                final recipient = emailController.text.trim();
+
+                                bool sent = await _sendEmailOTP(
+                                  recipientEmail: recipient,
+                                  otpCode: otp,
+                                  subjectText: 'Account Verification - Kez C-Em Zek',
+                                );
+
+                                setModalState(() => isLoading = false);
+
+                                if (mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        sent
+                                            ? 'Account registered! Verification code sent to $recipient'
+                                            : 'Failed to send verification email.',
+                                      ),
+                                      backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFE11D48),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE11D48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            child: isLoading
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : const Text('Register Account', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                     ),
                   ),
                 ),
@@ -345,9 +432,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // ===========================================================================
-  // 2. FORGOT PASSWORD MODAL (WITH ANIMATED SWITCHER STEP TRANSITION)
-  // ===========================================================================
   void _showForgotPasswordModal(BuildContext context) {
     int currentStep = 1;
     final stepAKey = GlobalKey<FormState>();
@@ -357,7 +441,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final emailController = TextEditingController();
     final otpController = TextEditingController();
     final newPasswordController = TextEditingController();
-    final confirmNewPasswordController = TextEditingController();
 
     Timer? countdownTimer;
     int secondsRemaining = 60;
@@ -407,205 +490,166 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               } else {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Failed to send OTP email. Please check your address or connection.')),
+                    const SnackBar(content: Text('Failed to send OTP email.')),
                   );
                 }
               }
             }
 
-            return TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              tween: Tween<double>(begin: 0.0, end: 1.0),
-              builder: (context, animValue, child) {
-                return Transform.translate(
-                  offset: Offset(0, (1 - animValue) * 40),
-                  child: Opacity(
-                    opacity: animValue,
-                    child: child,
-                  ),
-                );
-              },
-              child: Padding(
-                padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  padding: const EdgeInsets.all(20.0),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              currentStep == 1 ? 'Forgot Password' : (currentStep == 2 ? 'Email OTP Verification' : 'Set New Password'),
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                              onPressed: () {
-                                countdownTimer?.cancel();
-                                Navigator.pop(context);
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        // ANIMATED STEP TRANSITION (STEP 1 -> STEP 2 -> STEP 3)
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 350),
-                          transitionBuilder: (Widget child, Animation<double> animation) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0.15, 0.0),
-                                  end: Offset.zero,
-                                ).animate(animation),
-                                child: child,
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                padding: const EdgeInsets.all(20.0),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            currentStep == 1 ? 'Forgot Password' : (currentStep == 2 ? 'Email OTP Verification' : 'Set New Password'),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                            onPressed: () {
+                              countdownTimer?.cancel();
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (currentStep == 1)
+                        Form(
+                          key: stepAKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Enter your registered Email Address to receive OTP code.', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: _buildInputDecoration('Registered Email Address', Icons.email_outlined),
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) return 'Please enter your email address';
+                                  return null;
+                                },
                               ),
-                            );
-                          },
-                          child: currentStep == 1
-                              ? Form(
-                            key: stepAKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Enter your registered Email Address to receive a password reset verification code.', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: emailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: _buildInputDecoration('Registered Email Address', Icons.email_outlined),
-                                  validator: (v) {
-                                    if (v == null || v.trim().isEmpty) return 'Please enter your email address';
-                                    final reg = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                                    if (!reg.hasMatch(v.trim())) return 'Please enter a valid email address';
-                                    return null;
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () async {
+                                    if (stepAKey.currentState!.validate()) {
+                                      recipientEmail = emailController.text.trim();
+                                      await sendOtpToEmail();
+                                    }
                                   },
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                  child: isLoading
+                                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Text('Send Verification Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: ElevatedButton(
-                                    onPressed: isLoading
-                                        ? null
-                                        : () async {
-                                      if (stepAKey.currentState!.validate()) {
-                                        recipientEmail = emailController.text.trim();
-                                        await sendOtpToEmail();
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (currentStep == 2)
+                        Form(
+                          key: stepBKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('A 6-digit verification code was sent to: $recipientEmail', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: otpController,
+                                keyboardType: TextInputType.number,
+                                maxLength: 6,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 8),
+                                decoration: _buildInputDecoration('6-Digit Code', Icons.security_rounded).copyWith(counterText: ''),
+                                validator: (v) => (v == null || v.trim().length != 6) ? 'Please enter valid 6-digit OTP' : null,
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    if (stepBKey.currentState!.validate()) {
+                                      if (otpController.text.trim() == activeOtp) {
+                                        countdownTimer?.cancel();
+                                        setModalState(() => currentStep = 3);
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid OTP code.')));
                                       }
-                                    },
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                    child: isLoading
-                                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                        : const Text('Send Verification Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                  child: const Text('Verify OTP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Center(
+                                child: TextButton(
+                                  onPressed: canResend && !isLoading ? () async => await sendOtpToEmail() : null,
+                                  child: Text(
+                                    canResend ? 'Resend Email' : 'Resend Email in ${secondsRemaining}s',
+                                    style: TextStyle(color: canResend ? const Color(0xFFE11D48) : const Color(0xFF94A3B8), fontWeight: FontWeight.bold),
                                   ),
                                 ),
-                              ],
-                            ),
-                          )
-                              : currentStep == 2
-                              ? Form(
-                            key: stepBKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('A 6-digit verification code was sent to: $recipientEmail', style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: otpController,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 6,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 8),
-                                  decoration: _buildInputDecoration('6-Digit Code', Icons.security_rounded).copyWith(counterText: ''),
-                                  validator: (v) => (v == null || v.trim().length != 6) ? 'Please enter the valid 6-digit OTP' : null,
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Form(
+                          key: stepCKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Create a new password for your account.', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: newPasswordController,
+                                obscureText: true,
+                                decoration: _buildInputDecoration('New Password', Icons.lock_outline_rounded),
+                                validator: (v) => (v == null || v.length < 6) ? 'Must be at least 6 characters' : null,
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    if (stepCKey.currentState!.validate()) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Password reset successfully!'), backgroundColor: Color(0xFF059669)),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                  child: const Text('Reset Password', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                                 ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      if (stepBKey.currentState!.validate()) {
-                                        if (otpController.text.trim() == activeOtp) {
-                                          countdownTimer?.cancel();
-                                          setModalState(() => currentStep = 3);
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid OTP code. Please try again.')));
-                                        }
-                                      }
-                                    },
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                    child: const Text('Verify OTP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Center(
-                                  child: TextButton(
-                                    onPressed: canResend && !isLoading ? () async => await sendOtpToEmail() : null,
-                                    child: Text(
-                                      canResend ? 'Resend Email' : 'Resend Email in ${secondsRemaining}s',
-                                      style: TextStyle(color: canResend ? const Color(0xFFE11D48) : const Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                              : Form(
-                            key: stepCKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Create a new password for your account.', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
-                                const SizedBox(height: 14),
-                                TextFormField(
-                                  controller: newPasswordController,
-                                  obscureText: true,
-                                  decoration: _buildInputDecoration('New Password', Icons.lock_outline_rounded),
-                                  validator: (v) => (v == null || v.length < 6) ? 'Must be at least 6 characters' : null,
-                                ),
-                                const SizedBox(height: 12),
-                                TextFormField(
-                                  controller: confirmNewPasswordController,
-                                  obscureText: true,
-                                  decoration: _buildInputDecoration('Confirm New Password', Icons.lock_reset_rounded),
-                                  validator: (v) => (v != newPasswordController.text) ? 'Passwords do not match' : null,
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      if (stepCKey.currentState!.validate()) {
-                                        Navigator.pop(context);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Password reset successfully! You can now log in.'), backgroundColor: Color(0xFF059669)),
-                                        );
-                                      }
-                                    },
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                    child: const Text('Reset Password', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 10),
-                      ],
-                    ),
+                      const SizedBox(height: 10),
+                    ],
                   ),
                 ),
               ),
@@ -616,259 +660,276 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // ===========================================================================
-  // MAIN LOGIN UI BUILD WITH ANIMATION
-  // ===========================================================================
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SingleChildScrollView(
-        child: SizedBox(
-          height: size.height,
-          child: Stack(
-            children: [
-              // 1. TOP CURVED DARK SLATE HEADER
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: ClipPath(
-                  clipper: CurvedHeaderClipper(),
-                  child: Container(
-                    height: size.height * 0.38,
-                    width: double.infinity,
-                    color: const Color(0xFF0F172A),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
+      resizeToAvoidBottomInset: true,
+      backgroundColor: const Color(0xFF0F172A),
+      body: Stack(
+        children: [
+          FadeTransition(
+            opacity: _bgFadeAnimation,
+            child: Container(
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: NetworkImage('https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1?auto=format&fit=crop&w=1000&q=80'),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(Colors.black87, BlendMode.darken),
+                ),
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: SizedBox(
+              width: double.infinity,
+              height: double.infinity,
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 16.0),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom - 32,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Spacer(flex: 3),
+
+                      SlideTransition(
+                        position: _logoPosAnimation,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              width: 42,
-                              height: 42,
+                              width: 68,
+                              height: 68,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE11D48)]),
-                                borderRadius: BorderRadius.circular(12),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFF97316), Color(0xFFE11D48)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFE11D48).withOpacity(0.4),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
                               ),
-                              child: const Icon(Icons.print_rounded, color: Colors.white, size: 24),
+                              child: const Icon(Icons.print_rounded, color: Colors.white, size: 38),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 16),
                             const Text(
                               'KCZ PRINTING',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 18,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w900,
-                                letterSpacing: 1.5,
+                                letterSpacing: 3.0,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Kez C-Em Zek',
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      FadeTransition(
+                        opacity: _textFadeAnimation,
+                        child: const Text(
+                          'The premier web & mobile printing shop service.\nOnline order submission, live production tracking & store supplies.',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
+                            color: Color(0xFF94A3B8),
+                            fontSize: 12.5,
+                            height: 1.5,
+                            letterSpacing: 0.2,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Welcome back! Log in to continue.',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                      ),
 
-              // 2. MAIN LOGIN FORM CARD CONTAINER
-              Positioned(
-                top: size.height * 0.31,
-                left: 20,
-                right: 20,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(22),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 16,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Form(
-                            key: _loginFormKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Login',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
+                      const Spacer(flex: 4),
 
-                                TextFormField(
-                                  controller: _loginEmailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: _buildInputDecoration('Email', Icons.email_outlined),
-                                  validator: (v) {
-                                    if (v == null || v.trim().isEmpty) return 'Please enter your email address';
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 14),
-
-                                TextFormField(
-                                  controller: _loginPasswordController,
-                                  obscureText: _obscureLoginPassword,
-                                  decoration: _buildInputDecoration('Password', Icons.lock_outline_rounded).copyWith(
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _obscureLoginPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                        color: const Color(0xFF64748B),
-                                      ),
-                                      onPressed: () => setState(() => _obscureLoginPassword = !_obscureLoginPassword),
-                                    ),
-                                  ),
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty) return 'Please enter your password';
-                                    return null;
-                                  },
-                                ),
-
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: () => _showForgotPasswordModal(context),
-                                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                                    child: const Text(
-                                      'Forgot password?',
-                                      style: TextStyle(
-                                        color: Color(0xFF64748B),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 8),
-
+                      SlideTransition(
+                        position: _buttonsSlideAnimation,
+                        child: FadeTransition(
+                          opacity: _buttonsFadeAnimation,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!_showFormCard) ...[
                                 SizedBox(
                                   width: double.infinity,
-                                  height: 50,
+                                  height: 52,
                                   child: ElevatedButton(
-                                    onPressed: _handleLogin,
+                                    onPressed: () {
+                                      setState(() => _showFormCard = true);
+                                    },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF0F172A),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF0F172A),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                                       elevation: 0,
                                     ),
                                     child: const Text(
-                                      'Login',
+                                      'LOGIN',
                                       style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13,
+                                        letterSpacing: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: OutlinedButton(
+                                    onPressed: () => _showRegisterModal(context),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.white,
+                                      side: const BorderSide(color: Colors.white54, width: 1.5),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                                    ),
+                                    child: const Text(
+                                      'SIGN UP',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13,
+                                        letterSpacing: 1.5,
                                       ),
                                     ),
                                   ),
                                 ),
 
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 14),
 
-                                Row(
-                                  children: [
-                                    const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                                      child: Text('Or', style: TextStyle(color: const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                // LANDING SCREEN T&C LINK
+                                TextButton.icon(
+                                  onPressed: () => _showTermsAndConditionsDialog(context),
+                                  icon: const Icon(Icons.gavel_rounded, size: 14, color: Colors.white70),
+                                  label: const Text(
+                                    'Terms & Conditions',
+                                    style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ] else ...[
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10)),
+                                    ],
+                                  ),
+                                  child: Form(
+                                    key: _loginFormKey,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                            IconButton(
+                                              icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 20),
+                                              onPressed: () => setState(() => _showFormCard = false),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        TextFormField(
+                                          controller: _loginEmailController,
+                                          keyboardType: TextInputType.emailAddress,
+                                          decoration: _buildInputDecoration('Email Address', Icons.email_outlined),
+                                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter email' : null,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        TextFormField(
+                                          controller: _loginPasswordController,
+                                          obscureText: _obscureLoginPassword,
+                                          decoration: _buildInputDecoration('Password', Icons.lock_outline_rounded).copyWith(
+                                            suffixIcon: IconButton(
+                                              icon: Icon(_obscureLoginPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B), size: 20),
+                                              onPressed: () => setState(() => _obscureLoginPassword = !_obscureLoginPassword),
+                                            ),
+                                          ),
+                                          validator: (v) => (v == null || v.isEmpty) ? 'Enter password' : null,
+                                        ),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: TextButton(
+                                            onPressed: () => _showForgotPasswordModal(context),
+                                            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 30)),
+                                            child: const Text('Forgot password?', style: TextStyle(color: Color(0xFFE11D48), fontSize: 11, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ),
+
+                                        // LOGIN CARD T&C CHECKBOX
+                                        Row(
+                                          children: [
+                                            Checkbox(
+                                              value: _loginAgreeTerms,
+                                              activeColor: const Color(0xFFE11D48),
+                                              onChanged: (val) => setState(() => _loginAgreeTerms = val ?? false),
+                                            ),
+                                            Expanded(
+                                              child: GestureDetector(
+                                                onTap: () => _showTermsAndConditionsDialog(context),
+                                                child: const Text.rich(
+                                                  TextSpan(
+                                                    text: "I agree to the ",
+                                                    style: TextStyle(fontSize: 10.5, color: Color(0xFF334155)),
+                                                    children: [
+                                                      TextSpan(
+                                                        text: "Terms & Conditions",
+                                                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48), decoration: TextDecoration.underline),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+
+                                        SizedBox(
+                                          width: double.infinity,
+                                          height: 46,
+                                          child: ElevatedButton(
+                                            onPressed: _handleLogin,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF0F172A),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            ),
+                                            child: const Text('Login', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildSocialIconButton(Icons.facebook, const Color(0xFF1877F2)),
-                                    const SizedBox(width: 16),
-                                    _buildSocialIconButton(Icons.g_mobiledata_rounded, const Color(0xFFEA4335), size: 28),
-                                    const SizedBox(width: 16),
-                                    _buildSocialIconButton(Icons.apple, const Color(0xFF000000)),
-                                  ],
+                                  ),
                                 ),
                               ],
-                            ),
+                            ],
                           ),
                         ),
+                      ),
 
-                        const SizedBox(height: 24),
-
-                        GestureDetector(
-                          onTap: () => _showRegisterModal(context),
-                          child: const Text.rich(
-                            TextSpan(
-                              text: "Don't have an account? ",
-                              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                              children: [
-                                TextSpan(
-                                  text: 'Sign up',
-                                  style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildSocialIconButton(IconData icon, Color color, {double size = 20}) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Icon(icon, color: color, size: size),
     );
   }
 
@@ -879,38 +940,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       prefixIcon: Icon(icon, size: 18, color: const Color(0xFF64748B)),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48))),
       focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
     );
   }
-}
-
-// ===========================================================================
-// CUSTOM CLIPPER FOR SMOOTH CURVED HEADER
-// ===========================================================================
-class CurvedHeaderClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    Path path = Path();
-    path.lineTo(0, size.height - 40);
-
-    var firstControlPoint = Offset(size.width / 2, size.height + 25);
-    var firstEndPoint = Offset(size.width, size.height - 40);
-    path.quadraticBezierTo(
-      firstControlPoint.dx,
-      firstControlPoint.dy,
-      firstEndPoint.dx,
-      firstEndPoint.dy,
-    );
-
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

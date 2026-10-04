@@ -534,7 +534,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '₱${product.price.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.extrabold, color: Color(0xFFE11D48)),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFE11D48)),
                             ),
                           ],
                         ),
