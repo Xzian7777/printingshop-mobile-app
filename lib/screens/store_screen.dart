@@ -240,12 +240,40 @@ class _StoreScreenState extends State<StoreScreen> {
           IconButton(
             icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
             onPressed: () async {
-              await _db.collection('products').doc(docId).delete();
-              if (!mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Deleted item from database.")),
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Row(
+                    children: const [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48)),
+                      SizedBox(width: 8),
+                      Text("Confirm Delete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  content: const Text("Are you sure you want to delete this product? This action cannot be undone."),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
               );
+
+              if (confirm == true) {
+                await _db.collection('products').doc(docId).delete();
+                if (!mounted) return;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Deleted item from database.")),
+                );
+              }
             },
           ),
           const Spacer(),
@@ -256,16 +284,44 @@ class _StoreScreenState extends State<StoreScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
             onPressed: () async {
-              await _db.collection('products').doc(docId).update({
-                'name': nameController.text.trim(),
-                'price': double.tryParse(priceController.text) ?? 0.0,
-                'stock': int.tryParse(stockController.text) ?? 0,
-              });
-              if (!mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Product updated successfully!")),
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Row(
+                    children: const [
+                      Icon(Icons.edit_note_rounded, color: Color(0xFF0F172A)),
+                      SizedBox(width: 8),
+                      Text("Confirm Update", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  content: const Text("Are you sure you want to save these changes to the product?"),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text("Confirm & Save", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
               );
+
+              if (confirm == true) {
+                await _db.collection('products').doc(docId).update({
+                  'name': nameController.text.trim(),
+                  'price': double.tryParse(priceController.text) ?? 0.0,
+                  'stock': int.tryParse(stockController.text) ?? 0,
+                });
+                if (!mounted) return;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Product updated successfully!")),
+                );
+              }
             },
             child: const Text("Update"),
           ),
@@ -334,6 +390,22 @@ class _StoreScreenState extends State<StoreScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: _db.collection('products').snapshots(),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFE11D48)),
+                          SizedBox(height: 8),
+                          Text('Nabigo sa pagkonekta sa inventory database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                          Text('Pakisuri ang iyong koneksyon sa internet.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                    ),
+                  );
+                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }

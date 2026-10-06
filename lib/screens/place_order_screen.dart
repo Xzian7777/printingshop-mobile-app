@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../services/local_db_service.dart';
+import '../services/order_repository.dart';
 
 class PlaceOrderScreen extends StatefulWidget {
   final String userEmail;
@@ -176,6 +178,35 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
       return;
     }
 
+    final qty = int.tryParse(_quantityController.text.trim());
+    if (qty == null || qty <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mangyaring maglagay ng tamang bilang ng quantity (higit sa 0).'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    if (_selectedService.contains('Tarpaulins')) {
+      final w = double.tryParse(_widthController.text.trim());
+      final h = double.tryParse(_heightController.text.trim());
+      if (w == null || w <= 0 || h == null || h <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mangyaring maglagay ng tamang Width at Height (higit sa 0).'), backgroundColor: Colors.orange),
+        );
+        return;
+      }
+    }
+
+    if (_selectedService.contains('Booklets') || _selectedService.contains('A4')) {
+      final p = int.tryParse(_pagesController.text.trim());
+      if (p == null || p <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mangyaring maglagay ng tamang bilang ng pahina (pages > 0).'), backgroundColor: Colors.orange),
+        );
+        return;
+      }
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final randomRef = 'PRNT-${Random().nextInt(8999) + 1000}';
@@ -196,15 +227,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
         uploadedFileUrl = 'Local File Attached: $_selectedFileName';
       }
 
-      // 2. DIRECT SAVE ORDER SA FIRESTORE
-      await FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('printcraft-pro')
-          .collection('public')
-          .doc('data')
-          .collection('orders')
-          .doc(randomRef)
-          .set({
+      final orderMap = {
         'id': randomRef,
         'customer': customerName,
         'email': widget.userEmail,
@@ -216,8 +239,40 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
         'status': 'Order Submitted',
         'file': _selectedFileName,
         'fileUrl': uploadedFileUrl,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      bool online = await OrderRepository().isOnline();
+
+      if (online) {
+        try {
+          // 2. DIRECT SAVE ORDER SA FIRESTORE
+          await FirebaseFirestore.instance
+              .collection('artifacts')
+              .doc('printcraft-pro')
+              .collection('public')
+              .doc('data')
+              .collection('orders')
+              .doc(randomRef)
+              .set({
+            ...orderMap,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          
+          // Save locally as synced
+          await LocalDbService.instance.insertOrUpdateOrder(orderMap, isSynced: true);
+        } catch (firestoreErr) {
+          debugPrint('Firestore Error, saving to local queue: $firestoreErr');
+          await LocalDbService.instance.insertOrUpdateOrder(orderMap, isSynced: false);
+        }
+      } else {
+        // Offline mode: Save locally as unsynced
+        await LocalDbService.instance.insertOrUpdateOrder(orderMap, isSynced: false);
+        debugPrint('Offline mode: Order saved locally and queued for sync.');
+      }
+
+      // Try syncing any pending offline orders in background
+      OrderRepository().syncOfflineOrders();
 
       if (!mounted) return;
       showDialog(

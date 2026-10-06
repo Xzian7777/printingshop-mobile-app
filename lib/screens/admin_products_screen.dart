@@ -300,7 +300,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         TextFormField(
                           controller: nameController,
                           decoration: _buildInputDecoration('Product Name *', Icons.inventory_2_outlined),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter product name' : null,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Please enter product name';
+                            if (v.trim().length < 2) return 'Name must be at least 2 characters';
+                            if (v.trim().length > 100) return 'Name cannot exceed 100 characters';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 12),
 
@@ -326,8 +331,10 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: _buildInputDecoration('Price (₱) *', Icons.payments_outlined),
                                 validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Required';
-                                  if (double.tryParse(v) == null) return 'Invalid price';
+                                  if (v == null || v.trim().isEmpty) return 'Price required';
+                                  final price = double.tryParse(v.trim());
+                                  if (price == null) return 'Invalid price';
+                                  if (price <= 0) return 'Price must be > 0';
                                   return null;
                                 },
                               ),
@@ -339,8 +346,10 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                 keyboardType: TextInputType.number,
                                 decoration: _buildInputDecoration('Stock Qty *', Icons.numbers_rounded),
                                 validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Required';
-                                  if (int.tryParse(v) == null) return 'Invalid qty';
+                                  if (v == null || v.trim().isEmpty) return 'Stock required';
+                                  final stock = int.tryParse(v.trim());
+                                  if (stock == null) return 'Invalid stock';
+                                  if (stock < 0) return 'Cannot be negative';
                                   return null;
                                 },
                               ),
@@ -354,8 +363,37 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
-                            onPressed: () {
+                            onPressed: () async {
                               if (formKey.currentState!.validate()) {
+                                if (isEditing) {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (c) => AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      title: Row(
+                                        children: const [
+                                          Icon(Icons.edit_note_rounded, color: Color(0xFF0F172A)),
+                                          SizedBox(width: 8),
+                                          Text('Confirm Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                      content: const Text('Are you sure you want to save the changes made to this product?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(c, false),
+                                          child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+                                          onPressed: () => Navigator.pop(c, true),
+                                          child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm != true) return;
+                                }
+
                                 setState(() {
                                   if (isEditing) {
                                     product.name = nameController.text.trim();
@@ -547,13 +585,42 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE11D48), size: 22),
-                        onPressed: () {
-                          setState(() {
-                            _products.removeWhere((p) => p.id == product.id);
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Product deleted')),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (c) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: Row(
+                                children: const [
+                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48)),
+                                  SizedBox(width: 8),
+                                  Text('Confirm Delete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              content: Text('Are you sure you want to delete "${product.name}"? This action cannot be undone.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(c, false),
+                                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
+                                  onPressed: () => Navigator.pop(c, true),
+                                  child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
                           );
+
+                          if (confirm == true) {
+                            setState(() {
+                              _products.removeWhere((p) => p.id == product.id);
+                            });
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Product deleted successfully')),
+                            );
+                          }
                         },
                       ),
                     ],
@@ -587,4 +654,4 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
     );
   }
-} x
+}

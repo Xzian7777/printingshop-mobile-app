@@ -70,10 +70,11 @@ class LocalDbService {
   // Get Local Cached Orders (Instant Query)
   Future<List<Map<String, dynamic>>> getLocalOrders(String email) async {
     final db = await instance.database;
+    final isAdm = email.toLowerCase().trim() == 'supernovaelectrodog@gmail.com';
     return await db.query(
       'local_orders',
-      where: email.contains('admin') ? null : 'email = ?',
-      whereArgs: email.contains('admin') ? null : [email],
+      where: isAdm ? null : 'email = ?',
+      whereArgs: isAdm ? null : [email],
       orderBy: 'createdAt DESC',
     );
   }

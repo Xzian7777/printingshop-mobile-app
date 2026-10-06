@@ -5,6 +5,7 @@ import 'login_screen.dart';
 import 'store_screen.dart';
 import 'place_order_screen.dart';
 import 'admin_products_screen.dart';
+import '../services/order_repository.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userEmail;
@@ -15,6 +16,12 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    OrderRepository().syncOfflineOrders();
+  }
+
   int _currentNavIndex = 0;
   int _adminSubTab = 0; // 0: Orders Queue, 1: Live Chat, 2: Analytics, 3: RFID Monitor
 
@@ -44,7 +51,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _chatReplyController = TextEditingController();
 
-  bool get _isAdmin => widget.userEmail.toLowerCase().contains('admin');
+  bool get _isAdmin => widget.userEmail.toLowerCase().trim() == 'supernovaelectrodog@gmail.com';
 
   // FIRESTORE COLLECTIONS
   CollectionReference get _ordersRef => FirebaseFirestore.instance
@@ -1542,23 +1549,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<void> _confirmAndUpdateOrderStatus(String orderId, String newStatus, String actionLabel) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF0F172A)),
+            SizedBox(width: 8),
+            Text('Confirm Action', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text('Are you sure you want to change order status to "$newStatus"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(actionLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _ordersRef.doc(orderId).update({'status': newStatus});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Order status updated to "$newStatus"')),
+      );
+    }
+  }
+
   Widget _buildDynamicActionButton(String orderId, String status) {
     final category = _getStatusCategory(status);
     if (category == 'approval') {
       return ElevatedButton(
-        onPressed: () async => await _ordersRef.doc(orderId).update({'status': 'Printing'}),
+        onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Printing', 'Approve Order'),
         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
         child: const Text('Approve', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
       );
     } else if (category == 'printing') {
       return ElevatedButton(
-        onPressed: () async => await _ordersRef.doc(orderId).update({'status': 'Ready for Pickup'}),
+        onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Ready for Pickup', 'Mark Ready'),
         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
         child: const Text('Mark Ready', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
       );
     } else if (category == 'ready') {
       return ElevatedButton(
-        onPressed: () async => await _ordersRef.doc(orderId).update({'status': 'Completed'}),
+        onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Completed', 'Complete Order'),
         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
         child: const Text('Complete', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
       );
@@ -1650,6 +1693,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: StreamBuilder<QuerySnapshot>(
             stream: _ordersRef.where('email', isEqualTo: widget.userEmail).snapshots(),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFE11D48)),
+                        SizedBox(height: 8),
+                        Text('Nabigo sa pagkonekta sa database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                        Text('Gumagamit ng local offline cache kung available.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                  ),
+                );
+              }
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               final docs = snapshot.data!.docs;
               if (docs.isEmpty) return const Center(child: Text('Wala ka pang order.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)));

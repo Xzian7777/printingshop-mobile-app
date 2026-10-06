@@ -28,7 +28,7 @@ class OrderRepository {
     if (await isOnline()) {
       try {
         Query query = _ordersRef.orderBy('createdAt', descending: true).limit(20); // PAGINATION LIMIT
-        if (!userEmail.toLowerCase().contains('admin')) {
+        if (userEmail.toLowerCase().trim() != 'supernovaelectrodog@gmail.com') {
           query = query.where('email', isEqualTo: userEmail);
         }
 

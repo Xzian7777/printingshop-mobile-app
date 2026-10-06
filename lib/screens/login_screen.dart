@@ -3,7 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dashboard_screen.dart';
+import '../utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -174,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return (100000 + random.nextInt(900000)).toString();
   }
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     if (_loginFormKey.currentState!.validate()) {
       if (!_loginAgreeTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -187,26 +189,70 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
 
       final email = _loginEmailController.text.trim();
+      final password = _loginPasswordController.text.trim();
 
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => DashboardScreen(userEmail: email),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.0, 0.05),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-                child: child,
-              ),
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 600),
-        ),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(child: CircularProgressIndicator(color: Color(0xFFE11D48))),
       );
+
+      try {
+        // 1. Check Admin Credentials
+        if (email.toLowerCase() == 'supernovaelectrodog@gmail.com') {
+          if (password == 'admin123') {
+            if (!mounted) return;
+            Navigator.pop(context); // pop loading
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => DashboardScreen(userEmail: email)),
+            );
+            return;
+          } else {
+            if (!mounted) return;
+            Navigator.pop(context); // pop loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Mali ang password ng Admin.'), backgroundColor: Colors.red),
+            );
+            return;
+          }
+        }
+
+        // 2. Customer Login via Firebase Auth (Must be registered in Firebase)
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+
+        if (!mounted) return;
+        Navigator.pop(context); // pop loading
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DashboardScreen(userEmail: email)),
+        );
+      } on FirebaseAuthException catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // pop loading
+        String errorMsg = 'Login failed.';
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          errorMsg = 'Ang customer na ito ay hindi nakarehistro sa Firebase o mali ang password.';
+        } else if (e.code == 'wrong-password') {
+          errorMsg = 'Mali ang password.';
+        } else if (e.code == 'invalid-email') {
+          errorMsg = 'Invalid email format.';
+        } else {
+          errorMsg = e.message ?? 'Authentication error.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // pop loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -224,6 +270,89 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     bool isLoading = false;
     String? termsErrorMsg;
 
+    Widget buildRequirementItem(String text, bool isMet) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2.0),
+        child: Row(
+          children: [
+            Icon(
+              isMet ? Icons.check_circle_rounded : Icons.cancel_rounded,
+              size: 16,
+              color: isMet ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: isMet ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                  fontWeight: isMet ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildModalField({
+      required String label,
+      required String hintText,
+      required TextEditingController controller,
+      bool isRequired = false,
+      bool obscureText = false,
+      TextInputType keyboardType = TextInputType.text,
+      int? maxLength,
+      Widget? suffixIcon,
+      String? subtext,
+      String? Function(String?)? validator,
+      void Function(String)? onChanged,
+    }) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              if (isRequired)
+                const Text(' *', style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: controller,
+            obscureText: obscureText,
+            keyboardType: keyboardType,
+            maxLength: maxLength,
+            onChanged: onChanged,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
+            decoration: InputDecoration(
+              hintText: hintText,
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+              counterText: '',
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFC026D3), width: 1.5)),
+              errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE11D48))),
+              focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
+              suffixIcon: suffixIcon,
+            ),
+            validator: validator,
+          ),
+          if (subtext != null) ...[
+            const SizedBox(height: 4),
+            Text(subtext, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          ],
+        ],
+      );
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -231,6 +360,41 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final pass = passwordController.text;
+            final name = nameController.text.trim().toLowerCase();
+            final emailPrefix = emailController.text.trim().split('@').first.toLowerCase();
+
+            bool req1 = pass.length >= 8;
+            bool req2 = RegExp(r'[A-Z]').hasMatch(pass) && RegExp(r'[a-z]').hasMatch(pass);
+            bool req3 = RegExp(r'[0-9!@#$%^&*(),.?":{}|<>]').hasMatch(pass);
+            bool req4 = pass.isNotEmpty && !pass.contains(' ');
+            bool req5 = pass.isNotEmpty &&
+                (name.length < 2 || !pass.toLowerCase().contains(name)) &&
+                (emailPrefix.length < 2 || !pass.toLowerCase().contains(emailPrefix));
+
+            int metCount = [req1, req2, req3, req4, req5].where((b) => b).length;
+            String strengthText = 'Weak';
+            Color strengthColor = const Color(0xFFF43F5E);
+            double strengthValue = 0.25;
+
+            if (pass.isEmpty) {
+              strengthText = 'Weak';
+              strengthColor = const Color(0xFFF43F5E);
+              strengthValue = 0.25;
+            } else if (metCount <= 2) {
+              strengthText = 'Weak';
+              strengthColor = const Color(0xFFF43F5E);
+              strengthValue = 0.33;
+            } else if (metCount <= 4) {
+              strengthText = 'Medium';
+              strengthColor = const Color(0xFFF59E0B);
+              strengthValue = 0.66;
+            } else {
+              strengthText = 'Strong';
+              strengthColor = const Color(0xFF10B981);
+              strengthValue = 1.0;
+            }
+
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
@@ -256,62 +420,123 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
+                        const SizedBox(height: 14),
+
+                        // 1. Full Name
+                        buildModalField(
+                          label: 'Full Name',
+                          hintText: 'e.g. Juan A. Dela Cruz',
                           controller: nameController,
-                          decoration: _buildInputDecoration('Full Name *', Icons.person_outline_rounded),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter your full name' : null,
+                          onChanged: (_) => setModalState(() {}),
+                          validator: (v) => AppValidators.validateName(v),
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: _buildInputDecoration('Email Address *', Icons.email_outlined),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Please enter your email address';
-                            final reg = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                            if (!reg.hasMatch(v.trim())) return 'Please enter a valid email address';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
+                        const SizedBox(height: 14),
+
+                        // 2. Contact Number
+                        buildModalField(
+                          label: 'Contact Number (For SMS Alerts)',
+                          hintText: '09171234567',
                           controller: phoneController,
                           keyboardType: TextInputType.phone,
                           maxLength: 11,
-                          decoration: _buildInputDecoration('Contact Number (09XX...) *', Icons.phone_android_rounded).copyWith(counterText: ''),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Please enter your contact number';
-                            final phReg = RegExp(r'^09\d{9}$');
-                            if (!phReg.hasMatch(v.trim())) return 'Must start with 09 and contain 11 digits';
-                            return null;
-                          },
+                          subtext: 'Format: 11-digit PH mobile number starting with 09',
+                          validator: (v) => AppValidators.validateContactNumber(v),
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
+                        const SizedBox(height: 14),
+
+                        // 3. Gmail Address
+                        buildModalField(
+                          label: 'Gmail Address (*.gmail.com)',
+                          hintText: 'juan.delacruz@gmail.com',
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          onChanged: (_) => setModalState(() {}),
+                          validator: (v) => AppValidators.validateEmail(v),
+                        ),
+                        const SizedBox(height: 14),
+
+                        // 4. Password
+                        buildModalField(
+                          label: 'Password',
+                          isRequired: true,
+                          hintText: 'Enter strong password',
                           controller: passwordController,
                           obscureText: obscurePass,
-                          decoration: _buildInputDecoration('Password *', Icons.lock_outline_rounded).copyWith(
-                            suffixIcon: IconButton(
-                              icon: Icon(obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
-                              onPressed: () => setModalState(() => obscurePass = !obscurePass),
-                            ),
+                          onChanged: (_) => setModalState(() {}),
+                          suffixIcon: IconButton(
+                            icon: Icon(obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B), size: 20),
+                            onPressed: () => setModalState(() => obscurePass = !obscurePass),
                           ),
                           validator: (v) {
                             if (v == null || v.isEmpty) return 'Please enter a password';
-                            if (v.length < 6) return 'Must be at least 6 characters';
+                            if (!req1 || !req2 || !req3 || !req4 || !req5) return 'Password does not meet requirements';
                             return null;
                           },
                         ),
+                        const SizedBox(height: 8),
+
+                        // Password Strength Indicator
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Password strength: $strengthText',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: strengthColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: strengthValue,
+                                backgroundColor: const Color(0xFFF1F5F9),
+                                valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
+                                minHeight: 6,
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 12),
-                        TextFormField(
+
+                        // Password Requirements Card
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'PASSWORD REQUIREMENTS:',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5),
+                              ),
+                              const SizedBox(height: 8),
+                              buildRequirementItem('Must be at least 8 characters', req1),
+                              buildRequirementItem('Must have Uppercase (A-Z) and Lowercase (a-z)', req2),
+                              buildRequirementItem('Must have at least one symbol or number', req3),
+                              buildRequirementItem("Can't contain spaces", req4),
+                              buildRequirementItem("Can't include your name or email address", req5),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        // 5. Confirm Password
+                        buildModalField(
+                          label: 'Confirm Password',
+                          isRequired: true,
+                          hintText: 'Re-enter password',
                           controller: confirmPasswordController,
                           obscureText: obscureConfirmPass,
-                          decoration: _buildInputDecoration('Confirm Password *', Icons.lock_reset_rounded).copyWith(
-                            suffixIcon: IconButton(
-                              icon: Icon(obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
-                              onPressed: () => setModalState(() => obscureConfirmPass = !obscureConfirmPass),
-                            ),
+                          suffixIcon: IconButton(
+                            icon: Icon(obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B), size: 20),
+                            onPressed: () => setModalState(() => obscureConfirmPass = !obscureConfirmPass),
                           ),
                           validator: (v) {
                             if (v == null || v.isEmpty) return 'Please confirm your password';
@@ -319,20 +544,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             return null;
                           },
                         ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: termsErrorMsg != null ? const Color(0xFFE11D48) : const Color(0xFFE2E8F0)),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Checkbox(
+                        const SizedBox(height: 14),
+
+                        // Terms & Conditions Checkbox
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Checkbox(
                                 value: agreeToTerms,
-                                activeColor: const Color(0xFFE11D48),
+                                activeColor: const Color(0xFFC026D3),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                 onChanged: (val) {
                                   setModalState(() {
                                     agreeToTerms = val ?? false;
@@ -340,84 +564,116 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   });
                                 },
                               ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: GestureDetector(
-                                    onTap: () => _showTermsAndConditionsDialog(context),
-                                    child: const Text.rich(
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => _showTermsAndConditionsDialog(context),
+                                child: const Text.rich(
+                                  TextSpan(
+                                    text: "Sumasang-ayon ako sa ",
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
+                                    children: [
                                       TextSpan(
-                                        text: "I agree to the ",
-                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF334155), height: 1.3),
-                                        children: [
-                                          TextSpan(
-                                            text: "Terms & Conditions",
-                                            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48), decoration: TextDecoration.underline),
-                                          ),
-                                          TextSpan(text: " (Unclaimed printed items after 30 days will be disposed of)."),
-                                        ],
+                                        text: "Terms & Conditions",
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48)),
                                       ),
-                                    ),
+                                      TextSpan(
+                                        text: " (Ang hindi mai-claim na prints sa loob ng 30 araw ay ida-dispose na).",
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                         if (termsErrorMsg != null)
                           Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 4),
+                            padding: const EdgeInsets.only(left: 32, top: 4),
                             child: Text(termsErrorMsg!, style: const TextStyle(color: Color(0xFFE11D48), fontSize: 11)),
                           ),
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton(
-                            onPressed: isLoading
-                                ? null
-                                : () async {
-                              setModalState(() {
-                                termsErrorMsg = agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
-                              });
+                        const SizedBox(height: 20),
 
-                              if (registerFormKey.currentState!.validate() && agreeToTerms) {
-                                setModalState(() => isLoading = true);
-                                final otp = _generate6DigitOTP();
-                                final recipient = emailController.text.trim();
+                        // Action Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () async {
+                                          setModalState(() {
+                                            termsErrorMsg = agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
+                                          });
 
-                                bool sent = await _sendEmailOTP(
-                                  recipientEmail: recipient,
-                                  otpCode: otp,
-                                  subjectText: 'Account Verification - Kez C-Em Zek',
-                                );
+                                          if (registerFormKey.currentState!.validate() && agreeToTerms) {
+                                            setModalState(() => isLoading = true);
+                                            final otp = _generate6DigitOTP();
+                                            final recipient = emailController.text.trim();
 
-                                setModalState(() => isLoading = false);
+                                            bool sent = await _sendEmailOTP(
+                                              recipientEmail: recipient,
+                                              otpCode: otp,
+                                              subjectText: 'Account Verification - Kez C-Em Zek',
+                                            );
 
-                                if (mounted) {
-                                  Navigator.pop(context);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        sent
-                                            ? 'Account registered! Verification code sent to $recipient'
-                                            : 'Failed to send verification email.',
-                                      ),
-                                      backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFE11D48),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE11D48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: 0,
+                                            if (sent) {
+                                              try {
+                                                await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                                                  email: recipient,
+                                                  password: passwordController.text.trim(),
+                                                );
+                                              } catch (fbErr) {
+                                                debugPrint('Firebase Auth Register Error: $fbErr');
+                                              }
+                                            }
+
+                                            setModalState(() => isLoading = false);
+
+                                            if (mounted) {
+                                              Navigator.pop(context);
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    sent
+                                                        ? 'Account registered! Verification code sent to $recipient'
+                                                        : 'Failed to send verification email.',
+                                                  ),
+                                                  backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFE11D48),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFC026D3),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 0,
+                                  ),
+                                  child: isLoading
+                                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Text('Send Verification Code', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                                ),
+                              ),
                             ),
-                            child: isLoading
-                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                : const Text('Register Account', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                          ),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  foregroundColor: const Color(0xFF334155),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: 0,
+                                ),
+                                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -847,7 +1103,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           controller: _loginEmailController,
                                           keyboardType: TextInputType.emailAddress,
                                           decoration: _buildInputDecoration('Email Address', Icons.email_outlined),
-                                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter email' : null,
+                                          validator: (v) => AppValidators.validateEmail(v),
                                         ),
                                         const SizedBox(height: 8),
                                         TextFormField(
@@ -859,7 +1115,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                               onPressed: () => setState(() => _obscureLoginPassword = !_obscureLoginPassword),
                                             ),
                                           ),
-                                          validator: (v) => (v == null || v.isEmpty) ? 'Enter password' : null,
+                                          validator: (v) => AppValidators.validatePassword(v),
                                         ),
                                         Align(
                                           alignment: Alignment.centerRight,
