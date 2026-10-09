@@ -9,11 +9,18 @@ import '../services/order_repository.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userEmail;
-  const DashboardScreen({super.key, required this.userEmail});
+  final bool isAdmin;
+
+  const DashboardScreen({
+    super.key,
+    required this.userEmail,
+    required this.isAdmin,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
+
 
 class _DashboardScreenState extends State<DashboardScreen> {
   @override
@@ -51,7 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _chatReplyController = TextEditingController();
 
-  bool get _isAdmin => widget.userEmail.toLowerCase().trim() == 'supernovaelectrodog@gmail.com';
+  bool get _isAdmin => widget.isAdmin;
 
   // FIRESTORE COLLECTIONS
   CollectionReference get _ordersRef => FirebaseFirestore.instance

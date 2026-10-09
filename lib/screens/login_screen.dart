@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dashboard_screen.dart';
 import '../utils/validators.dart';
@@ -144,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     required String subjectText,
   }) async {
     const String senderEmail = 'xdawinan@gmail.com';
-    const String appPassword = 'oplc shee myfd xpdy';
+    const String appPassword = 'rowb brnm dtzo oufu';
 
     final smtpServer = gmail(senderEmail, appPassword);
 
@@ -198,50 +199,57 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
 
       try {
-        // 1. Check Admin Credentials
-        if (email.toLowerCase() == 'supernovaelectrodog@gmail.com') {
-          if (password == 'admin123') {
-            if (!mounted) return;
-            Navigator.pop(context); // pop loading
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => DashboardScreen(userEmail: email)),
-            );
-            return;
-          } else {
-            if (!mounted) return;
-            Navigator.pop(context); // pop loading
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Mali ang password ng Admin.'), backgroundColor: Colors.red),
-            );
-            return;
-          }
-        }
-
-        // 2. Customer Login via Firebase Auth (Must be registered in Firebase)
+        // Login using Firebase Authentication
+        final credential =
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
 
+        final user = credential.user;
+
+        if (user == null) {
+          throw FirebaseAuthException(
+            code: 'user-not-found',
+            message: 'User account not found.',
+          );
+        }
+
+        // Get user's role from Firestore
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        final role = userDoc.data()?['role']?.toString().toLowerCase();
+
+        final isAdmin = role == 'admin';
+
         if (!mounted) return;
-        Navigator.pop(context); // pop loading
+
+        Navigator.pop(context); // Close loading dialog
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => DashboardScreen(userEmail: email)),
+          MaterialPageRoute(
+            builder: (context) => DashboardScreen(
+              userEmail: user.email ?? email,
+              isAdmin: isAdmin,
+            ),
+          ),
         );
       } on FirebaseAuthException catch (e) {
         if (!mounted) return;
         Navigator.pop(context); // pop loading
         String errorMsg = 'Login failed.';
-        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-          errorMsg = 'Ang customer na ito ay hindi nakarehistro sa Firebase o mali ang password.';
+        if (e.code == 'user-not-found') {
+          errorMsg = 'Firebase error: user-not-found';
+        } else if (e.code == 'invalid-credential') {
+          errorMsg = 'Firebase error: invalid-credential';
         } else if (e.code == 'wrong-password') {
-          errorMsg = 'Mali ang password.';
-        } else if (e.code == 'invalid-email') {
-          errorMsg = 'Invalid email format.';
+          errorMsg = 'Firebase error: wrong-password';
         } else {
-          errorMsg = e.message ?? 'Authentication error.';
+          errorMsg = 'Firebase error: ${e.code}';
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
