@@ -1211,4 +1211,4 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
     );
   }
-}
+} s
