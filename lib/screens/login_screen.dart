@@ -20,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final TextEditingController _loginEmailController = TextEditingController();
   final TextEditingController _loginPasswordController = TextEditingController();
   bool _obscureLoginPassword = true;
-  bool _loginAgreeTerms = false; // State para sa Login T&C Checkbox
+  bool _loginAgreeTerms = false;
 
   late AnimationController _animController;
   late Animation<double> _bgFadeAnimation;
@@ -92,7 +92,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // --- TERMS & CONDITIONS DIALOG ---
+  InputDecoration _buildInputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+      prefixIcon: Icon(icon, size: 18, color: const Color(0xFF64748B)),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48))),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
+    );
+  }
+
   void _showTermsAndConditionsDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -157,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
           <h2 style="color: #e11d48;">Kez C-Em Zek Printing Shop Service</h2>
           <p>Hello,</p>
-          <p>Your verification code is:</p>
+          <p>Your OTP verification code is:</p>
           <h1 style="color: #0f172a; letter-spacing: 5px;">$otpCode</h1>
           <p style="color: #64748b; font-size: 12px;">This code will expire in 5 minutes.</p>
         </div>
@@ -199,9 +213,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
 
       try {
-        // Login using Firebase Authentication
-        final credential =
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
@@ -215,19 +227,66 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           );
         }
 
-        // Get user's role from Firestore
+        // Check if email has been verified via the link
+        if (!user.emailVerified) {
+          await FirebaseAuth.instance.signOut();
+          if (!mounted) return;
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please verify your email address before logging in. Check your inbox for the verification link.'),
+              backgroundColor: Color(0xFFE11D48),
+            ),
+          );
+          return;
+        }
+
+        // Migrate pending_users to users collection if not yet migrated
+        final userDocCheck = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDocCheck.exists) {
+          final pendingDoc = await FirebaseFirestore.instance
+              .collection('pending_users')
+              .doc(user.uid)
+              .get();
+
+          final pendingEmailDoc = await FirebaseFirestore.instance
+              .collection('pending_users')
+              .doc(email)
+              .get();
+
+          final data = pendingDoc.data() ?? pendingEmailDoc.data() ?? {};
+
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'uid': user.uid,
+            'full_name': data['full_name'] ?? (user.displayName ?? 'Customer'),
+            'phone': data['phone'] ?? '',
+            'email': user.email ?? email,
+            'role': 'customer',
+            'created_at': FieldValue.serverTimestamp(),
+          });
+
+          await FirebaseFirestore.instance.collection('pending_users').doc(user.uid).delete();
+          await FirebaseFirestore.instance.collection('pending_users').doc(email).delete();
+        }
+
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .get();
 
         final role = userDoc.data()?['role']?.toString().toLowerCase();
-
         final isAdmin = role == 'admin';
 
         if (!mounted) return;
 
-        Navigator.pop(context); // Close loading dialog
+        Navigator.pop(context);
 
         Navigator.pushReplacement(
           context,
@@ -240,7 +299,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         );
       } on FirebaseAuthException catch (e) {
         if (!mounted) return;
-        Navigator.pop(context); // pop loading
+        Navigator.pop(context);
         String errorMsg = 'Login failed.';
         if (e.code == 'user-not-found') {
           errorMsg = 'Firebase error: user-not-found';
@@ -256,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         );
       } catch (e) {
         if (!mounted) return;
-        Navigator.pop(context); // pop loading
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
@@ -265,18 +324,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   void _showRegisterModal(BuildContext context) {
+    int regStep = 1;
     final registerFormKey = GlobalKey<FormState>();
+    final otpFormKey = GlobalKey<FormState>();
+
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
     final passwordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
+    final otpController = TextEditingController();
 
     bool obscurePass = true;
     bool obscureConfirmPass = true;
     bool agreeToTerms = false;
     bool isLoading = false;
     String? termsErrorMsg;
+
+    Timer? regCountdownTimer;
+    int regSecondsRemaining = 60;
+    bool regCanResend = false;
+    String activeOtp = '';
+    String recipientEmail = '';
 
     Widget buildRequirementItem(String text, bool isMet) {
       return Padding(
@@ -368,6 +437,234 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            void startRegTimer() {
+              setModalState(() {
+                regSecondsRemaining = 60;
+                regCanResend = false;
+              });
+              regCountdownTimer?.cancel();
+              regCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+                if (regSecondsRemaining > 0) {
+                  setModalState(() => regSecondsRemaining--);
+                } else {
+                  setModalState(() => regCanResend = true);
+                  timer.cancel();
+                }
+              });
+            }
+
+            Future<void> sendRegisterVerificationLink() async {
+              setModalState(() => isLoading = true);
+              recipientEmail = emailController.text.trim();
+              final password = passwordController.text.trim();
+              final fullName = nameController.text.trim();
+              final phone = phoneController.text.trim();
+
+              try {
+                // 1. Create account in Firebase Auth
+                UserCredential userCredential = await FirebaseAuth.instance
+                    .createUserWithEmailAndPassword(
+                  email: recipientEmail,
+                  password: password,
+                );
+
+                await userCredential.user?.updateDisplayName(fullName);
+
+                // 2. Send Firebase verification link to email
+                await userCredential.user?.sendEmailVerification();
+
+                // 3. Save pending info in pending_users collection
+                await FirebaseFirestore.instance
+                    .collection('pending_users')
+                    .doc(userCredential.user!.uid)
+                    .set({
+                  'uid': userCredential.user!.uid,
+                  'full_name': fullName,
+                  'phone': phone,
+                  'email': recipientEmail,
+                  'role': 'customer',
+                  'created_at': FieldValue.serverTimestamp(),
+                });
+
+                await FirebaseFirestore.instance
+                    .collection('pending_users')
+                    .doc(recipientEmail)
+                    .set({
+                  'uid': userCredential.user!.uid,
+                  'full_name': fullName,
+                  'phone': phone,
+                  'email': recipientEmail,
+                  'role': 'customer',
+                  'created_at': FieldValue.serverTimestamp(),
+                });
+
+                setModalState(() => isLoading = false);
+                startRegTimer();
+                setModalState(() => regStep = 2);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Verification link sent to your email!'),
+                      backgroundColor: Color(0xFF059669),
+                    ),
+                  );
+                }
+              } on FirebaseAuthException catch (e) {
+                setModalState(() => isLoading = false);
+                if (mounted) {
+                  String msg = e.message ?? 'Registration failed.';
+                  if (e.code == 'email-already-in-use') {
+                    msg = 'This email is already registered. Please log in.';
+                  } else if (e.code == 'weak-password') {
+                    msg = 'The password is too weak.';
+                  } else if (e.code == 'invalid-email') {
+                    msg = 'The email address is invalid.';
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(msg),
+                      backgroundColor: const Color(0xFFE11D48),
+                    ),
+                  );
+                }
+              } catch (e) {
+                setModalState(() => isLoading = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error saving registration data: $e'),
+                      backgroundColor: const Color(0xFFE11D48),
+                    ),
+                  );
+                }
+              }
+            }
+
+            Future<void> resendVerificationLink() async {
+              setModalState(() => isLoading = true);
+              try {
+                User? user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  await user.sendEmailVerification();
+                } else {
+                  final credential = await FirebaseAuth.instance
+                      .signInWithEmailAndPassword(
+                    email: recipientEmail,
+                    password: passwordController.text.trim(),
+                  );
+                  user = credential.user;
+                  await user?.sendEmailVerification();
+                }
+
+                setModalState(() => isLoading = false);
+                startRegTimer();
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Verification link resent successfully!'),
+                      backgroundColor: Color(0xFF059669),
+                    ),
+                  );
+                }
+              } catch (e) {
+                setModalState(() => isLoading = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to resend verification link: $e'),
+                      backgroundColor: const Color(0xFFE11D48),
+                    ),
+                  );
+                }
+              }
+            }
+
+            Future<void> checkVerificationStatus() async {
+              setModalState(() => isLoading = true);
+              try {
+                User? user = FirebaseAuth.instance.currentUser;
+                if (user == null) {
+                  final credential = await FirebaseAuth.instance
+                      .signInWithEmailAndPassword(
+                    email: recipientEmail,
+                    password: passwordController.text.trim(),
+                  );
+                  user = credential.user;
+                }
+
+                if (user != null) {
+                  await user.reload();
+                  user = FirebaseAuth.instance.currentUser;
+                }
+
+                if (user != null && user.emailVerified) {
+                  final pendingDoc = await FirebaseFirestore.instance
+                      .collection('pending_users')
+                      .doc(user.uid)
+                      .get();
+
+                  final pendingEmailDoc = await FirebaseFirestore.instance
+                      .collection('pending_users')
+                      .doc(recipientEmail)
+                      .get();
+
+                  final data = pendingDoc.data() ?? pendingEmailDoc.data() ?? {};
+
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .set({
+                    'uid': user.uid,
+                    'full_name': data['full_name'] ?? (user.displayName ?? nameController.text.trim()),
+                    'phone': data['phone'] ?? phoneController.text.trim(),
+                    'email': user.email ?? recipientEmail,
+                    'role': 'customer',
+                    'created_at': FieldValue.serverTimestamp(),
+                  });
+
+                  await FirebaseFirestore.instance.collection('pending_users').doc(user.uid).delete();
+                  await FirebaseFirestore.instance.collection('pending_users').doc(recipientEmail).delete();
+
+                  await FirebaseAuth.instance.signOut();
+
+                  regCountdownTimer?.cancel();
+                  setModalState(() => isLoading = false);
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Email verified successfully! You can now log in.'),
+                        backgroundColor: Color(0xFF059669),
+                      ),
+                    );
+                  }
+                } else {
+                  setModalState(() => isLoading = false);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Your email is not verified yet. Please click the link in your email first.'),
+                        backgroundColor: Color(0xFFE11D48),
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                setModalState(() => isLoading = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error checking verification: $e'),
+                      backgroundColor: const Color(0xFFE11D48),
+                    ),
+                  );
+                }
+              }
+            }
+
             final pass = passwordController.text;
             final name = nameController.text.trim().toLowerCase();
             final emailPrefix = emailController.text.trim().split('@').first.toLowerCase();
@@ -412,7 +709,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 ),
                 padding: const EdgeInsets.all(20.0),
                 child: SingleChildScrollView(
-                  child: Form(
+                  child: regStep == 1
+                      ? Form(
                     key: registerFormKey,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -424,13 +722,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             const Text('Create New Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                             IconButton(
                               icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: () {
+                                regCountdownTimer?.cancel();
+                                Navigator.pop(context);
+                              },
                             ),
                           ],
                         ),
                         const SizedBox(height: 14),
 
-                        // 1. Full Name
                         buildModalField(
                           label: 'Full Name',
                           hintText: 'e.g. Juan A. Dela Cruz',
@@ -440,7 +740,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 14),
 
-                        // 2. Contact Number
                         buildModalField(
                           label: 'Contact Number (For SMS Alerts)',
                           hintText: '09171234567',
@@ -452,7 +751,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 14),
 
-                        // 3. Gmail Address
                         buildModalField(
                           label: 'Gmail Address (*.gmail.com)',
                           hintText: 'juan.delacruz@gmail.com',
@@ -463,7 +761,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 14),
 
-                        // 4. Password
                         buildModalField(
                           label: 'Password',
                           isRequired: true,
@@ -483,7 +780,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 8),
 
-                        // Password Strength Indicator
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -509,7 +805,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 12),
 
-                        // Password Requirements Card
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -535,7 +830,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 14),
 
-                        // 5. Confirm Password
                         buildModalField(
                           label: 'Confirm Password',
                           isRequired: true,
@@ -554,7 +848,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         const SizedBox(height: 14),
 
-                        // Terms & Conditions Checkbox
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -579,7 +872,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 onTap: () => _showTermsAndConditionsDialog(context),
                                 child: const Text.rich(
                                   TextSpan(
-                                    text: "Sumasang-ayon ako sa ",
+                                    text: "I agree to the ",
                                     style: TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
                                     children: [
                                       TextSpan(
@@ -587,7 +880,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48)),
                                       ),
                                       TextSpan(
-                                        text: " (Ang hindi mai-claim na prints sa loob ng 30 araw ay ida-dispose na).",
+                                        text: " (Unclaimed prints within 30 days will be disposed of).",
                                       ),
                                     ],
                                   ),
@@ -603,7 +896,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ),
                         const SizedBox(height: 20),
 
-                        // Action Buttons
                         Row(
                           children: [
                             Expanded(
@@ -613,49 +905,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   onPressed: isLoading
                                       ? null
                                       : () async {
-                                          setModalState(() {
-                                            termsErrorMsg = agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
-                                          });
+                                    setModalState(() {
+                                      termsErrorMsg = agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
+                                    });
 
-                                          if (registerFormKey.currentState!.validate() && agreeToTerms) {
-                                            setModalState(() => isLoading = true);
-                                            final otp = _generate6DigitOTP();
-                                            final recipient = emailController.text.trim();
-
-                                            bool sent = await _sendEmailOTP(
-                                              recipientEmail: recipient,
-                                              otpCode: otp,
-                                              subjectText: 'Account Verification - Kez C-Em Zek',
-                                            );
-
-                                            if (sent) {
-                                              try {
-                                                await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                                                  email: recipient,
-                                                  password: passwordController.text.trim(),
-                                                );
-                                              } catch (fbErr) {
-                                                debugPrint('Firebase Auth Register Error: $fbErr');
-                                              }
-                                            }
-
-                                            setModalState(() => isLoading = false);
-
-                                            if (mounted) {
-                                              Navigator.pop(context);
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    sent
-                                                        ? 'Account registered! Verification code sent to $recipient'
-                                                        : 'Failed to send verification email.',
-                                                  ),
-                                                  backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFE11D48),
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        },
+                                    if (registerFormKey.currentState!.validate() && agreeToTerms) {
+                                      await sendRegisterVerificationLink();
+                                    }
+                                  },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFFC026D3),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -663,7 +920,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   ),
                                   child: isLoading
                                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                      : const Text('Send Verification Code', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                                      : const Text('Send Verification Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
                                 ),
                               ),
                             ),
@@ -683,6 +940,98 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                           ],
                         ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  )
+                      : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Verify Your Email', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                            onPressed: () {
+                              regCountdownTimer?.cancel();
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Center(
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFDF2F8),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFFBCFE8), width: 1.5),
+                          ),
+                          child: const Icon(Icons.mark_email_read_rounded, color: Color(0xFFC026D3), size: 30),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          'A verification link has been sent to:',
+                          style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
+                          recipientEmail,
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Text(
+                          'Please check your inbox (and spam folder) and click the verification link to activate your account.',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF475569), height: 1.4),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: isLoading ? null : checkVerificationStatus,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF059669),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: isLoading
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('I Have Verified My Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: TextButton(
+                          onPressed: regCanResend && !isLoading ? () async => await resendVerificationLink() : null,
+                          child: Text(
+                            regCanResend ? 'Resend Verification Link' : 'Resend Link in ${regSecondsRemaining}s',
+                            style: TextStyle(color: regCanResend ? const Color(0xFFC026D3) : const Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                         const SizedBox(height: 10),
                       ],
                     ),
@@ -1071,7 +1420,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                                 const SizedBox(height: 14),
 
-                                // LANDING SCREEN T&C LINK
                                 TextButton.icon(
                                   onPressed: () => _showTermsAndConditionsDialog(context),
                                   icon: const Icon(Icons.gavel_rounded, size: 14, color: Colors.white70),
@@ -1134,7 +1482,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           ),
                                         ),
 
-                                        // LOGIN CARD T&C CHECKBOX
                                         Row(
                                           children: [
                                             Checkbox(
@@ -1194,21 +1541,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
         ],
       ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-      prefixIcon: Icon(icon, size: 18, color: const Color(0xFF64748B)),
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
-      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48))),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
     );
   }
 }

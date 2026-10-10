@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server.dart';
 import 'login_screen.dart';
 import '../utils/validators.dart';
 
@@ -11,18 +16,301 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  int _regStep = 1;
   final _formKey = GlobalKey<FormState>();
+// Removed unused OTP form key
 
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
+  bool _isLoading = false;
   String? _termsError;
+
+  Timer? _countdownTimer;
+  int _secondsRemaining = 60;
+  bool _canResend = false;
+  String _activeOtp = '';
+  String _recipientEmail = '';
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _fullNameController.dispose();
+    _mobileController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  String _generate6DigitOTP() {
+    final random = Random();
+    return (100000 + random.nextInt(900000)).toString();
+  }
+
+  Future<bool> _sendEmailOTP({
+    required String recipientEmail,
+    required String otpCode,
+    required String subjectText,
+  }) async {
+    const String senderEmail = 'xdawinan@gmail.com';
+    const String appPassword = 'rowb brnm dtzo oufu';
+
+    final smtpServer = gmail(senderEmail, appPassword);
+
+    final message = Message()
+      ..from = const Address(senderEmail, 'Kez C-Em Zek Printing')
+      ..recipients.add(recipientEmail)
+      ..subject = subjectText
+      ..html = '''
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <h2 style="color: #e11d48;">Kez C-Em Zek Printing Shop Service</h2>
+          <p>Hello,</p>
+          <p>Your OTP verification code is:</p>
+          <h1 style="color: #0f172a; letter-spacing: 5px;">$otpCode</h1>
+          <p style="color: #64748b; font-size: 12px;">This code will expire in 5 minutes.</p>
+        </div>
+      ''';
+
+    try {
+      await send(message, smtpServer);
+      return true;
+    } catch (e) {
+      debugPrint('SMTP Email Error: $e');
+      return false;
+    }
+  }
+
+  void _startTimer() {
+    setState(() {
+      _secondsRemaining = 60;
+      _canResend = false;
+    });
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsRemaining > 0) {
+        if (mounted) setState(() => _secondsRemaining--);
+      } else {
+        if (mounted) setState(() => _canResend = true);
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _sendRegisterVerificationLink() async {
+    setState(() => _isLoading = true);
+    _recipientEmail = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final fullName = _fullNameController.text.trim();
+    final phone = _mobileController.text.trim();
+
+    try {
+      // 1. Create account in Firebase Auth
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email: _recipientEmail,
+        password: password,
+      );
+
+      await userCredential.user?.updateDisplayName(fullName);
+
+      // 2. Send Firebase verification link
+      await userCredential.user?.sendEmailVerification();
+
+      // 3. Save pending info in pending_users collection
+      await FirebaseFirestore.instance
+          .collection('pending_users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'uid': userCredential.user!.uid,
+        'full_name': fullName,
+        'phone': phone,
+        'email': _recipientEmail,
+        'role': 'customer',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      await FirebaseFirestore.instance
+          .collection('pending_users')
+          .doc(_recipientEmail)
+          .set({
+        'uid': userCredential.user!.uid,
+        'full_name': fullName,
+        'phone': phone,
+        'email': _recipientEmail,
+        'role': 'customer',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      setState(() => _isLoading = false);
+      _startTimer();
+      setState(() => _regStep = 2);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification link sent to your email!'),
+          backgroundColor: Color(0xFF059669),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      String msg = e.message ?? 'Registration failed.';
+      if (e.code == 'email-already-in-use') {
+        msg = 'This email is already registered. Please log in.';
+      } else if (e.code == 'weak-password') {
+        msg = 'The password is too weak.';
+      } else if (e.code == 'invalid-email') {
+        msg = 'The email address is invalid.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFFE11D48),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving registration data: $e'),
+          backgroundColor: const Color(0xFFE11D48),
+        ),
+      );
+    }
+  }
+
+  Future<void> _resendVerificationLink() async {
+    setState(() => _isLoading = true);
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.sendEmailVerification();
+      } else {
+        final credential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(
+          email: _recipientEmail,
+          password: _passwordController.text.trim(),
+        );
+        user = credential.user;
+        await user?.sendEmailVerification();
+      }
+
+      setState(() => _isLoading = false);
+      _startTimer();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification link resent successfully!'),
+          backgroundColor: Color(0xFF059669),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to resend link: $e'),
+          backgroundColor: const Color(0xFFE11D48),
+        ),
+      );
+    }
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    setState(() => _isLoading = true);
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        final credential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(
+          email: _recipientEmail,
+          password: _passwordController.text.trim(),
+        );
+        user = credential.user;
+      }
+
+      if (user != null) {
+        await user.reload();
+        user = FirebaseAuth.instance.currentUser;
+      }
+
+      if (user != null && user.emailVerified) {
+        final pendingDoc = await FirebaseFirestore.instance
+            .collection('pending_users')
+            .doc(user.uid)
+            .get();
+
+        final pendingEmailDoc = await FirebaseFirestore.instance
+            .collection('pending_users')
+            .doc(_recipientEmail)
+            .get();
+
+        final data = pendingDoc.data() ?? pendingEmailDoc.data() ?? {};
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'uid': user.uid,
+          'full_name': data['full_name'] ?? (user.displayName ?? _fullNameController.text.trim()),
+          'phone': data['phone'] ?? _mobileController.text.trim(),
+          'email': user.email ?? _recipientEmail,
+          'role': 'customer',
+          'created_at': FieldValue.serverTimestamp(),
+        });
+
+        await FirebaseFirestore.instance.collection('pending_users').doc(user.uid).delete();
+        await FirebaseFirestore.instance.collection('pending_users').doc(_recipientEmail).delete();
+
+        await FirebaseAuth.instance.signOut();
+
+        _countdownTimer?.cancel();
+        setState(() => _isLoading = false);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email verified successfully! You can now log in.'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      } else {
+        setState(() => _isLoading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Your email is not verified yet. Please click the link in your email first.'),
+            backgroundColor: Color(0xFFE11D48),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error checking verification: $e'),
+          backgroundColor: const Color(0xFFE11D48),
+        ),
+      );
+    }
+  }
 
   Widget _buildRequirementItem(String text, bool isMet) {
     return Padding(
@@ -107,43 +395,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Future<void> _handleRegister() async {
-    setState(() {
-      _termsError = _agreeToTerms ? null : 'Kailangan mong sumang-ayon sa Terms & Conditions.';
-    });
-
-    if (_formKey.currentState!.validate() && _agreeToTerms) {
-      try {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account successfully registered in Firebase!'),
-            backgroundColor: Color(0xFF059669),
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      } on FirebaseAuthException catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration error: ${e.message ?? e.code}'), backgroundColor: Colors.red),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final pass = _passwordController.text;
@@ -186,19 +437,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
-          'Create New Account',
-          style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
+        title: Text(
+          _regStep == 1 ? 'Create New Account' : 'Verify Email',
+          style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (_regStep == 2) {
+              setState(() => _regStep = 1);
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
-          child: Form(
+          child: _regStep == 1
+              ? Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,7 +608,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const Expanded(
                       child: Text.rich(
                         TextSpan(
-                          text: "Sumasang-ayon ako sa ",
+                          text: "I agree to the ",
                           style: TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
                           children: [
                             TextSpan(
@@ -358,7 +616,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48)),
                             ),
                             TextSpan(
-                              text: " (Ang hindi mai-claim na prints sa loob ng 30 araw ay ida-dispose na).",
+                              text: " (Unclaimed prints within 30 days will be disposed of).",
                             ),
                           ],
                         ),
@@ -380,13 +638,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: SizedBox(
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: _handleRegister,
+                          onPressed: _isLoading
+                              ? null
+                              : () async {
+                            setState(() {
+                              _termsError = _agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
+                            });
+
+                            if (_formKey.currentState!.validate() && _agreeToTerms) {
+                              await _sendRegisterVerificationLink();
+                            }
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC026D3),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             elevation: 0,
                           ),
-                          child: const Text('Send Verification Code', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                          child: _isLoading
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Send Verification Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
                         ),
                       ),
                     ),
@@ -434,6 +704,98 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ],
             ),
+          )
+              : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Verify Your Email', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const SizedBox(height: 16),
+              Center(
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF2F8),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFBCFE8), width: 1.5),
+                  ),
+                  child: const Icon(Icons.mark_email_read_rounded, color: Color(0xFFC026D3), size: 32),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Center(
+                child: Text(
+                  'A verification link has been sent to:',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Center(
+                child: Text(
+                  _recipientEmail,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Text(
+                  'Please check your email inbox (and spam folder) and click the verification link to activate your account.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Verify Button
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _checkVerificationStatus,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('I Have Verified My Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Resend Button
+              Center(
+                child: TextButton(
+                  onPressed: _canResend && !_isLoading ? _resendVerificationLink : null,
+                  child: Text(
+                    _canResend ? 'Resend Verification Link' : 'Resend Link in ${_secondsRemaining}s',
+                    style: TextStyle(
+                      color: _canResend ? const Color(0xFFC026D3) : const Color(0xFF94A3B8),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: TextButton(
+                  onPressed: () => setState(() => _regStep = 1),
+                  child: const Text('← Back to Registration Form', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ),
+            ],
           ),
         ),
       ),
