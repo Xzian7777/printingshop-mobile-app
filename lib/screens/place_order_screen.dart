@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../services/local_db_service.dart';
-import '../services/order_repository.dart';
 
 class PlaceOrderScreen extends StatefulWidget {
   final String userEmail;
@@ -90,14 +89,70 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedService = _serviceOptions[0];
+    _selectedService = _serviceOptions.first;
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _pagesController.dispose();
+    _widthController.dispose();
+    _heightController.dispose();
+    super.dispose();
+  }
+
+  double get _calculatedTotal {
+    int qty = int.tryParse(_quantityController.text) ?? 1;
+    if (qty < 1) qty = 1;
+
+    if (_selectedService.contains('Standard A4 Print')) {
+      int pages = int.tryParse(_pagesController.text) ?? 1;
+      if (pages < 1) pages = 1;
+      return pages * qty * 3.00;
+    } else if (_selectedService.contains('Business Cards')) {
+      double basePrice = 250.0;
+      if (_bcSides.contains('2-Side')) basePrice += 100.0;
+      if (_bcFinish.contains('Soft Touch')) basePrice += 50.0;
+      return (qty / 100).ceil() * basePrice;
+    } else if (_selectedService.contains('Tarpaulins')) {
+      double w = double.tryParse(_widthController.text) ?? 3.0;
+      double h = double.tryParse(_heightController.text) ?? 4.0;
+      double sqft = w * h;
+      double rate = _tarpThickness.contains('13 oz') ? 20.0 : 15.0;
+      return sqft * rate * qty;
+    } else if (_selectedService.contains('Flyers')) {
+      double base = _flyerSize.contains('A4') ? 3.50 : 2.50;
+      if (_flyerSides.contains('2-Side')) base += 1.50;
+      return base * qty;
+    } else if (_selectedService.contains('Stickers')) {
+      double base = _stickerSize.contains('3x3') ? 8.00 : 5.00;
+      if (_stickerMaterial.contains('Vinyl')) base += 2.00;
+      return base * qty;
+    } else if (_selectedService.contains('Invitations')) {
+      double base = 35.00;
+      if (_invEnvelope.contains('With Matching')) base += 10.00;
+      return base * qty;
+    } else if (_selectedService.contains('Shirt')) {
+      double base = 180.00;
+      if (_shirtLocation.contains('Front & Back')) base += 50.00;
+      return base * qty;
+    } else if (_selectedService.contains('Photo')) {
+      double base = 120.00;
+      if (_photoSize.contains('12 x 18')) base = 250.00;
+      if (_photoFrame.contains('Frame')) base += 150.00;
+      return base * qty;
+    } else if (_selectedService.contains('Booklets')) {
+      int pages = int.tryParse(_pagesController.text) ?? 10;
+      return (pages * 2.50 + 20.00) * qty;
+    }
+    return 30.00;
   }
 
   Future<void> _pickDeviceFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'psd', 'ai'],
+        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'ai', 'psd'],
       );
 
       if (result != null && result.files.single.path != null) {
@@ -105,196 +160,153 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
           _selectedFileName = result.files.single.name;
           _selectedFileObj = File(result.files.single.path!);
         });
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Naka-select na ang file: $_selectedFileName'),
-            backgroundColor: const Color(0xFF059669),
-          ),
-        );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sa pagkuha ng file: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error picking file: $e'), backgroundColor: const Color(0xFFF43F5E)),
       );
     }
-  }
-
-  double get _calculatedTotal {
-    int qty = int.tryParse(_quantityController.text) ?? 1;
-    int pages = int.tryParse(_pagesController.text) ?? 1;
-    double width = double.tryParse(_widthController.text) ?? 1.0;
-    double height = double.tryParse(_heightController.text) ?? 1.0;
-
-    if (_selectedService.contains('Standard A4 Print')) {
-      return pages * qty * 3.00;
-    } else if (_selectedService.contains('Business Cards')) {
-      return qty * 2.50;
-    } else if (_selectedService.contains('Tarpaulins')) {
-      return (width * height) * 15.00 * qty;
-    } else if (_selectedService.contains('Flyers & Leaflets')) {
-      return qty * 2.50;
-    } else if (_selectedService.contains('Stickers & Labels')) {
-      return qty * 5.00;
-    } else if (_selectedService.contains('Invitations')) {
-      return qty * 35.00;
-    } else if (_selectedService.contains('Shirt Printing')) {
-      return qty * 180.00;
-    } else if (_selectedService.contains('Photo & Canvas')) {
-      return qty * 120.00;
-    } else if (_selectedService.contains('Booklets & Menus')) {
-      return qty * 45.00;
-    }
-    return qty * 30.00;
-  }
-
-  Map<String, dynamic> _buildOrderDetails() {
-    if (_selectedService.contains('Business Cards')) {
-      return {'size': _bcSize, 'paper': _bcPaper, 'sides': _bcSides, 'finish': _bcFinish, 'corners': _bcCorners};
-    } else if (_selectedService.contains('Tarpaulins')) {
-      return {'width': _widthController.text, 'height': _heightController.text, 'thickness': _tarpThickness, 'eyelets': _tarpEyelets, 'finishing': _tarpFinishing};
-    } else if (_selectedService.contains('Flyers')) {
-      return {'size': _flyerSize, 'paper': _flyerPaper, 'sides': _flyerSides, 'finish': _flyerFinish, 'folding': _flyerFold};
-    } else if (_selectedService.contains('Stickers')) {
-      return {'size': _stickerSize, 'shape': _stickerShape, 'material': _stickerMaterial, 'finish': _stickerFinish, 'adhesive': _stickerAdhesive};
-    } else if (_selectedService.contains('Invitations')) {
-      return {'size': _invSize, 'paper': _invPaper, 'sides': _invSides, 'finish': _invFinish, 'envelope': _invEnvelope};
-    } else if (_selectedService.contains('Shirt')) {
-      return {'size': _shirtSize, 'color': _shirtColor, 'fabric': _shirtFabric, 'method': _shirtMethod, 'location': _shirtLocation};
-    } else if (_selectedService.contains('Photo')) {
-      return {'size': _photoSize, 'material': _photoMaterial, 'orientation': _photoOrientation, 'finish': _photoFinish, 'frame': _photoFrame};
-    } else if (_selectedService.contains('Booklets')) {
-      return {'size': _bookletSize, 'pages': _pagesController.text, 'paper': _bookletPaper, 'cover': _bookletCover, 'binding': _bookletBinding};
-    }
-    return {'pages': _pagesController.text};
   }
 
   Future<void> _submitOrder() async {
-    if (_selectedFileObj == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pumili muna ng file mula sa iyong device!'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    final qty = int.tryParse(_quantityController.text.trim());
-    if (qty == null || qty <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mangyaring maglagay ng tamang bilang ng quantity (higit sa 0).'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    if (_selectedService.contains('Tarpaulins')) {
-      final w = double.tryParse(_widthController.text.trim());
-      final h = double.tryParse(_heightController.text.trim());
-      if (w == null || w <= 0 || h == null || h <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Mangyaring maglagay ng tamang Width at Height (higit sa 0).'), backgroundColor: Colors.orange),
-        );
-        return;
-      }
-    }
-
-    if (_selectedService.contains('Booklets') || _selectedService.contains('A4')) {
-      final p = int.tryParse(_pagesController.text.trim());
-      if (p == null || p <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Mangyaring maglagay ng tamang bilang ng pahina (pages > 0).'), backgroundColor: Colors.orange),
-        );
-        return;
-      }
-    }
-
     setState(() => _isSubmitting = true);
+
     try {
-      final randomRef = 'PRNT-${Random().nextInt(8999) + 1000}';
-      final customerName = widget.userEmail.split('@')[0];
+      String fileDownloadUrl = 'Pending / Direct In-Store Upload';
 
-      // 1. SAFE STORAGE UPLOAD (FALLBACK MODE PARANG DI MAG-ERROR)
-      String uploadedFileUrl = '';
-      try {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('customer_orders/${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName');
-
-        final TaskSnapshot uploadSnapshot = await storageRef.putFile(_selectedFileObj!);
-        uploadedFileUrl = await uploadSnapshot.ref.getDownloadURL();
-      } catch (storageErr) {
-        debugPrint('Storage Error (Fallback mode active): $storageErr');
-        // Magse-set ng temporary link indicator para tuloy pa rin ang pag-save sa database
-        uploadedFileUrl = 'Local File Attached: $_selectedFileName';
+      if (_selectedFileObj != null) {
+        try {
+          final storageRef = FirebaseStorage.instance
+              .ref()
+              .child('order_files/${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName');
+          final uploadTask = await storageRef.putFile(_selectedFileObj!);
+          fileDownloadUrl = await uploadTask.ref.getDownloadURL();
+        } catch (storageErr) {
+          debugPrint('Storage Upload Warning: $storageErr');
+        }
       }
 
-      final orderMap = {
-        'id': randomRef,
-        'customer': customerName,
+      final String customOrderRef = 'PRNT-${Random().nextInt(900000) + 100000}';
+
+      final Map<String, dynamic> orderPayload = {
+        'id': customOrderRef,
+        'customer': widget.userEmail.split('@').first,
         'email': widget.userEmail,
         'service': _selectedService,
-        'quantity': int.tryParse(_quantityController.text) ?? 1,
-        'specifications': _buildOrderDetails(),
-        'payment': _paymentMethod,
         'total': _calculatedTotal,
-        'status': 'Order Submitted',
-        'file': _selectedFileName,
-        'fileUrl': uploadedFileUrl,
-        'createdAt': DateTime.now().toIso8601String(),
+        'status': 'For Approval',
+        'payment': _paymentMethod,
+        'fileName': _selectedFileName,
+        'fileUrl': fileDownloadUrl,
+        'createdAt': FieldValue.serverTimestamp(),
+        'quantity': int.tryParse(_quantityController.text) ?? 1,
+        'details': {
+          if (_selectedService.contains('Business Cards')) ...{
+            'size': _bcSize,
+            'paper': _bcPaper,
+            'sides': _bcSides,
+            'finish': _bcFinish,
+            'corners': _bcCorners,
+          },
+          if (_selectedService.contains('Tarpaulins')) ...{
+            'dimensions': '${_widthController.text}ft x ${_heightController.text}ft',
+            'thickness': _tarpThickness,
+            'eyelets': _tarpEyelets,
+            'finishing': _tarpFinishing,
+          },
+          if (_selectedService.contains('Flyers')) ...{
+            'size': _flyerSize,
+            'paper': _flyerPaper,
+            'sides': _flyerSides,
+            'finish': _flyerFinish,
+            'fold': _flyerFold,
+          },
+          if (_selectedService.contains('Stickers')) ...{
+            'size': _stickerSize,
+            'shape': _stickerShape,
+            'material': _stickerMaterial,
+            'finish': _stickerFinish,
+            'adhesive': _stickerAdhesive,
+          },
+          if (_selectedService.contains('Invitations')) ...{
+            'size': _invSize,
+            'paper': _invPaper,
+            'sides': _invSides,
+            'finish': _invFinish,
+            'envelope': _invEnvelope,
+          },
+          if (_selectedService.contains('Shirt')) ...{
+            'size': _shirtSize,
+            'color': _shirtColor,
+            'fabric': _shirtFabric,
+            'method': _shirtMethod,
+            'location': _shirtLocation,
+          },
+          if (_selectedService.contains('Photo')) ...{
+            'size': _photoSize,
+            'material': _photoMaterial,
+            'orientation': _photoOrientation,
+            'finish': _photoFinish,
+            'frame': _photoFrame,
+          },
+          if (_selectedService.contains('Booklets')) ...{
+            'size': _bookletSize,
+            'pages': _pagesController.text,
+            'paper': _bookletPaper,
+            'cover': _bookletCover,
+            'binding': _bookletBinding,
+          },
+        },
       };
 
-      bool online = await OrderRepository().isOnline();
-
-      if (online) {
-        try {
-          // 2. DIRECT SAVE ORDER SA FIRESTORE
-          await FirebaseFirestore.instance
-              .collection('artifacts')
-              .doc('printcraft-pro')
-              .collection('public')
-              .doc('data')
-              .collection('orders')
-              .doc(randomRef)
-              .set({
-            ...orderMap,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-          
-          // Save locally as synced
-          await LocalDbService.instance.insertOrUpdateOrder(orderMap, isSynced: true);
-        } catch (firestoreErr) {
-          debugPrint('Firestore Error, saving to local queue: $firestoreErr');
-          await LocalDbService.instance.insertOrUpdateOrder(orderMap, isSynced: false);
-        }
-      } else {
-        // Offline mode: Save locally as unsynced
-        await LocalDbService.instance.insertOrUpdateOrder(orderMap, isSynced: false);
-        debugPrint('Offline mode: Order saved locally and queued for sync.');
+      try {
+        await FirebaseFirestore.instance
+            .collection('artifacts')
+            .doc('printcraft-pro')
+            .collection('public')
+            .doc('data')
+            .collection('orders')
+            .add(orderPayload);
+      } catch (firestoreErr) {
+        debugPrint('Firestore offline fallback: $firestoreErr');
+        await LocalDbService.instance.insertOrUpdateOrder(orderPayload, isSynced: false);
       }
 
-      // Try syncing any pending offline orders in background
-      OrderRepository().syncOfflineOrders();
-
       if (!mounted) return;
+
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Color(0xFF1E293B)),
+          ),
           title: Row(
             children: const [
-              Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 28),
+              Icon(Icons.check_circle_rounded, color: Color(0xFF10B981)),
               SizedBox(width: 8),
-              Text('Order Successful!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('Order Submitted!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             ],
           ),
-          content: Text('Your order reference is $randomRef. Total: ₱${_calculatedTotal.toStringAsFixed(2)}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tracking Ref: $customOrderRef', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF818CF8))),
+              const SizedBox(height: 6),
+              const Text('Your order has been queued for shop approval. You will receive real-time notifications on production status.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            ],
+          ),
           actions: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 Navigator.pop(context);
               },
-              child: const Text('OK', style: TextStyle(color: Colors.white)),
+              child: const Text('Back to Dashboard'),
             ),
           ],
         ),
@@ -302,7 +314,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error submitting order: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error submitting order: $e'), backgroundColor: const Color(0xFFF43F5E)),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -312,13 +324,17 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF070A14),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text('Place Print Order', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: const Color(0xFF070A14),
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFF1E293B)),
+        ),
+        title: const Text('Place Print Order', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -332,24 +348,24 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFF0D1224),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFCBD5E1)),
+                border: Border.all(color: const Color(0xFF1E293B)),
               ),
               child: Column(
                 children: [
-                  const Icon(Icons.upload_file_rounded, size: 40, color: Color(0xFFE11D48)),
+                  const Icon(Icons.upload_file_rounded, size: 40, color: Color(0xFF818CF8)),
                   const SizedBox(height: 8),
-                  Text(_selectedFileName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)), textAlign: TextAlign.center),
+                  Text(_selectedFileName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white), textAlign: TextAlign.center),
                   const SizedBox(height: 4),
-                  const Text('Mag-upload ng PDF, Word, AI, PSD, o Image file mula sa storage', style: TextStyle(fontSize: 11, color: Color(0xFF64748B)), textAlign: TextAlign.center),
+                  const Text('Upload PDF, Word, AI, PSD, or Image file from device', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)), textAlign: TextAlign.center),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: _pickDeviceFile,
                     icon: const Icon(Icons.folder_open_rounded, size: 16, color: Colors.white),
                     label: const Text('Choose File', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
+                      backgroundColor: const Color(0xFF4F46E5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
@@ -362,21 +378,30 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D1224),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1E293B)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Printing Service Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                  const Text('Printing Service Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: _selectedService,
+                    dropdownColor: const Color(0xFF0F172A),
+                    initialValue: _selectedService,
                     isExpanded: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
                     ),
                     items: _serviceOptions
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)))
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12, color: Colors.white), overflow: TextOverflow.ellipsis)))
                         .toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _selectedService = val);
@@ -399,24 +424,24 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _paymentMethod == 'GCash Online' ? const Color(0xFFEFF6FF) : Colors.white,
+                        color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5).withOpacity(0.15) : const Color(0xFF0D1224),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _paymentMethod == 'GCash Online' ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0), width: 1.5),
+                        border: Border.all(color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5) : const Color(0xFF1E293B), width: 1.5),
                       ),
                       child: Row(
                         children: [
                           Radio<String>(
                             value: 'GCash Online',
                             groupValue: _paymentMethod,
-                            activeColor: const Color(0xFF2563EB),
+                            activeColor: const Color(0xFF818CF8),
                             onChanged: (val) => setState(() => _paymentMethod = val!),
                           ),
                           const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('GCash Online', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('Pay instantly', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                                Text('GCash Online', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                                Text('Pay instantly', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                               ],
                             ),
                           ),
@@ -432,24 +457,24 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFFEFF6FF) : Colors.white,
+                        color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5).withOpacity(0.15) : const Color(0xFF0D1224),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0), width: 1.5),
+                        border: Border.all(color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5) : const Color(0xFF1E293B), width: 1.5),
                       ),
                       child: Row(
                         children: [
                           Radio<String>(
                             value: 'Cash on Pickup',
                             groupValue: _paymentMethod,
-                            activeColor: const Color(0xFF2563EB),
+                            activeColor: const Color(0xFF818CF8),
                             onChanged: (val) => setState(() => _paymentMethod = val!),
                           ),
                           const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Cash on Pickup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('Pay at counter', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                                Text('Cash on Pickup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                                Text('Pay at counter', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                               ],
                             ),
                           ),
@@ -465,25 +490,26 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: const Color(0xFF0D1224),
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1E293B)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('TOTAL SUMMARY', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  const Text('TOTAL SUMMARY', style: TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                   const SizedBox(height: 8),
-                  const Text('Estimated Total:', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  const Text('Estimated Total:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                   const SizedBox(height: 2),
                   Text(
                     '₱${_calculatedTotal.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Color(0xFFF97316), fontWeight: FontWeight.w900, fontSize: 28),
+                    style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 28),
                   ),
-                  const Divider(color: Colors.white24, height: 24),
+                  const Divider(color: Color(0xFF1E293B), height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Payment:', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                      const Text('Payment:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                       Text(_paymentMethod, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                     ],
                   ),
@@ -491,7 +517,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Estimated Pickup:', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                      Text('Estimated Pickup:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                       Text('Tomorrow 4:00 PM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                     ],
                   ),
@@ -505,7 +531,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                           : const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
                       label: Text(_isSubmitting ? 'Uploading & Submitting...' : 'Confirm & Submit Order →', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
+                        backgroundColor: const Color(0xFF4F46E5),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
@@ -681,15 +707,19 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF0F172A),
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
           ),
         ),
       ],
@@ -700,17 +730,22 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          value: items.contains(value) ? value : items.first,
+          dropdownColor: const Color(0xFF0F172A),
+          initialValue: items.contains(value) ? value : items.first,
           isExpanded: true,
+          style: const TextStyle(color: Colors.white, fontSize: 11),
           decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF0F172A),
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
           ),
           items: items
-              .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis)))
+              .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 10, color: Colors.white), overflow: TextOverflow.ellipsis)))
               .toList(),
           onChanged: onChanged,
         ),
@@ -719,6 +754,6 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   }
 
   Widget _buildSectionHeader(String title) {
-    return Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFE11D48), letterSpacing: 1.1));
+    return Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF818CF8), letterSpacing: 1.1));
   }
 }

@@ -12,8 +12,8 @@ class Product {
   String category;
   double price;
   int stock;
-  String? imageUrl; // Para sa online or default image
-  XFile? localImageFile; // Para sa na-import na bagong picture mula sa gallery/camera
+  String? imageUrl;
+  XFile? localImageFile;
 
   Product({
     required this.id,
@@ -41,7 +41,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   String _selectedCategory = 'All';
 
   // Sample Product Inventory List
-  List<Product> _products = [
+  final List<Product> _products = [
     Product(
       id: 'P001',
       name: 'Tarpaulin Printing (13oz)',
@@ -60,30 +60,51 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     ),
     Product(
       id: 'P003',
-      name: 'Customized T-Shirt Sublimation',
+      name: 'PVC ID Card with Lanyard',
+      category: 'Cards & Badges',
+      price: 50.00,
+      stock: 120,
+      imageUrl: 'https://via.placeholder.com/150',
+    ),
+    Product(
+      id: 'P004',
+      name: 'A4 Document Print (B&W)',
+      category: 'Documents',
+      price: 3.00,
+      stock: 5000,
+      imageUrl: 'https://via.placeholder.com/150',
+    ),
+    Product(
+      id: 'P005',
+      name: 'Custom Cotton Shirt (DTF)',
       category: 'Apparel',
-      price: 250.00,
-      stock: 80,
+      price: 180.00,
+      stock: 45,
       imageUrl: 'https://via.placeholder.com/150',
     ),
   ];
 
-  final List<String> _categories = ['All', 'Tarpaulin', 'Stickers', 'Apparel', 'Documents'];
+  final List<String> _categories = [
+    'All',
+    'Documents',
+    'Tarpaulin',
+    'Stickers',
+    'Cards & Badges',
+    'Apparel',
+  ];
 
   // ===========================================================================
-  // ADD / EDIT PRODUCT MODAL WITH IMAGE IMPORT FIELD
+  // ADD / EDIT PRODUCT MODAL SHEET WITH PHOTO IMPORT
   // ===========================================================================
   void _showEditProductModal(BuildContext context, {Product? product}) {
     final isEditing = product != null;
+    final nameController = TextEditingController(text: product?.name ?? '');
+    final priceController = TextEditingController(text: product?.price.toString() ?? '');
+    final stockController = TextEditingController(text: product?.stock.toString() ?? '');
+    String selectedCat = product?.category ?? _categories[1];
+    XFile? pickedImage = product?.localImageFile;
+
     final formKey = GlobalKey<FormState>();
-
-    final nameController = TextEditingController(text: isEditing ? product.name : '');
-    final priceController = TextEditingController(text: isEditing ? product.price.toString() : '');
-    final stockController = TextEditingController(text: isEditing ? product.stock.toString() : '');
-    String selectedCat = isEditing ? product.category : 'Tarpaulin';
-
-    XFile? pickedImage = isEditing ? product.localImageFile : null;
-    String? currentImageUrl = isEditing ? product.imageUrl : null;
 
     showModalBottomSheet(
       context: context,
@@ -92,14 +113,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            // Function para pumili ng picture mula sa Gallery o Camera
             Future<void> pickProductImage(ImageSource source) async {
               try {
                 final XFile? image = await _imagePicker.pickImage(
                   source: source,
-                  maxWidth: 800,
-                  maxHeight: 800,
                   imageQuality: 85,
+                  maxWidth: 800,
                 );
                 if (image != null) {
                   setModalState(() {
@@ -107,14 +126,14 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   });
                 }
               } catch (e) {
-                debugPrint('Image Pick Error: $e');
+                debugPrint('Image picking error: $e');
               }
             }
 
-            // Dialog para mamili kung Gallery o Camera
             void showImageSourceSelector() {
               showModalBottomSheet(
                 context: context,
+                backgroundColor: const Color(0xFF0F172A),
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
@@ -134,11 +153,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 26,
-                                backgroundColor: Color(0xFFF1F5F9),
-                                child: Icon(Icons.photo_library_rounded, color: Color(0xFFE11D48)),
+                                backgroundColor: Color(0xFF1E293B),
+                                child: Icon(Icons.photo_library_rounded, color: Color(0xFF818CF8)),
                               ),
                               SizedBox(height: 8),
-                              Text('Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              Text('Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
                             ],
                           ),
                         ),
@@ -152,11 +171,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 26,
-                                backgroundColor: Color(0xFFF1F5F9),
-                                child: Icon(Icons.camera_alt_rounded, color: Color(0xFF0F172A)),
+                                backgroundColor: Color(0xFF1E293B),
+                                child: Icon(Icons.camera_alt_rounded, color: Color(0xFF38BDF8)),
                               ),
                               SizedBox(height: 8),
-                              Text('Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              Text('Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
                             ],
                           ),
                         ),
@@ -171,8 +190,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
                 decoration: const BoxDecoration(
-                  color: Colors.white,
+                  color: Color(0xFF0F172A),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  border: Border(top: BorderSide(color: Color(0xFF1E293B))),
                 ),
                 padding: const EdgeInsets.all(20.0),
                 child: SingleChildScrollView(
@@ -182,176 +202,183 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title Header
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              isEditing ? 'Edit Product' : 'Add New Product',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                              isEditing ? 'Edit Product Details' : 'Add New Inventory Product',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
 
-                        // =====================================================
-                        // PRODUCT IMAGE IMPORT FIELD
-                        // =====================================================
-                        const Text(
-                          'Product Image *',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
-                        ),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: showImageSourceSelector,
-                          child: Container(
-                            height: 140,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid, width: 1.5),
-                            ),
-                            child: pickedImage != null
-                                ? Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: kIsWeb
-                                      ? Image.network(pickedImage!.path, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-                                      : Image.file(File(pickedImage!.path), fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-                                ),
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: CircleAvatar(
-                                    backgroundColor: Colors.black54,
-                                    radius: 16,
-                                    child: IconButton(
-                                      padding: EdgeInsets.zero,
-                                      icon: const Icon(Icons.edit, size: 16, color: Colors.white),
-                                      onPressed: showImageSourceSelector,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                                : (currentImageUrl != null && currentImageUrl!.isNotEmpty)
-                                ? Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: Image.network(
-                                    currentImageUrl!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    errorBuilder: (context, error, stackTrace) => const Center(
-                                      child: Icon(Icons.broken_image_rounded, size: 40, color: Color(0xFF94A3B8)),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: CircleAvatar(
-                                    backgroundColor: Colors.black54,
-                                    radius: 16,
-                                    child: IconButton(
-                                      padding: EdgeInsets.zero,
-                                      icon: const Icon(Icons.edit, size: 16, color: Colors.white),
-                                      onPressed: showImageSourceSelector,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                                : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                        // Image Picker Box
+                        Center(
+                          child: GestureDetector(
+                            onTap: showImageSourceSelector,
+                            child: Stack(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(10),
+                                  width: 110,
+                                  height: 110,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFE11D48).withOpacity(0.1),
-                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF0D1224),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFF1E293B), width: 1.5),
                                   ),
-                                  child: const Icon(Icons.add_a_photo_rounded, color: Color(0xFFE11D48), size: 28),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: pickedImage != null
+                                        ? (kIsWeb
+                                        ? Image.network(pickedImage!.path, fit: BoxFit.cover)
+                                        : Image.file(File(pickedImage!.path), fit: BoxFit.cover))
+                                        : (product?.imageUrl != null
+                                        ? Image.network(
+                                      product!.imageUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => const Icon(
+                                        Icons.add_photo_alternate_rounded,
+                                        size: 40,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    )
+                                        : const Icon(
+                                      Icons.add_photo_alternate_rounded,
+                                      size: 40,
+                                      color: Color(0xFF64748B),
+                                    )),
+                                  ),
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Tap to import product image',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                                ),
-                                const Text(
-                                  'Supports PNG, JPG (Max 5MB)',
-                                  style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                                Positioned(
+                                  bottom: 4,
+                                  right: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF4F46E5),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        const Center(
+                          child: Text('Tap to upload product photo', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                        ),
                         const SizedBox(height: 16),
 
-                        // Product Name Input
+                        // Product Name Field
+                        const Text('Product Title', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+                        const SizedBox(height: 6),
                         TextFormField(
                           controller: nameController,
-                          decoration: _buildInputDecoration('Product Name *', Icons.inventory_2_outlined),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Please enter product name';
-                            if (v.trim().length < 2) return 'Name must be at least 2 characters';
-                            if (v.trim().length > 100) return 'Name cannot exceed 100 characters';
-                            return null;
-                          },
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. Glossy Sticker Pack',
+                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            filled: true,
+                            fillColor: const Color(0xFF0D1224),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a product name' : null,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
 
                         // Category Dropdown
+                        const Text('Product Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+                        const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
+                          dropdownColor: const Color(0xFF0D1224),
                           value: selectedCat,
-                          decoration: _buildInputDecoration('Category *', Icons.category_outlined),
-                          items: _categories.where((c) => c != 'All').map((cat) {
-                            return DropdownMenuItem(value: cat, child: Text(cat));
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) setModalState(() => selectedCat = val);
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFF0D1224),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                          ),
+                          items: _categories
+                              .where((c) => c != 'All')
+                              .map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(color: Colors.white))))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) setModalState(() => selectedCat = v);
                           },
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
 
-                        // Price & Stock Inputs Row
+                        // Price and Stock row
                         Row(
                           children: [
                             Expanded(
-                              child: TextFormField(
-                                controller: priceController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: _buildInputDecoration('Price (₱) *', Icons.payments_outlined),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Price required';
-                                  final price = double.tryParse(v.trim());
-                                  if (price == null) return 'Invalid price';
-                                  if (price <= 0) return 'Price must be > 0';
-                                  return null;
-                                },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Unit Price (₱)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: priceController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    decoration: InputDecoration(
+                                      hintText: '0.00',
+                                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                      filled: true,
+                                      fillColor: const Color(0xFF0D1224),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return 'Enter price';
+                                      if (double.tryParse(v.trim()) == null) return 'Invalid price';
+                                      return null;
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: TextFormField(
-                                controller: stockController,
-                                keyboardType: TextInputType.number,
-                                decoration: _buildInputDecoration('Stock Qty *', Icons.numbers_rounded),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Stock required';
-                                  final stock = int.tryParse(v.trim());
-                                  if (stock == null) return 'Invalid stock';
-                                  if (stock < 0) return 'Cannot be negative';
-                                  return null;
-                                },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Current Stock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: stockController,
+                                    keyboardType: TextInputType.number,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    decoration: InputDecoration(
+                                      hintText: '0',
+                                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                      filled: true,
+                                      fillColor: const Color(0xFF0D1224),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return 'Enter stock';
+                                      final stock = int.tryParse(v.trim());
+                                      if (stock == null) return 'Invalid stock';
+                                      if (stock < 0) return 'Cannot be negative';
+                                      return null;
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -369,22 +396,23 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   final confirm = await showDialog<bool>(
                                     context: context,
                                     builder: (c) => AlertDialog(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      backgroundColor: const Color(0xFF0F172A),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
                                       title: Row(
                                         children: const [
-                                          Icon(Icons.edit_note_rounded, color: Color(0xFF0F172A)),
+                                          Icon(Icons.edit_note_rounded, color: Color(0xFF4F46E5)),
                                           SizedBox(width: 8),
-                                          Text('Confirm Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                          Text('Confirm Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                                         ],
                                       ),
-                                      content: const Text('Are you sure you want to save the changes made to this product?'),
+                                      content: const Text('Are you sure you want to save the changes made to this product?', style: TextStyle(color: Color(0xFF94A3B8))),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(c, false),
                                           child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
                                         ),
                                         ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
                                           onPressed: () => Navigator.pop(c, true),
                                           child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                         ),
@@ -420,13 +448,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(isEditing ? 'Product updated successfully!' : 'Product added successfully!'),
-                                    backgroundColor: const Color(0xFF059669),
+                                    backgroundColor: const Color(0xFF10B981),
                                   ),
                                 );
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0F172A),
+                              backgroundColor: const Color(0xFF4F46E5),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               elevation: 0,
                             ),
@@ -459,11 +487,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         : _products.where((p) => p.category == _selectedCategory).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF070A14),
       appBar: AppBar(
-        title: const Text('Inventory & Products', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: const Color(0xFF0F172A),
+        title: const Text('Inventory & Products', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: const Color(0xFF070A14),
         elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFF1E293B)),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_box_rounded, color: Colors.white),
@@ -476,7 +508,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           // Category Filter Tabs
           Container(
             height: 54,
-            color: const Color(0xFF0F172A),
+            color: const Color(0xFF0B0E1B),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -489,8 +521,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   child: ChoiceChip(
                     label: Text(cat),
                     selected: isSelected,
-                    selectedColor: const Color(0xFFE11D48),
-                    backgroundColor: const Color(0xFF1E293B),
+                    selectedColor: const Color(0xFF4F46E5),
+                    backgroundColor: const Color(0xFF0D1224),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFF1E293B)),
+                    ),
                     labelStyle: TextStyle(
                       color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                       fontWeight: FontWeight.bold,
@@ -511,7 +547,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           Expanded(
             child: filteredProducts.isEmpty
                 ? const Center(
-              child: Text('No products available in this category.', style: TextStyle(color: Color(0xFF64748B))),
+              child: Text('No products available in this category.', style: TextStyle(color: Color(0xFF94A3B8))),
             )
                 : ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -522,12 +558,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF0D1224),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 4)),
-                    ],
+                    border: Border.all(color: const Color(0xFF1E293B)),
                   ),
                   child: Row(
                     children: [
@@ -536,9 +569,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         width: 64,
                         height: 64,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: const Color(0xFF0F172A),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: const Color(0xFF1E293B)),
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
@@ -549,7 +582,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                               : Image.network(
                             product.imageUrl ?? '',
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported_rounded, color: Color(0xFF94A3B8)),
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported_rounded, color: Color(0xFF64748B)),
                           ),
                         ),
                       ),
@@ -562,17 +595,17 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           children: [
                             Text(
                               product.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '${product.category} • Stock: ${product.stock}',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '₱${product.price.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFE11D48)),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF38BDF8)),
                             ),
                           ],
                         ),
@@ -580,31 +613,32 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
                       // Action Buttons (Edit & Delete)
                       IconButton(
-                        icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF0F172A), size: 26),
+                        icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF818CF8), size: 24),
                         onPressed: () => _showEditProductModal(context, product: product),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE11D48), size: 22),
+                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFF43F5E), size: 22),
                         onPressed: () async {
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (c) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              backgroundColor: const Color(0xFF0F172A),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
                               title: Row(
                                 children: const [
-                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48)),
+                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
                                   SizedBox(width: 8),
-                                  Text('Confirm Delete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  Text('Confirm Delete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                                 ],
                               ),
-                              content: Text('Are you sure you want to delete "${product.name}"? This action cannot be undone.'),
+                              content: Text('Are you sure you want to delete "${product.name}"? This action cannot be undone.', style: const TextStyle(color: Color(0xFF94A3B8))),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(c, false),
                                   child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
                                 ),
                                 ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
                                   onPressed: () => Navigator.pop(c, true),
                                   child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 ),
@@ -616,9 +650,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             setState(() {
                               _products.removeWhere((p) => p.id == product.id);
                             });
-                            if (!mounted) return;
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Product deleted successfully')),
+                              SnackBar(
+                                content: Text('Deleted "${product.name}"'),
+                                backgroundColor: const Color(0xFFF43F5E),
+                              ),
                             );
                           }
                         },
@@ -631,27 +668,6 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showEditProductModal(context),
-        backgroundColor: const Color(0xFFE11D48),
-        icon: const Icon(Icons.add_a_photo_rounded, color: Colors.white),
-        label: const Text('Add Product', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-      prefixIcon: Icon(icon, size: 18, color: const Color(0xFF64748B)),
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
-      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48))),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
     );
   }
 }

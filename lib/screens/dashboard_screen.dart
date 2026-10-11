@@ -21,12 +21,17 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
 
-class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
     OrderRepository().syncOfflineOrders();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
   }
 
   int _currentNavIndex = 0;
@@ -84,6 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _animController.dispose();
     _searchController.dispose();
     _chatReplyController.dispose();
     super.dispose();
@@ -94,12 +100,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
         title: Row(
           children: const [
-            Icon(Icons.gavel_rounded, color: Color(0xFFE11D48)),
+            Icon(Icons.gavel_rounded, color: Color(0xFF6366F1)),
             SizedBox(width: 8),
-            Text("Terms & Conditions", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Text("Terms & Conditions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ],
         ),
         content: SingleChildScrollView(
@@ -107,27 +117,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Text("1. Print File Proofing & Responsibility", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("1. Print File Proofing & Responsibility", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Customers are responsible for reviewing uploaded documents, layout sizing, and spelling before submitting print orders.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Customers are responsible for reviewing uploaded documents, layout sizing, and spelling before submitting print orders.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               SizedBox(height: 10),
-              Text("2. Turnaround Time & Processing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("2. Turnaround Time & Processing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Standard print jobs take 1-2 business days. Bulk orders (Tarpaulins, Shirts, Booklets) may require additional processing time.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Standard print jobs take 1-2 business days. Bulk orders (Tarpaulins, Shirts, Booklets) may require additional processing time.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               SizedBox(height: 10),
-              Text("3. Cancellation & Non-Refundable Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("3. Cancellation & Non-Refundable Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Once a job moves to 'Printing' status, orders cannot be cancelled or refunded due to customized materials used.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Once a job moves to 'Printing' status, orders cannot be cancelled or refunded due to customized materials used.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               SizedBox(height: 10),
-              Text("4. Unclaimed Prints & RFID Rewards", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("4. Unclaimed Prints & RFID Rewards", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Orders ready for pickup must be claimed within 30 days. RFID loyalty points are earned upon successful payment verification.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Orders ready for pickup must be claimed within 30 days. RFID loyalty points are earned upon successful payment verification.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
             ],
           ),
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx),
             child: const Text("I Agree"),
           ),
@@ -141,15 +151,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
         title: const Row(
           children: [
-            Icon(Icons.logout_rounded, color: Color(0xFFE11D48)),
+            Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
             SizedBox(width: 10),
-            Text('Confirm Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
+            Text('Confirm Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
           ],
         ),
-        content: const Text('Are you sure you want to log out of your account?', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+        content: const Text('Are you sure you want to log out of your account?', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -168,7 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     (route) => false,
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), elevation: 0),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E), elevation: 0),
             child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
@@ -235,19 +249,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF070A14),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: const Color(0xFF070A14),
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFF1E293B)),
+        ),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE11D48)]),
+                gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF6366F1)]),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text('KCZ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: const Icon(Icons.print_rounded, color: Colors.white, size: 16),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -255,10 +273,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isAdmin ? 'Kez C-Em Zek (Admin)' : 'Kez C-Em Zek',
-                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                    _isAdmin ? 'KCZ Printing (Admin)' : 'KCZ Printing',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-                  Text(widget.userEmail, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                  Text(widget.userEmail, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
                 ],
               ),
             ),
@@ -266,39 +284,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.gavel_rounded, color: Color(0xFF0F172A)),
+            icon: const Icon(Icons.gavel_rounded, color: Color(0xFF94A3B8)),
             tooltip: 'Terms & Conditions',
             onPressed: () => _showTermsAndConditionsDialog(context),
           ),
           if (_isAdmin)
             IconButton(
-              icon: const Icon(Icons.inventory_2_rounded, color: Color(0xFF0F172A)),
+              icon: const Icon(Icons.inventory_2_rounded, color: Color(0xFF818CF8)),
               tooltip: 'Manage Products',
               onPressed: () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminProductsScreen()));
               },
             ),
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Color(0xFFE11D48)),
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
             tooltip: 'Logout',
             onPressed: () => _showLogoutConfirmationDialog(context),
           ),
         ],
       ),
       body: _buildSelectedTabContent(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentNavIndex,
-        onTap: (index) => setState(() => _currentNavIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFFE11D48),
-        unselectedItemColor: const Color(0xFF94A3B8),
-        backgroundColor: Colors.white,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'Store'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentNavIndex,
+          onTap: (index) => setState(() => _currentNavIndex = index),
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: const Color(0xFF818CF8),
+          unselectedItemColor: const Color(0xFF64748B),
+          backgroundColor: const Color(0xFF0B0E1B),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'Store'),
+            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+          ],
+        ),
       ),
     );
   }
@@ -338,7 +361,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       children: [
         Container(
-          color: Colors.white,
+          color: const Color(0xFF0B0E1B),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -355,7 +378,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
-        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+        const Divider(height: 1, color: Color(0xFF1E293B)),
 
         Expanded(
           child: _adminSubTab == 0
@@ -373,18 +396,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildAdminSubTabButton(int index, String title, IconData icon) {
     final isSelected = _adminSubTab == index;
     return ChoiceChip(
-      avatar: Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF64748B)),
+      avatar: Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
       label: Text(title),
       selected: isSelected,
-      selectedColor: const Color(0xFF0F172A),
-      backgroundColor: const Color(0xFFF1F5F9),
+      selectedColor: const Color(0xFF4F46E5),
+      backgroundColor: const Color(0xFF0F172A),
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : const Color(0xFF334155),
+        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
         fontSize: 11.5,
         fontWeight: FontWeight.bold,
       ),
       onSelected: (_) => setState(() => _adminSubTab = index),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide.none),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFF1E293B)),
+      ),
     );
   }
 
@@ -395,8 +421,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _chatsRef.orderBy('lastUpdated', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Chat Error: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Chat Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
 
         final chatDocs = snapshot.data!.docs;
 
@@ -405,9 +431,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: const [
-                Icon(Icons.chat_outlined, size: 48, color: Color(0xFF94A3B8)),
+                Icon(Icons.chat_outlined, size: 48, color: Color(0xFF64748B)),
                 SizedBox(height: 12),
-                Text('No active customer chats yet.', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('No active customer chats yet.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                 Text('New messages from web/app customers will appear here in realtime.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
               ],
             ),
@@ -427,18 +453,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: unread ? const Color(0xFFE11D48) : const Color(0xFFE2E8F0)),
+                color: const Color(0xFF0D1224),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: unread ? const Color(0xFFF43F5E) : const Color(0xFF1E293B)),
               ),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: unread ? const Color(0xFFFFF1F2) : const Color(0xFFF1F5F9),
-                  child: Icon(Icons.person, color: unread ? const Color(0xFFE11D48) : const Color(0xFF64748B)),
+                  backgroundColor: unread ? const Color(0xFF4F46E5).withOpacity(0.2) : const Color(0xFF0F172A),
+                  child: Icon(Icons.person, color: unread ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
                 ),
-                title: Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                subtitle: Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+                title: Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                subtitle: Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B)),
                 onTap: () => _openChatConversationModal(doc.id, customerName),
               ),
             );
@@ -459,8 +485,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Container(
             height: MediaQuery.of(ctx).size.height * 0.75,
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: Color(0xFF0F172A),
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border(top: BorderSide(color: Color(0xFF1E293B))),
             ),
             child: Column(
               children: [
@@ -471,21 +498,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Row(
                         children: [
-                          const CircleAvatar(radius: 16, backgroundColor: Color(0xFFFFF1F2), child: Icon(Icons.person, color: Color(0xFFE11D48), size: 18)),
+                          const CircleAvatar(radius: 16, backgroundColor: Color(0xFF1E293B), child: Icon(Icons.person, color: Color(0xFF818CF8), size: 18)),
                           const SizedBox(width: 10),
-                          Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
                         ],
                       ),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      IconButton(icon: const Icon(Icons.close, color: Color(0xFF94A3B8)), onPressed: () => Navigator.pop(ctx)),
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                const Divider(height: 1, color: Color(0xFF1E293B)),
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
                     stream: _chatsRef.doc(chatId).collection('messages').orderBy('timestamp', descending: true).snapshots(),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
                       final msgs = snapshot.data!.docs;
 
                       return ListView.builder(
@@ -503,12 +530,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
-                                color: isMe ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                                color: isMe ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Text(
                                 text,
-                                style: TextStyle(color: isMe ? Colors.white : const Color(0xFF0F172A), fontSize: 12),
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
                               ),
                             ),
                           );
@@ -519,25 +546,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   child: Row(
                     children: [
                       Expanded(
                         child: TextField(
                           controller: _chatReplyController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
                           decoration: InputDecoration(
                             hintText: 'Type your reply...',
-                            hintStyle: const TextStyle(fontSize: 12),
+                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                             filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
+                            fillColor: const Color(0xFF070A14),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF1E293B))),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       CircleAvatar(
-                        backgroundColor: const Color(0xFFE11D48),
+                        backgroundColor: const Color(0xFF4F46E5),
                         child: IconButton(
                           icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
                           onPressed: () async {
@@ -576,8 +604,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _ordersRef.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Analytics Error: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Analytics Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
 
         final docs = snapshot.data!.docs;
         double totalRevenue = 0.0;
@@ -658,54 +686,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   value: '₱${totalRevenue.toStringAsFixed(2)}',
                   subtitle: 'Print + Store Sales',
                   icon: Icons.monetization_on_rounded,
-                  iconColor: const Color(0xFF059669),
-                  valueColor: const Color(0xFF059669),
-                  bgColor: const Color(0xFFECFDF5),
+                  iconColor: const Color(0xFF10B981),
+                  valueColor: const Color(0xFF10B981),
+                  bgColor: const Color(0xFF10B981).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'TOTAL ORDERS',
                   value: '$totalOrders',
                   subtitle: 'Submitted print jobs',
                   icon: Icons.inventory_2_rounded,
-                  iconColor: const Color(0xFF2563EB),
-                  valueColor: const Color(0xFF2563EB),
-                  bgColor: const Color(0xFFEFF6FF),
+                  iconColor: const Color(0xFF38BDF8),
+                  valueColor: const Color(0xFF38BDF8),
+                  bgColor: const Color(0xFF38BDF8).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'PAGES PRINTED',
                   value: _formatNumberWithCommas(pagesPrinted),
                   subtitle: 'Total paper consumption',
                   icon: Icons.description_rounded,
-                  iconColor: const Color(0xFF4F46E5),
-                  valueColor: const Color(0xFF4F46E5),
-                  bgColor: const Color(0xFFEEF2FF),
+                  iconColor: const Color(0xFF818CF8),
+                  valueColor: const Color(0xFF818CF8),
+                  bgColor: const Color(0xFF818CF8).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'TOTAL CUSTOMERS',
                   value: '$activeCustomersCount',
                   subtitle: 'Registered accounts',
                   icon: Icons.people_alt_rounded,
-                  iconColor: const Color(0xFF7C3AED),
-                  valueColor: const Color(0xFF7C3AED),
-                  bgColor: const Color(0xFFF5F3FF),
+                  iconColor: const Color(0xFFA78BFA),
+                  valueColor: const Color(0xFFA78BFA),
+                  bgColor: const Color(0xFFA78BFA).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'AVG ORDER VALUE',
                   value: '₱${avgOrderValue.toStringAsFixed(2)}',
                   subtitle: 'Average spent per ticket',
                   icon: Icons.bar_chart_rounded,
-                  iconColor: const Color(0xFFD97706),
-                  valueColor: const Color(0xFFD97706),
-                  bgColor: const Color(0xFFFEF3C7),
+                  iconColor: const Color(0xFFFBBF24),
+                  valueColor: const Color(0xFFFBBF24),
+                  bgColor: const Color(0xFFFBBF24).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'STORE REVENUE',
                   value: '₱${storeRevenue.toStringAsFixed(2)}',
                   subtitle: 'School supplies sales',
                   icon: Icons.shopping_cart_rounded,
-                  iconColor: const Color(0xFFEA580C),
-                  valueColor: const Color(0xFFEA580C),
-                  bgColor: const Color(0xFFFFEDD5),
+                  iconColor: const Color(0xFFFB923C),
+                  valueColor: const Color(0xFFFB923C),
+                  bgColor: const Color(0xFFFB923C).withOpacity(0.15),
                 ),
               ],
             ),
@@ -715,8 +743,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'ORDER STATUS DISTRIBUTION',
               subtitle: 'Live active job status breakdown',
               badgeLabel: 'Real-Time',
-              badgeColor: const Color(0xFFEFF6FF),
-              badgeTextColor: const Color(0xFF2563EB),
+              badgeColor: const Color(0xFF4F46E5).withOpacity(0.2),
+              badgeTextColor: const Color(0xFF818CF8),
               child: Column(
                 children: [
                   SizedBox(
@@ -747,8 +775,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'ORDERS BY SERVICE TYPE',
               subtitle: 'Popular print products volume',
               badgeLabel: 'Live Data',
-              badgeColor: const Color(0xFFEEF2FF),
-              badgeTextColor: const Color(0xFF4F46E5),
+              badgeColor: const Color(0xFF4F46E5).withOpacity(0.2),
+              badgeTextColor: const Color(0xFF818CF8),
               child: Column(
                 children: [
                   SizedBox(
@@ -773,8 +801,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'REVENUE SHARE',
               subtitle: 'Print jobs vs Store supply sales',
               badgeLabel: 'Financials',
-              badgeColor: const Color(0xFFECFDF5),
-              badgeTextColor: const Color(0xFF059669),
+              badgeColor: const Color(0xFF10B981).withOpacity(0.2),
+              badgeTextColor: const Color(0xFF10B981),
               child: Column(
                 children: [
                   SizedBox(
@@ -791,9 +819,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildChartLegendItem('Print Services', const Color(0xFF2563EB)),
+                      _buildChartLegendItem('Print Services', const Color(0xFF38BDF8)),
                       const SizedBox(width: 20),
-                      _buildChartLegendItem('Store Supplies', const Color(0xFFEA580C)),
+                      _buildChartLegendItem('Store Supplies', const Color(0xFFFB923C)),
                     ],
                   ),
                 ],
@@ -818,12 +846,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF0D1224),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
-        ],
+        border: Border.all(color: const Color(0xFF1E293B)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -854,7 +879,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8)),
+            style: const TextStyle(fontSize: 9, color: Color(0xFF64748B)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -874,10 +899,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF0D1224),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: const Color(0xFF1E293B)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -888,9 +912,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF0F172A), letterSpacing: 0.5)),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.white, letterSpacing: 0.5)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                  Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                 ],
               ),
               Container(
@@ -913,7 +937,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
       ],
     );
   }
@@ -929,8 +953,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _rfidLogsRef.orderBy('timestamp', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('RFID Error: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('RFID Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
 
         final rfidDocs = snapshot.data!.docs;
 
@@ -940,25 +964,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFF0D1224),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: const Color(0xFF1E293B)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.nfc_rounded, color: Color(0xFF16A34A), size: 24),
+                    decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.nfc_rounded, color: Color(0xFF10B981), size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Text('RFID Reader Active (Store Counter)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                        Text('RFID Reader Active (Store Counter)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                         SizedBox(height: 2),
-                        Text('Live card taps, customer points & discount tapping', style: TextStyle(color: Color(0xFF64748B), fontSize: 10.5)),
+                        Text('Live card taps, customer points & discount tapping', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
                       ],
                     ),
                   ),
@@ -970,32 +994,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: () async {
                 await _rfidLogsRef.add({
                   'cardUid': 'A4:8F:C2:90',
-                  'customerName': 'xdawinan',
+                  'customerName': widget.userEmail.split('@').first,
                   'pointsAdded': 10,
                   'timestamp': FieldValue.serverTimestamp(),
                 });
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Simulated RFID Tap registered! (+10 Loyalty Points)')),
+                  const SnackBar(
+                    content: Text('Simulated RFID Tap registered! (+10 Loyalty Points)'),
+                    backgroundColor: Color(0xFF10B981),
+                  ),
                 );
               },
               icon: const Icon(Icons.tap_and_play, color: Colors.white, size: 18),
               label: const Text('Simulate Test Card Tap (+10 Points)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F172A),
+                backgroundColor: const Color(0xFF4F46E5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 20),
-            const Text('LIVE CARD TAP LOGS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+            const Text('LIVE CARD TAP LOGS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
             const SizedBox(height: 10),
             if (rfidDocs.isEmpty)
               Container(
                 padding: const EdgeInsets.all(24),
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                child: const Text('No RFID taps logged yet.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1224),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF1E293B)),
+                ),
+                child: const Text('No RFID taps logged yet.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
               )
             else
               ...rfidDocs.map((doc) {
@@ -1009,31 +1040,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF0D1224),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: const Color(0xFF1E293B)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF2563EB), size: 20),
+                        decoration: BoxDecoration(color: const Color(0xFF38BDF8).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF38BDF8), size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$name ($uid)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
-                            Text(dt, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                            Text('$name ($uid)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                            Text(dt, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                           ],
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(6)),
-                        child: Text('+$pts PTS', style: const TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold, fontSize: 10)),
+                        decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                        child: Text('+$pts PTS', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10)),
                       ),
                     ],
                   ),
@@ -1045,30 +1076,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- HOMEPAGE TAB ---
+  // ===========================================================================
+  // --- INTERIOR HOMEPAGE TAB (MATCHING HOMESCREEN FUTURISTIC DESIGN) ---
+  // ===========================================================================
   Widget _buildCustomerHomeTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      physics: const BouncingScrollPhysics(),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (_isAdmin) ...[
+          // Admin quick card banner if admin
+          if (_isAdmin)
             Container(
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4)),
-                ],
+                border: Border.all(color: const Color(0xFF312E81)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: const Color(0xFFE11D48).withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.add_a_photo_rounded, color: Color(0xFFE11D48), size: 24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5).withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF818CF8), size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1086,130 +1125,340 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminProductsScreen()));
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE11D48),
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     ),
-                    child: const Text('Manage', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    child: const Text('Manage', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
               ),
             ),
-          ],
 
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          const SizedBox(height: 20),
+
+          // Hero Headline
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                const Text(
+                  'Elevate Your\nPrinting Experience',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: const Text(
+                    'Unlock your printing potential in a fully connected environment, powered by Kez C-Em Zek Printing Shop',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Central Sphere Graphic with Floating Glass Cards
+          SizedBox(
+            height: 310,
+            width: double.infinity,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                // Animated Orbital Sphere
+                AnimatedBuilder(
+                  animation: _animController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      size: const Size(340, 260),
+                      painter: _FuturisticSpherePainter(progress: _animController.value),
+                    );
+                  },
+                ),
+
+                // Center Action Button
+                Positioned(
+                  top: 6,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.12),
+                          blurRadius: 14,
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_isAdmin) {
+                          setState(() => _currentNavIndex = 2);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0F172A),
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        _isAdmin ? 'Manage Orders Queue' : 'Place New Print Order',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Left Floating Card
+                Positioned(
+                  left: 16,
+                  bottom: 60,
+                  child: _buildHomeGlassCard(
+                    width: 150,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Print Services', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+                              child: const Icon(Icons.north_east_rounded, color: Colors.white, size: 10),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text('Unparalleled\nQuality Proofing', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, height: 1.2)),
+                        const SizedBox(height: 6),
+                        const Text('100% Guaranteed', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Right Floating Card
+                Positioned(
+                  right: 16,
+                  bottom: 35,
+                  child: _buildHomeGlassCard(
+                    width: 150,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Order Tracking', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+                              child: const Icon(Icons.north_east_rounded, color: Colors.white, size: 10),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text('99.4%', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          height: 4,
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: 0.94,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(colors: [Color(0xFF818CF8), Color(0xFFEC4899)]),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Quick Action Buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+                      );
+                    },
+                    icon: const Icon(Icons.add_circle_rounded, size: 18),
+                    label: const Text('Order Prints', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() => _currentNavIndex = 1),
+                    icon: const Icon(Icons.storefront_rounded, size: 18),
+                    label: const Text('Store Supplies', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Color(0xFF1E293B)),
+                      backgroundColor: const Color(0xFF0D1224),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 26),
+
+          // Services Grid Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const Text('OUR SERVICES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF818CF8), letterSpacing: 1.2)),
+                const SizedBox(height: 4),
+                const Text('Everything your business needs printed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                const Text('Tap a service to customize and calculate instant prices.', style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+                const SizedBox(height: 14),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.95,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(6)),
-                      child: const Text('Kez C-Em Zek Printing Service Web System', style: TextStyle(color: Color(0xFFE11D48), fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _showTermsAndConditionsDialog(context),
-                      icon: const Icon(Icons.gavel_rounded, size: 14, color: Color(0xFFE11D48)),
-                      label: const Text('Terms', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFE11D48))),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('Streamlined Printing Orders with Real-Time Tracking & RFID Rewards', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), height: 1.2)),
-                const SizedBox(height: 10),
-                const Text('A clean, unified web solution for modern print shops: instant file proofing, accurate price calculations, stage-by-stage order monitoring, customer-staff live chat, RFID loyalty tapping, and real-time paper stock level sensors.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => setState(() => _currentNavIndex = 2),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE11D48),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: const Text('View Orders →', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => setState(() => _currentNavIndex = 1),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          side: const BorderSide(color: Color(0xFFCBD5E1)),
-                        ),
-                        child: const Text('Store Supplies', style: TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                    ),
+                    _buildDarkServiceCard('Document Print', 'Short, Long, A4 B&W or Color.', 'Starts at ₱3.00 / pg', Icons.description_rounded, const Color(0xFF38BDF8)),
+                    _buildDarkServiceCard('PVC ID Cards', 'Durable waterproof PVC cards.', 'Starts at ₱50.00 / pc', Icons.badge_rounded, const Color(0xFFFBBF24)),
+                    _buildDarkServiceCard('Stickers & Labels', 'Glossy, Matte, or Vinyl die-cut.', 'Starts at ₱45.00 / sheet', Icons.auto_awesome_rounded, const Color(0xFFA78BFA)),
+                    _buildDarkServiceCard('Store Supplies', 'Notebooks, pens, and paper packs.', 'Available in Store Tab', Icons.storefront_rounded, const Color(0xFF10B981)),
                   ],
                 ),
               ],
             ),
           ),
+
           const SizedBox(height: 24),
-          const Text('OUR SERVICES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFE11D48), letterSpacing: 1.2)),
-          const SizedBox(height: 4),
-          const Text('Everything your business needs printed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-          const Text('Pick a service to see options and pricing.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.85,
-            children: [
-              _buildWebServiceCard('Standard Document Print', 'Short, Long, A4 paper in Black & White or Full Color.', 'Starts at ₱3.00 / page', Icons.description_rounded, const Color(0xFFFFF1F2), const Color(0xFFE11D48)),
-              _buildWebServiceCard('PVC ID & Badge Printing', 'Durable waterproof PVC cards for school or work IDs.', 'Starts at ₱50.00 / card', Icons.badge_rounded, const Color(0xFFFEF3C7), const Color(0xFFD97706)),
-              _buildWebServiceCard('Sticker & Label Printing', 'Glossy, Matte, or Vinyl die-cut stickers for packaging.', 'Starts at ₱45.00 / sheet', Icons.auto_awesome_rounded, const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
-              _buildWebServiceCard('Store & Office Supplies', 'Notebooks, pens, clear books, folders, and paper packs.', 'Available in Store Tab', Icons.storefront_rounded, const Color(0xFFDCFCE7), const Color(0xFF16A34A)),
-            ],
-          ),
-          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildWebServiceCard(String title, String desc, String price, IconData icon, Color bgColor, Color iconColor) {
+  Widget _buildHomeGlassCard({required double width, required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)), child: Icon(icon, size: 20, color: iconColor)),
-          const SizedBox(height: 8),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 2),
-          Expanded(child: Text(desc, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)), maxLines: 3, overflow: TextOverflow.ellipsis)),
-          const SizedBox(height: 4),
-          Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF059669))),
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1224).withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
         ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildDarkServiceCard(String title, String desc, String price, IconData icon, Color accentColor) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D1224),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF1E293B)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 20, color: accentColor),
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 3),
+            Expanded(child: Text(desc, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            const SizedBox(height: 4),
+            Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF10B981))),
+          ],
+        ),
       ),
     );
   }
 
-  // --- MANAGE ORDERS VIEW ---
+  // ===========================================================================
+  // --- MANAGE ORDERS VIEW (ADMIN) ---
+  // ===========================================================================
   Widget _buildManageOrdersView() {
     return StreamBuilder<QuerySnapshot>(
       stream: _ordersRef.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
 
         final docs = snapshot.data!.docs;
         int approvalCount = 0;
@@ -1259,7 +1508,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return matchesCategory && matchesSearch && matchesStatus;
         }).toList();
 
-        // ORDERS PAGINATION CALCULATION
         int totalPages = (filteredDocs.length / _ordersPerPage).ceil();
         if (totalPages < 1) totalPages = 1;
         if (_ordersCurrentPage > totalPages) _ordersCurrentPage = totalPages;
@@ -1274,13 +1522,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D1224),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1E293B)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.print_rounded, color: Color(0xFFE11D48))),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.print_rounded, color: Color(0xFF818CF8)),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -1288,17 +1544,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             Row(
                               children: [
-                                const Text('Print Production Queue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
+                                const Text('Print Production Queue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(6)),
-                                  child: Text('${docs.length} Active', style: const TextStyle(color: Color(0xFF2563EB), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                  child: Text('${docs.length} Active', style: const TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
-                            const Text('Organized print job management • FIFO', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            const Text('Organized print job management • FIFO', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
                           ],
                         ),
                       ),
@@ -1307,11 +1563,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      _buildStatusCounterBox('APPROVAL', approvalCount.toString(), const Color(0xFFFEF3C7), const Color(0xFFD97706)),
+                      _buildStatusCounterBox('APPROVAL', approvalCount.toString(), const Color(0xFFFBBF24).withOpacity(0.15), const Color(0xFFFBBF24)),
                       const SizedBox(width: 8),
-                      _buildStatusCounterBox('PRINTING', printingCount.toString(), const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+                      _buildStatusCounterBox('PRINTING', printingCount.toString(), const Color(0xFF38BDF8).withOpacity(0.15), const Color(0xFF38BDF8)),
                       const SizedBox(width: 8),
-                      _buildStatusCounterBox('READY', readyCount.toString(), const Color(0xFFDCFCE7), const Color(0xFF16A34A)),
+                      _buildStatusCounterBox('READY', readyCount.toString(), const Color(0xFF10B981).withOpacity(0.15), const Color(0xFF10B981)),
                     ],
                   ),
                 ],
@@ -1321,15 +1577,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             TextField(
               controller: _searchController,
               onChanged: (_) => setState(() => _ordersCurrentPage = 1),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search PRNT-7767, Client, or Item...',
-                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF64748B)),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: const Color(0xFF0D1224),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
               ),
             ),
             const SizedBox(height: 12),
@@ -1338,12 +1595,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+                  decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF1E293B))),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
+                      dropdownColor: const Color(0xFF0D1224),
                       value: _serviceCategories.contains(_selectedServiceCategory) ? _selectedServiceCategory : 'All Services',
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF0F172A)),
-                      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                       onChanged: (val) {
                         if (val != null) {
                           setState(() {
@@ -1358,7 +1616,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF1E293B))),
                   child: Row(
                     children: [
                       _buildViewToggleBtn('List', Icons.list_alt_rounded, _isListView, () => setState(() => _isListView = true)),
@@ -1383,10 +1641,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _statusFilter = status;
                         _ordersCurrentPage = 1;
                       }),
-                      selectedColor: const Color(0xFF0F172A),
-                      labelStyle: TextStyle(color: isSelected ? Colors.white : const Color(0xFF334155), fontSize: 11, fontWeight: FontWeight.bold),
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFE2E8F0))),
+                      selectedColor: const Color(0xFF4F46E5),
+                      labelStyle: TextStyle(color: isSelected ? Colors.white : const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                      backgroundColor: const Color(0xFF0D1224),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFF1E293B))),
                     ),
                   );
                 }).toList(),
@@ -1397,8 +1655,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(32),
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF1F5F9))),
-                child: Text('No matching orders found under "$_selectedServiceCategory".', style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
+                decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1E293B))),
+                child: Text('No matching orders found under "$_selectedServiceCategory".', style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 13)),
               )
             else
               ...pagedDocs.map((doc) {
@@ -1418,31 +1676,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : _buildOrderCardItem(docId, displayRefId, serviceName, customer, totalStr, status, payment, dateTimeStr, data);
               }),
 
-            // ORDERS PAGINATION BOTTOM BAR (WITH EDGEINSETS.ONLY FIX)
             if (filteredDocs.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF0D1224),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: const Color(0xFF1E293B)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left_rounded),
+                      icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
                       onPressed: _ordersCurrentPage > 1
                           ? () => setState(() => _ordersCurrentPage--)
                           : null,
                     ),
                     Text(
                       "Page $_ordersCurrentPage of $totalPages (${filteredDocs.length} orders)",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.chevron_right_rounded),
+                      icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
                       onPressed: _ordersCurrentPage < totalPages
                           ? () => setState(() => _ordersCurrentPage++)
                           : null,
@@ -1463,14 +1720,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected ? const Color(0xFF4F46E5) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 14, color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B)),
+            Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
             const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B))),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
           ],
         ),
       ),
@@ -1479,44 +1736,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildOrderCardItem(String docId, String refId, String service, String customer, String total, String status, String payment, String dateTimeStr, Map<String, dynamic> data) {
     final statusCategory = _getStatusCategory(status);
-    Color statusBgColor = const Color(0xFFFEF3C7);
-    Color statusTextColor = const Color(0xFFD97706);
+    Color statusBgColor = const Color(0xFFFBBF24).withOpacity(0.2);
+    Color statusTextColor = const Color(0xFFFBBF24);
     if (statusCategory == 'printing') {
-      statusBgColor = const Color(0xFFEFF6FF);
-      statusTextColor = const Color(0xFF2563EB);
+      statusBgColor = const Color(0xFF38BDF8).withOpacity(0.2);
+      statusTextColor = const Color(0xFF38BDF8);
     } else if (statusCategory == 'ready') {
-      statusBgColor = const Color(0xFFDCFCE7);
-      statusTextColor = const Color(0xFF16A34A);
+      statusBgColor = const Color(0xFF10B981).withOpacity(0.2);
+      statusTextColor = const Color(0xFF10B981);
     } else if (statusCategory == 'completed') {
-      statusBgColor = const Color(0xFFECFDF5);
-      statusTextColor = const Color(0xFF059669);
+      statusBgColor = const Color(0xFF10B981).withOpacity(0.2);
+      statusTextColor = const Color(0xFF10B981);
     } else if (statusCategory == 'rejected') {
-      statusBgColor = const Color(0xFFFFE4E6);
-      statusTextColor = const Color(0xFFE11D48);
+      statusBgColor = const Color(0xFFF43F5E).withOpacity(0.2);
+      statusTextColor = const Color(0xFFF43F5E);
     }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF1E293B))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
               Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)), child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusTextColor))),
             ],
           ),
           const SizedBox(height: 8),
-          Text(customer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-          Text(service, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+          Text(customer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFCBD5E1))),
+          Text(service, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF059669))),
+              Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
               _buildDynamicActionButton(docId, status),
             ],
           ),
@@ -1529,25 +1786,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1E293B))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF059669))),
+              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+              Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981))),
             ],
           ),
           const SizedBox(height: 4),
-          Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-          Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFCBD5E1))),
+          Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF334155)))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
               _buildDynamicActionButton(docId, status),
             ],
           ),
@@ -1560,22 +1817,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
         title: Row(
           children: const [
-            Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF0F172A)),
+            Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF4F46E5)),
             SizedBox(width: 8),
-            Text('Confirm Action', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Confirm Action', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ],
         ),
-        content: Text('Are you sure you want to change order status to "$newStatus"?'),
+        content: Text('Are you sure you want to change order status to "$newStatus"?', style: const TextStyle(color: Color(0xFF94A3B8))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
             child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
             onPressed: () => Navigator.pop(c, true),
             child: Text(actionLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -1587,7 +1845,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await _ordersRef.doc(orderId).update({'status': newStatus});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order status updated to "$newStatus"')),
+        SnackBar(
+          content: Text('Order status updated to "$newStatus"'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
       );
     }
   }
@@ -1597,23 +1858,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (category == 'approval') {
       return ElevatedButton(
         onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Printing', 'Approve Order'),
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
         child: const Text('Approve', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
       );
     } else if (category == 'printing') {
       return ElevatedButton(
         onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Ready for Pickup', 'Mark Ready'),
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
         child: const Text('Mark Ready', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
       );
     } else if (category == 'ready') {
       return ElevatedButton(
         onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Completed', 'Complete Order'),
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
         child: const Text('Complete', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
       );
     } else {
-      return const Text('Done', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155)));
+      return const Text('Done', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)));
     }
   }
 
@@ -1639,16 +1900,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+          decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF1E293B))),
           child: Row(
             children: [
-              const CircleAvatar(radius: 24, backgroundColor: Color(0xFFFFF1F2), child: Icon(Icons.admin_panel_settings, color: Color(0xFFE11D48))),
+              const CircleAvatar(radius: 24, backgroundColor: Color(0xFF1E293B), child: Icon(Icons.admin_panel_settings, color: Color(0xFF818CF8))),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Administrator Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(widget.userEmail, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  const Text('Administrator Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                  Text(widget.userEmail, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
                 ],
               ),
             ],
@@ -1656,11 +1917,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 12),
         ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          tileColor: Colors.white,
-          leading: const Icon(Icons.gavel_rounded, color: Color(0xFFE11D48)),
-          title: const Text("Terms and Conditions", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-          trailing: const Icon(Icons.chevron_right_rounded),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFF1E293B))),
+          tileColor: const Color(0xFF0D1224),
+          leading: const Icon(Icons.gavel_rounded, color: Color(0xFF818CF8)),
+          title: const Text("Terms and Conditions", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B)),
           onTap: () => _showTermsAndConditionsDialog(context),
         ),
       ],
@@ -1682,7 +1943,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                   icon: const Icon(Icons.add_circle_rounded, color: Colors.white),
                   label: const Text('Place New Print Order', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), padding: const EdgeInsets.symmetric(vertical: 14)),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), padding: const EdgeInsets.symmetric(vertical: 14)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -1690,7 +1951,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () => _showTermsAndConditionsDialog(context),
                 child: const Text(
                   "By placing an order, you agree to our Terms & Conditions →",
-                  style: TextStyle(fontSize: 10.5, color: Color(0xFFE11D48), fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 10.5, color: Color(0xFF818CF8), fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -1707,18 +1968,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
-                        Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFE11D48)),
+                        Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFF43F5E)),
                         SizedBox(height: 8),
-                        Text('Nabigo sa pagkonekta sa database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                        Text('Gumagamit ng local offline cache kung available.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                        Text('Nabigo sa pagkonekta sa database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        Text('Gumagamit ng local offline cache kung available.', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
                       ],
                     ),
                   ),
                 );
               }
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
               final docs = snapshot.data!.docs;
-              if (docs.isEmpty) return const Center(child: Text('Wala ka pang order.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)));
+              if (docs.isEmpty) return const Center(child: Text('Wala ka pang order.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)));
               return ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: docs.map((doc) {
@@ -1726,13 +1987,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+                    decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1E293B))),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(data['id'] ?? 'PRNT-xxxx', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text(data['service'] ?? 'Print Service', style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
-                        Text('Total: ₱${data['total'] ?? '30.00'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                        Text(data['id'] ?? 'PRNT-xxxx', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        const SizedBox(height: 2),
+                        Text(data['service'] ?? 'Print Service', style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+                        const SizedBox(height: 4),
+                        Text('Total: ₱${data['total'] ?? '30.00'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
                       ],
                     ),
                   );
@@ -1750,20 +2013,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircleAvatar(radius: 36, backgroundColor: Color(0xFFFFF1F2), child: Icon(Icons.person, color: Color(0xFFE11D48))),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.15), shape: BoxShape.circle),
+            child: const Icon(Icons.person, color: Color(0xFF818CF8), size: 48),
+          ),
           const SizedBox(height: 12),
-          Text(widget.userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(widget.userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => _showTermsAndConditionsDialog(context),
-            icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFFE11D48)),
-            label: const Text("Terms & Conditions", style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.bold, fontSize: 12)),
+            icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFF818CF8)),
+            label: const Text("Terms & Conditions", style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold, fontSize: 12)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E293B))),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _showLogoutConfirmationDialog(context),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
-            child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1772,8 +2040,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 // =============================================================================
-// CUSTOM PAINTERS (CHARTS)
+// CUSTOM PAINTERS (CHARTS & SPHERE)
 // =============================================================================
+class _FuturisticSpherePainter extends CustomPainter {
+  final double progress;
+  _FuturisticSpherePainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.55);
+    final radiusX = size.width * 0.44;
+    final radiusY = size.height * 0.38;
+
+    final paintGlow = Paint()
+      ..color = const Color(0xFF3B82F6).withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+
+    final paintStroke = Paint()
+      ..color = const Color(0xFF4F46E5).withOpacity(0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final paintHighlight = Paint()
+      ..color = const Color(0xFF60A5FA).withOpacity(0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+
+    final auraPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFF4338CA).withOpacity(0.20),
+          const Color(0xFF1D4ED8).withOpacity(0.08),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: radiusX * 1.1));
+    canvas.drawCircle(center, radiusX * 0.95, auraPaint);
+
+    const int ringCount = 7;
+    for (int i = 0; i < ringCount; i++) {
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+
+      final double angle = (i * (math.pi / ringCount)) + (progress * 2 * math.pi * 0.05);
+      canvas.rotate(angle);
+
+      final rect = Rect.fromCenter(
+        center: Offset.zero,
+        width: radiusX * (1.6 - (i * 0.1)),
+        height: radiusY * (0.85 + (i * 0.08)),
+      );
+
+      canvas.drawOval(rect, paintGlow);
+      canvas.drawOval(rect, i % 2 == 0 ? paintHighlight : paintStroke);
+
+      canvas.restore();
+    }
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-math.pi / 4);
+    final diagRect = Rect.fromCenter(
+      center: Offset.zero,
+      width: radiusX * 1.8,
+      height: radiusY * 0.7,
+    );
+    canvas.drawOval(diagRect, paintHighlight);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _FuturisticSpherePainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
+}
+
 class _DonutChartPainter extends CustomPainter {
   final Map<String, int> statusCounts;
   _DonutChartPainter({required this.statusCounts});
@@ -1782,9 +2124,9 @@ class _DonutChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2.2;
-    final strokeWidth = 24.0;
+    const strokeWidth = 24.0;
 
-    final total = statusCounts.values.fold(0, (sum, val) => sum + val);
+    final total = statusCounts.values.fold(0, (acc, val) => acc + val);
     if (total == 0) return;
 
     double startAngle = -math.pi / 2;
@@ -1802,10 +2144,10 @@ class _DonutChartPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.butt;
 
-    statusCounts.forEach((key, count) {
-      if (count > 0) {
-        final sweepAngle = (count / total) * 2 * math.pi;
-        paint.color = colors[key] ?? const Color(0xFFCBD5E1);
+    statusCounts.forEach((key, cnt) {
+      if (cnt > 0) {
+        final sweepAngle = (cnt / total) * 2 * math.pi;
+        paint.color = colors[key] ?? const Color(0xFF64748B);
 
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
@@ -1830,9 +2172,9 @@ class _BarChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = const Color(0xFF3B82F6);
-    final bgPaint = Paint()..color = const Color(0xFFF1F5F9);
+    final bgPaint = Paint()..color = const Color(0xFF0F172A);
     final gridPaint = Paint()
-      ..color = const Color(0xFFE2E8F0)
+      ..color = const Color(0xFF1E293B)
       ..strokeWidth = 1;
 
     for (int i = 0; i <= 4; i++) {
@@ -1893,11 +2235,11 @@ class _PieChartPainter extends CustomPainter {
     final storeSweep = (storeRevenue / total) * 2 * math.pi;
 
     final paintPrint = Paint()
-      ..color = const Color(0xFF2563EB)
+      ..color = const Color(0xFF38BDF8)
       ..style = PaintingStyle.fill;
 
     final paintStore = Paint()
-      ..color = const Color(0xFFEA580C)
+      ..color = const Color(0xFFFB923C)
       ..style = PaintingStyle.fill;
 
     canvas.drawArc(

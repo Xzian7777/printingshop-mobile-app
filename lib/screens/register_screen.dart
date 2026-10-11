@@ -18,7 +18,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   int _regStep = 1;
   final _formKey = GlobalKey<FormState>();
-// Removed unused OTP form key
+  final _otpFormKey = GlobalKey<FormState>();
 
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
@@ -71,12 +71,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ..recipients.add(recipientEmail)
       ..subject = subjectText
       ..html = '''
-        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
-          <h2 style="color: #e11d48;">Kez C-Em Zek Printing Shop Service</h2>
-          <p>Hello,</p>
-          <p>Your OTP verification code is:</p>
-          <h1 style="color: #0f172a; letter-spacing: 5px;">$otpCode</h1>
-          <p style="color: #64748b; font-size: 12px;">This code will expire in 5 minutes.</p>
+        <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0b0f19; color: #ffffff; border-radius: 12px; border: 1px solid #1e293b;">
+          <h2 style="color: #6366f1; margin-top: 0;">Kez C-Em Zek Printing Shop</h2>
+          <p style="color: #cbd5e1;">Hello,</p>
+          <p style="color: #cbd5e1;">Your 6-digit account verification code is:</p>
+          <div style="background-color: #111827; padding: 14px 24px; border-radius: 8px; display: inline-block; margin: 12px 0;">
+            <h1 style="color: #38bdf8; letter-spacing: 6px; margin: 0; font-size: 32px;">$otpCode</h1>
+          </div>
+          <p style="color: #94a3b8; font-size: 12px;">This code will expire in 5 minutes. If you did not request this, please ignore this email.</p>
         </div>
       ''';
 
@@ -105,210 +107,139 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
-  Future<void> _sendRegisterVerificationLink() async {
+  Future<void> _sendRegisterOtp() async {
     setState(() => _isLoading = true);
+    _activeOtp = _generate6DigitOTP();
     _recipientEmail = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final fullName = _fullNameController.text.trim();
-    final phone = _mobileController.text.trim();
 
     try {
-      // 1. Create account in Firebase Auth
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: _recipientEmail,
-        password: password,
-      );
-
-      await userCredential.user?.updateDisplayName(fullName);
-
-      // 2. Send Firebase verification link
-      await userCredential.user?.sendEmailVerification();
-
-      // 3. Save pending info in pending_users collection
-      await FirebaseFirestore.instance
-          .collection('pending_users')
-          .doc(userCredential.user!.uid)
-          .set({
-        'uid': userCredential.user!.uid,
-        'full_name': fullName,
-        'phone': phone,
-        'email': _recipientEmail,
-        'role': 'customer',
-        'created_at': FieldValue.serverTimestamp(),
-      });
-
       await FirebaseFirestore.instance
           .collection('pending_users')
           .doc(_recipientEmail)
           .set({
-        'uid': userCredential.user!.uid,
-        'full_name': fullName,
-        'phone': phone,
+        'full_name': _fullNameController.text.trim(),
+        'phone': _mobileController.text.trim(),
         'email': _recipientEmail,
-        'role': 'customer',
+        'password': _passwordController.text.trim(),
+        'otp': _activeOtp,
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      setState(() => _isLoading = false);
-      _startTimer();
-      setState(() => _regStep = 2);
+      bool sent = await _sendEmailOTP(
+        recipientEmail: _recipientEmail,
+        otpCode: _activeOtp,
+        subjectText: 'Account Verification - Kez C-Em Zek',
+      );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verification link sent to your email!'),
-          backgroundColor: Color(0xFF059669),
-        ),
-      );
-    } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
-      if (!mounted) return;
-      String msg = e.message ?? 'Registration failed.';
-      if (e.code == 'email-already-in-use') {
-        msg = 'This email is already registered. Please log in.';
-      } else if (e.code == 'weak-password') {
-        msg = 'The password is too weak.';
-      } else if (e.code == 'invalid-email') {
-        msg = 'The email address is invalid.';
+
+      if (sent) {
+        _otpController.clear();
+        _startTimer();
+        setState(() => _regStep = 2);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to send verification email. Please check your internet or email address.'),
+            backgroundColor: Color(0xFFF43F5E),
+          ),
+        );
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: const Color(0xFFE11D48),
-        ),
-      );
     } catch (e) {
       setState(() => _isLoading = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error saving registration data: $e'),
-          backgroundColor: const Color(0xFFE11D48),
+          backgroundColor: const Color(0xFFF43F5E),
         ),
       );
     }
   }
 
-  Future<void> _resendVerificationLink() async {
-    setState(() => _isLoading = true);
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await user.sendEmailVerification();
-      } else {
-        final credential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(
-          email: _recipientEmail,
-          password: _passwordController.text.trim(),
-        );
-        user = credential.user;
-        await user?.sendEmailVerification();
-      }
+  Future<void> _verifyOtpAndComplete() async {
+    if (_otpFormKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
 
-      setState(() => _isLoading = false);
-      _startTimer();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verification link resent successfully!'),
-          backgroundColor: Color(0xFF059669),
-        ),
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to resend link: $e'),
-          backgroundColor: const Color(0xFFE11D48),
-        ),
-      );
-    }
-  }
-
-  Future<void> _checkVerificationStatus() async {
-    setState(() => _isLoading = true);
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        final credential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(
-          email: _recipientEmail,
-          password: _passwordController.text.trim(),
-        );
-        user = credential.user;
-      }
-
-      if (user != null) {
-        await user.reload();
-        user = FirebaseAuth.instance.currentUser;
-      }
-
-      if (user != null && user.emailVerified) {
-        final pendingDoc = await FirebaseFirestore.instance
+      try {
+        final docRef = FirebaseFirestore.instance
             .collection('pending_users')
-            .doc(user.uid)
-            .get();
+            .doc(_recipientEmail);
 
-        final pendingEmailDoc = await FirebaseFirestore.instance
-            .collection('pending_users')
-            .doc(_recipientEmail)
-            .get();
+        final doc = await docRef.get();
 
-        final data = pendingDoc.data() ?? pendingEmailDoc.data() ?? {};
+        if (!doc.exists) {
+          setState(() => _isLoading = false);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pending registration expired or not found. Please register again.'),
+              backgroundColor: Color(0xFFF43F5E),
+            ),
+          );
+          return;
+        }
 
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({
-          'uid': user.uid,
-          'full_name': data['full_name'] ?? (user.displayName ?? _fullNameController.text.trim()),
-          'phone': data['phone'] ?? _mobileController.text.trim(),
-          'email': user.email ?? _recipientEmail,
-          'role': 'customer',
-          'created_at': FieldValue.serverTimestamp(),
-        });
+        final pendingData = doc.data()!;
 
-        await FirebaseFirestore.instance.collection('pending_users').doc(user.uid).delete();
-        await FirebaseFirestore.instance.collection('pending_users').doc(_recipientEmail).delete();
+        if (pendingData['otp'] == _otpController.text.trim()) {
+          UserCredential userCredential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(
+            email: pendingData['email'],
+            password: pendingData['password'],
+          );
 
-        await FirebaseAuth.instance.signOut();
+          await userCredential.user?.updateDisplayName(pendingData['full_name']);
 
-        _countdownTimer?.cancel();
-        setState(() => _isLoading = false);
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userCredential.user!.uid)
+              .set({
+            'uid': userCredential.user!.uid,
+            'full_name': pendingData['full_name'],
+            'phone': pendingData['phone'],
+            'email': pendingData['email'],
+            'role': 'customer',
+            'created_at': FieldValue.serverTimestamp(),
+          });
 
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Email verified successfully! You can now log in.'),
-            backgroundColor: Color(0xFF059669),
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      } else {
+          await docRef.delete();
+
+          _countdownTimer?.cancel();
+          setState(() => _isLoading = false);
+
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! You can now log in.'),
+              backgroundColor: Color(0xFF10B981),
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        } else {
+          setState(() => _isLoading = false);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Invalid OTP code. Please enter the correct code.'),
+              backgroundColor: Color(0xFFF43F5E),
+            ),
+          );
+        }
+      } catch (e) {
         setState(() => _isLoading = false);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Your email is not verified yet. Please click the link in your email first.'),
-            backgroundColor: Color(0xFFE11D48),
+          SnackBar(
+            content: Text('Error completing registration: $e'),
+            backgroundColor: const Color(0xFFF43F5E),
           ),
         );
       }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error checking verification: $e'),
-          backgroundColor: const Color(0xFFE11D48),
-        ),
-      );
     }
   }
 
@@ -319,8 +250,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           Icon(
             isMet ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            size: 16,
-            color: isMet ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+            size: 15,
+            color: isMet ? const Color(0xFF10B981) : const Color(0xFF64748B),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -328,7 +259,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               text,
               style: TextStyle(
                 fontSize: 11.5,
-                color: isMet ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                color: isMet ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
                 fontWeight: isMet ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -358,10 +289,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           children: [
             Text(
               label,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFCBD5E1)),
             ),
             if (isRequired)
-              const Text(' *', style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(' *', style: TextStyle(color: Color(0xFFF43F5E), fontWeight: FontWeight.bold, fontSize: 13)),
           ],
         ),
         const SizedBox(height: 6),
@@ -371,25 +302,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboardType: keyboardType,
           maxLength: maxLength,
           onChanged: onChanged,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
+          style: const TextStyle(fontSize: 13, color: Colors.white),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
             counterText: '',
             filled: true,
-            fillColor: Colors.white,
+            fillColor: const Color(0xFF0F172A),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFC026D3), width: 1.5)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE11D48))),
-            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF1E293B)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFF43F5E)),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFF43F5E), width: 1.5),
+            ),
             suffixIcon: suffixIcon,
           ),
           validator: validator,
         ),
         if (subtext != null) ...[
           const SizedBox(height: 4),
-          Text(subtext, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          Text(subtext, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
         ],
       ],
     );
@@ -433,16 +376,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF070A14),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: Text(
-          _regStep == 1 ? 'Create New Account' : 'Verify Email',
-          style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
+          _regStep == 1 ? 'Create Account' : 'Verify Email OTP',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () {
             if (_regStep == 2) {
               setState(() => _regStep = 1);
@@ -452,352 +395,419 @@ class _RegisterScreenState extends State<RegisterScreen> {
           },
         ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: _regStep == 1
-              ? Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Full Name
-                _buildField(
-                  label: 'Full Name',
-                  hintText: 'e.g. Juan A. Dela Cruz',
-                  controller: _fullNameController,
-                  onChanged: (_) => setState(() {}),
-                  validator: (v) => AppValidators.validateName(v),
-                ),
-                const SizedBox(height: 14),
-
-                // 2. Contact Number
-                _buildField(
-                  label: 'Contact Number (For SMS Alerts)',
-                  hintText: '09171234567',
-                  controller: _mobileController,
-                  keyboardType: TextInputType.phone,
-                  maxLength: 11,
-                  subtext: 'Format: 11-digit PH mobile number starting with 09',
-                  validator: (v) => AppValidators.validateContactNumber(v),
-                ),
-                const SizedBox(height: 14),
-
-                // 3. Gmail Address
-                _buildField(
-                  label: 'Gmail Address (*.gmail.com)',
-                  hintText: 'juan.delacruz@gmail.com',
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  onChanged: (_) => setState(() {}),
-                  validator: (v) => AppValidators.validateEmail(v),
-                ),
-                const SizedBox(height: 14),
-
-                // 4. Password
-                _buildField(
-                  label: 'Password',
-                  isRequired: true,
-                  hintText: 'Enter strong password',
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  onChanged: (_) => setState(() {}),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B), size: 20),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Please enter a password';
-                    if (!req1 || !req2 || !req3 || !req4 || !req5) return 'Password does not meet requirements';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 8),
-
-                // Password Strength Indicator
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Password strength: $strengthText',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: strengthColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: strengthValue,
-                        backgroundColor: const Color(0xFFF1F5F9),
-                        valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
-                        minHeight: 6,
-                      ),
-                    ),
+      body: Stack(
+        children: [
+          // Background ambient glow
+          Positioned(
+            top: -100,
+            left: -80,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF4F46E5).withValues(alpha: 0.18),
+                    const Color(0xFF38BDF8).withValues(alpha: 0.06),
+                    Colors.transparent,
                   ],
                 ),
-                const SizedBox(height: 12),
+              ),
+            ),
+          ),
 
-                // Password Requirements Box
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'PASSWORD REQUIREMENTS:',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildRequirementItem('Must be at least 8 characters', req1),
-                      _buildRequirementItem('Must have Uppercase (A-Z) and Lowercase (a-z)', req2),
-                      _buildRequirementItem('Must have at least one symbol or number', req3),
-                      _buildRequirementItem("Can't contain spaces", req4),
-                      _buildRequirementItem("Can't include your name or email address", req5),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // 5. Confirm Password
-                _buildField(
-                  label: 'Confirm Password',
-                  isRequired: true,
-                  hintText: 'Re-enter password',
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirmPassword,
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B), size: 20),
-                    onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Please confirm your password';
-                    if (v != _passwordController.text) return 'Passwords do not match';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-
-                // Terms & Conditions Checkbox
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: _agreeToTerms,
-                        activeColor: const Color(0xFFC026D3),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        onChanged: (val) {
-                          setState(() {
-                            _agreeToTerms = val ?? false;
-                            if (_agreeToTerms) _termsError = null;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          text: "I agree to the ",
-                          style: TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
-                          children: [
-                            TextSpan(
-                              text: "Terms & Conditions",
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48)),
-                            ),
-                            TextSpan(
-                              text: " (Unclaimed prints within 30 days will be disposed of).",
-                            ),
-                          ],
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D1224).withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-                if (_termsError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 32, top: 4),
-                    child: Text(_termsError!, style: const TextStyle(color: Color(0xFFE11D48), fontSize: 11)),
-                  ),
-                const SizedBox(height: 20),
-
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () async {
-                            setState(() {
-                              _termsError = _agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
-                            });
-
-                            if (_formKey.currentState!.validate() && _agreeToTerms) {
-                              await _sendRegisterVerificationLink();
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFC026D3),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('Send Verification Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF1F5F9),
-                          foregroundColor: const Color(0xFF334155),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
-                        ),
-                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Already have an account Link
-                Center(
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
-                      );
-                    },
-                    child: const Text.rich(
-                      TextSpan(
-                        text: "Already have an account? ",
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                    child: _regStep == 1
+                        ? Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextSpan(
-                            text: 'Log In',
-                            style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.bold),
+                          const Text(
+                            'Get Started with KCZ Printing',
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Register to place orders and track print jobs in real time',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // 1. Full Name
+                          _buildField(
+                            label: 'Full Name',
+                            hintText: 'e.g. Juan A. Dela Cruz',
+                            controller: _fullNameController,
+                            onChanged: (_) => setState(() {}),
+                            validator: (v) => AppValidators.validateName(v),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 2. Contact Number
+                          _buildField(
+                            label: 'Contact Number (For SMS Alerts)',
+                            hintText: '09171234567',
+                            controller: _mobileController,
+                            keyboardType: TextInputType.phone,
+                            maxLength: 11,
+                            subtext: 'Format: 11-digit PH mobile number starting with 09',
+                            validator: (v) => AppValidators.validateContactNumber(v),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 3. Gmail Address
+                          _buildField(
+                            label: 'Gmail Address (*.gmail.com)',
+                            hintText: 'juan.delacruz@gmail.com',
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            onChanged: (_) => setState(() {}),
+                            validator: (v) => AppValidators.validateEmail(v),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 4. Password
+                          _buildField(
+                            label: 'Password',
+                            isRequired: true,
+                            hintText: 'Enter strong password',
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            onChanged: (_) => setState(() {}),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                color: const Color(0xFF64748B),
+                                size: 20,
+                              ),
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Please enter a password';
+                              if (!req1 || !req2 || !req3 || !req4 || !req5) return 'Password does not meet requirements';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Password Strength Indicator
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Password strength: $strengthText',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: strengthColor,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: strengthValue,
+                                  backgroundColor: const Color(0xFF1E293B),
+                                  valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
+                                  minHeight: 5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Password Requirements Box
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF1E293B)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PASSWORD REQUIREMENTS:',
+                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), letterSpacing: 0.5),
+                                ),
+                                const SizedBox(height: 6),
+                                _buildRequirementItem('Must be at least 8 characters', req1),
+                                _buildRequirementItem('Must have Uppercase (A-Z) and Lowercase (a-z)', req2),
+                                _buildRequirementItem('Must have at least one symbol or number', req3),
+                                _buildRequirementItem("Can't contain spaces", req4),
+                                _buildRequirementItem("Can't include your name or email prefix", req5),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 5. Confirm Password
+                          _buildField(
+                            label: 'Confirm Password',
+                            isRequired: true,
+                            hintText: 'Re-enter password',
+                            controller: _confirmPasswordController,
+                            obscureText: _obscureConfirmPassword,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                color: const Color(0xFF64748B),
+                                size: 20,
+                              ),
+                              onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Please confirm your password';
+                              if (v != _passwordController.text) return 'Passwords do not match';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Terms & Conditions Checkbox
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: _agreeToTerms,
+                                  activeColor: const Color(0xFF4F46E5),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _agreeToTerms = val ?? false;
+                                      if (_agreeToTerms) _termsError = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text.rich(
+                                  TextSpan(
+                                    text: "Sumasang-ayon ako sa ",
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), height: 1.3),
+                                    children: [
+                                      TextSpan(
+                                        text: "Terms & Conditions",
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                                      ),
+                                      TextSpan(
+                                        text: " (Ang prints na hindi kukunin sa loob ng 30 araw ay ida-dispose).",
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_termsError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 30, top: 4),
+                              child: Text(_termsError!, style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 11)),
+                            ),
+                          const SizedBox(height: 20),
+
+                          // Action Buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: 48,
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () async {
+                                      setState(() {
+                                        _termsError = _agreeToTerms ? null : 'You must agree to the Terms & Conditions.';
+                                      });
+
+                                      if (_formKey.currentState!.validate() && _agreeToTerms) {
+                                        await _sendRegisterOtp();
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4F46E5),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      elevation: 0,
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                        : const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              SizedBox(
+                                height: 48,
+                                child: OutlinedButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF94A3B8),
+                                    side: const BorderSide(color: Color(0xFF1E293B)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          // Already have account
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                );
+                              },
+                              child: const Text.rich(
+                                TextSpan(
+                                  text: "Already have an account? ",
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  children: [
+                                    TextSpan(
+                                      text: 'Log In',
+                                      style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                        : Form(
+                      key: _otpFormKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Enter OTP Verification Code',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'A 6-digit verification code was sent to your email:\n$_recipientEmail',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.4),
+                          ),
+                          const SizedBox(height: 22),
+
+                          // OTP Input Field
+                          TextFormField(
+                            controller: _otpController,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8, color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: '000000',
+                              hintStyle: const TextStyle(color: Color(0xFF475569)),
+                              counterText: '',
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                              ),
+                            ),
+                            validator: (v) => (v == null || v.trim().length != 6) ? 'Please enter valid 6-digit OTP' : null,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Countdown Timer & Resend Button
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _secondsRemaining > 0 ? 'Resend code in ${_secondsRemaining}s' : 'Code expired',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                              ),
+                              TextButton(
+                                onPressed: _canResend && !_isLoading ? _sendRegisterOtp : null,
+                                child: Text(
+                                  'Resend OTP',
+                                  style: TextStyle(
+                                    color: _canResend ? const Color(0xFF818CF8) : const Color(0xFF475569),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Verify Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _verifyOtpAndComplete,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                  : const Text('Verify OTP & Complete Sign Up', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: TextButton(
+                              onPressed: () => setState(() => _regStep = 1),
+                              child: const Text('← Back to Registration Form', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600, fontSize: 12)),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          )
-              : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Verify Your Email', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              const SizedBox(height: 16),
-              Center(
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDF2F8),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFFBCFE8), width: 1.5),
-                  ),
-                  child: const Icon(Icons.mark_email_read_rounded, color: Color(0xFFC026D3), size: 32),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Center(
-                child: Text(
-                  'A verification link has been sent to:',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: Text(
-                  _recipientEmail,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: const Text(
-                  'Please check your email inbox (and spam folder) and click the verification link to activate your account.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Verify Button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _checkVerificationStatus,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF059669),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('I Have Verified My Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Resend Button
-              Center(
-                child: TextButton(
-                  onPressed: _canResend && !_isLoading ? _resendVerificationLink : null,
-                  child: Text(
-                    _canResend ? 'Resend Verification Link' : 'Resend Link in ${_secondsRemaining}s',
-                    style: TextStyle(
-                      color: _canResend ? const Color(0xFFC026D3) : const Color(0xFF94A3B8),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: TextButton(
-                  onPressed: () => setState(() => _regStep = 1),
-                  child: const Text('← Back to Registration Form', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-              ),
-            ],
           ),
-        ),
+        ],
       ),
     );
   }

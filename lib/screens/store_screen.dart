@@ -46,12 +46,16 @@ class _StoreScreenState extends State<StoreScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
         title: Row(
           children: const [
-            Icon(Icons.gavel_rounded, color: Color(0xFFE11D48)),
+            Icon(Icons.gavel_rounded, color: Color(0xFF6366F1)),
             SizedBox(width: 8),
-            Text("Terms & Conditions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text("Terms & Conditions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ],
         ),
         content: SingleChildScrollView(
@@ -59,27 +63,27 @@ class _StoreScreenState extends State<StoreScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Text("1. Store Purchase & Availability", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+              Text("1. Store Purchase & Availability", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("All school and office supplies listed in the store are subject to physical stock availability. Items added to cart are not reserved until checkout.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("All school and office supplies listed in the store are subject to physical stock availability. Items added to cart are not reserved until checkout.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               SizedBox(height: 10),
-              Text("2. Pricing & Payments", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+              Text("2. Pricing & Payments", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Prices are in Philippine Pesos (₱) and include applicable taxes. Payments via GCash or Cash on Pickup must be verified upon claiming.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Prices are in Philippine Pesos (₱) and include applicable taxes. Payments via GCash or Cash on Pickup must be verified upon claiming.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               SizedBox(height: 10),
-              Text("3. Returns & Exchange Policy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+              Text("3. Returns & Exchange Policy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Defective or damaged items must be reported within 24 hours of receiving for exchange with official store receipt.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Defective or damaged items must be reported within 24 hours of receiving for exchange with official store receipt.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
               SizedBox(height: 10),
-              Text("4. Order Claiming", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+              Text("4. Order Claiming", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
               SizedBox(height: 2),
-              Text("Purchased items for store pickup must be claimed within 14 days from the order date.", style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+              Text("Purchased items for store pickup must be claimed within 14 days from the order date.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
             ],
           ),
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx),
             child: const Text("I Understand & Agree"),
           ),
@@ -98,12 +102,16 @@ class _StoreScreenState extends State<StoreScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
         title: Row(
           children: const [
-            Icon(Icons.add_box_rounded, color: Color(0xFF2563EB)),
+            Icon(Icons.add_box_rounded, color: Color(0xFF818CF8)),
             SizedBox(width: 8),
-            Text("Add Store Item", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text("Add Store Item", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ],
         ),
         content: SingleChildScrollView(
@@ -112,26 +120,49 @@ class _StoreScreenState extends State<StoreScreen> {
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(labelText: "Product Name", hintText: "e.g., A4 Paper Pack"),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: const InputDecoration(
+                  labelText: "Product Name",
+                  labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  hintText: "e.g., A4 Paper Pack",
+                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Price (₱)", hintText: "50.00"),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: const InputDecoration(
+                  labelText: "Price (₱)",
+                  labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  hintText: "50.0",
+                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: stockController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Initial Stock", hintText: "100"),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: const InputDecoration(
+                  labelText: "Initial Stock",
+                  labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  hintText: "100",
+                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                ),
               ),
               const SizedBox(height: 10),
               StatefulBuilder(
                 builder: (context, setDialogState) {
                   return DropdownButtonFormField<String>(
-                    value: category,
-                    decoration: const InputDecoration(labelText: "Category"),
+                    dropdownColor: const Color(0xFF0F172A),
+                    initialValue: category,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: "Category",
+                      labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                    ),
                     items: const [
                       DropdownMenuItem(value: 'notebooks', child: Text('Notebooks & Paper')),
                       DropdownMenuItem(value: 'pens', child: Text('Pens & Writing')),
@@ -149,10 +180,10 @@ class _StoreScreenState extends State<StoreScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
             onPressed: () async {
               final name = nameController.text.trim();
               final price = double.tryParse(priceController.text) ?? 0.0;
@@ -169,7 +200,10 @@ class _StoreScreenState extends State<StoreScreen> {
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Added '$name' to Database!")),
+                  SnackBar(
+                    content: Text("Added '$name' to Database!"),
+                    backgroundColor: const Color(0xFF10B981),
+                  ),
                 );
               }
             },
@@ -189,27 +223,34 @@ class _StoreScreenState extends State<StoreScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Edit Inventory Stock", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
+        title: const Text("Edit Inventory Stock", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(labelText: "Product Name"),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: const InputDecoration(labelText: "Product Name", labelStyle: TextStyle(color: Color(0xFF94A3B8))),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Price (₱)"),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: const InputDecoration(labelText: "Price (₱)", labelStyle: TextStyle(color: Color(0xFF94A3B8))),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: stockController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Current Stock Level"),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: const InputDecoration(labelText: "Current Stock Level", labelStyle: TextStyle(color: Color(0xFF94A3B8))),
               ),
               const SizedBox(height: 16),
               Row(
@@ -220,16 +261,18 @@ class _StoreScreenState extends State<StoreScreen> {
                       int current = int.tryParse(stockController.text) ?? 0;
                       stockController.text = (current + 10).toString();
                     },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text("+10 Stock"),
+                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF818CF8)),
+                    label: const Text("+10 Stock", style: TextStyle(color: Color(0xFF818CF8), fontSize: 11)),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E293B))),
                   ),
                   OutlinedButton.icon(
                     onPressed: () {
                       int current = int.tryParse(stockController.text) ?? 0;
                       stockController.text = (current + 50).toString();
                     },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text("+50 Stock"),
+                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF818CF8)),
+                    label: const Text("+50 Stock", style: TextStyle(color: Color(0xFF818CF8), fontSize: 11)),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E293B))),
                   ),
                 ],
               ),
@@ -238,27 +281,28 @@ class _StoreScreenState extends State<StoreScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+            icon: const Icon(Icons.delete_forever_rounded, color: Color(0xFFF43F5E)),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  backgroundColor: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
                   title: Row(
                     children: const [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48)),
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
                       SizedBox(width: 8),
-                      Text("Confirm Delete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text("Confirm Delete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                     ],
                   ),
-                  content: const Text("Are you sure you want to delete this product? This action cannot be undone."),
+                  content: const Text("Are you sure you want to delete this product? This action cannot be undone.", style: TextStyle(color: Color(0xFF94A3B8))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
                       child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
                       onPressed: () => Navigator.pop(c, true),
                       child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
@@ -271,38 +315,32 @@ class _StoreScreenState extends State<StoreScreen> {
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Deleted item from database.")),
+                  const SnackBar(content: Text("Product deleted successfully!"), backgroundColor: Color(0xFFF43F5E)),
                 );
               }
             },
           ),
-          const Spacer(),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
+            child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  title: Row(
-                    children: const [
-                      Icon(Icons.edit_note_rounded, color: Color(0xFF0F172A)),
-                      SizedBox(width: 8),
-                      Text("Confirm Update", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  content: const Text("Are you sure you want to save these changes to the product?"),
+                  backgroundColor: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
+                  title: const Text("Confirm Stock Update", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  content: Text("Save new stock level (${stockController.text}) for '${nameController.text}'?", style: const TextStyle(color: Color(0xFF94A3B8))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
                       child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
                       onPressed: () => Navigator.pop(c, true),
                       child: const Text("Confirm & Save", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
@@ -319,7 +357,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Product updated successfully!")),
+                  const SnackBar(content: Text("Product updated successfully!"), backgroundColor: Color(0xFF10B981)),
                 );
               }
             },
@@ -333,12 +371,12 @@ class _StoreScreenState extends State<StoreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF070A14),
       body: Column(
         children: [
           // Search & Category Bar
           Container(
-            color: Colors.white,
+            color: const Color(0xFF0B0E1B),
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
@@ -348,14 +386,16 @@ class _StoreScreenState extends State<StoreScreen> {
                     _searchQuery = val;
                     _currentPage = 1;
                   }),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: widget.isAdmin ? "Search inventory database..." : "Search store items...",
-                    hintStyle: const TextStyle(fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF64748B)),
                     contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
                     filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
+                    fillColor: const Color(0xFF0D1224),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -375,7 +415,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.gavel_rounded, size: 20, color: Color(0xFF64748B)),
+                      icon: const Icon(Icons.gavel_rounded, size: 18, color: Color(0xFF818CF8)),
                       tooltip: 'Terms & Conditions',
                       onPressed: _showTermsAndConditionsDialog,
                     ),
@@ -397,17 +437,17 @@ class _StoreScreenState extends State<StoreScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFE11D48)),
+                          Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFF43F5E)),
                           SizedBox(height: 8),
-                          Text('Nabigo sa pagkonekta sa inventory database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                          Text('Pakisuri ang iyong koneksyon sa internet.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                          Text('Nabigo sa pagkonekta sa inventory database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                          Text('Pakisuri ang iyong koneksyon sa internet.', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
                         ],
                       ),
                     ),
                   );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
                 }
 
                 final docs = snapshot.data?.docs ?? [];
@@ -429,18 +469,17 @@ class _StoreScreenState extends State<StoreScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.inventory_2_outlined, size: 48, color: Color(0xFFCBD5E1)),
+                        const Icon(Icons.inventory_2_outlined, size: 48, color: Color(0xFF334155)),
                         const SizedBox(height: 8),
                         Text(
                           widget.isAdmin ? "No items in inventory. Tap '+' to add." : "No items available in store.",
-                          style: const TextStyle(color: Color(0xFF64748B)),
+                          style: const TextStyle(color: Color(0xFF94A3B8)),
                         ),
                       ],
                     ),
                   );
                 }
 
-                // PAGINATION CALCULATION
                 int totalPages = (filteredDocs.length / _itemsPerPage).ceil();
                 if (totalPages < 1) totalPages = 1;
                 if (_currentPage > totalPages) _currentPage = totalPages;
@@ -472,112 +511,118 @@ class _StoreScreenState extends State<StoreScreen> {
 
                           final isLowStock = stock < 5;
 
-                          return Card(
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0D1224),
                               borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(color: isLowStock && widget.isAdmin ? Colors.orangeAccent : const Color(0xFFE2E8F0)),
+                              border: Border.all(
+                                color: isLowStock && widget.isAdmin
+                                    ? Colors.orangeAccent
+                                    : const Color(0xFF1E293B),
+                              ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(10.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEFF6FF),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Stack(
-                                        children: [
-                                          const Center(
-                                            child: Icon(Icons.inventory_2_outlined, size: 36, color: Color(0xFF2563EB)),
-                                          ),
-                                          if (widget.isAdmin)
-                                            Positioned(
-                                              top: 6,
-                                              right: 6,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: stock == 0 ? Colors.red : (isLowStock ? Colors.orange : Colors.green),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  stock == 0 ? "OUT OF STOCK" : "STOCK: $stock",
-                                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                                ),
+                            padding: const EdgeInsets.all(10.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFF1E293B)),
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        const Center(
+                                          child: Icon(Icons.inventory_2_outlined, size: 36, color: Color(0xFF818CF8)),
+                                        ),
+                                        if (widget.isAdmin)
+                                          Positioned(
+                                            top: 6,
+                                            right: 6,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: stock == 0 ? const Color(0xFFF43F5E) : (isLowStock ? Colors.orange : const Color(0xFF10B981)),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                stock == 0 ? "OUT OF STOCK" : "STOCK: $stock",
+                                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                                               ),
                                             ),
-                                        ],
-                                      ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        "₱${price.toStringAsFixed(2)}",
-                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB), fontSize: 13),
-                                      ),
-                                      if (!widget.isAdmin)
-                                        Text("Stock: $stock", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // CONTROLS BASED ON ROLE
-                                  if (widget.isAdmin) ...[
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 32,
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF0F172A),
-                                          foregroundColor: Colors.white,
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                        onPressed: () => _showEditProductDialog(prodId, data),
-                                        icon: const Icon(Icons.edit_note_rounded, size: 16),
-                                        label: const Text("Edit / Restock", style: TextStyle(fontSize: 11)),
-                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "₱${price.toStringAsFixed(2)}",
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF38BDF8), fontSize: 13),
                                     ),
-                                  ] else ...[
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 32,
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFE11D48),
-                                          foregroundColor: Colors.white,
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                        onPressed: stock > 0
-                                            ? () {
-                                          setState(() {
-                                            _cart[prodId] = (_cart[prodId] ?? 0) + 1;
-                                          });
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text("Added $name to Cart!")),
-                                          );
-                                        }
-                                            : null,
-                                        icon: const Icon(Icons.add_shopping_cart, size: 14),
-                                        label: Text(stock > 0 ? "Add to Cart" : "Out of Stock", style: const TextStyle(fontSize: 11)),
-                                      ),
-                                    ),
+                                    if (!widget.isAdmin)
+                                      Text("Stock: $stock", style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                                   ],
+                                ),
+                                const SizedBox(height: 8),
+
+                                // CONTROLS BASED ON ROLE
+                                if (widget.isAdmin) ...[
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 32,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF4F46E5),
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                      onPressed: () => _showEditProductDialog(prodId, data),
+                                      icon: const Icon(Icons.edit_note_rounded, size: 16),
+                                      label: const Text("Edit / Restock", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                ] else ...[
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 32,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF4F46E5),
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                      onPressed: stock > 0
+                                          ? () {
+                                        setState(() {
+                                          _cart[prodId] = (_cart[prodId] ?? 0) + 1;
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text("Added $name to Cart!"),
+                                            backgroundColor: const Color(0xFF10B981),
+                                          ),
+                                        );
+                                      }
+                                          : null,
+                                      icon: const Icon(Icons.add_shopping_cart, size: 14),
+                                      label: Text(stock > 0 ? "Add to Cart" : "Out of Stock", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
                                 ],
-                              ),
+                              ],
                             ),
                           );
                         },
@@ -588,24 +633,24 @@ class _StoreScreenState extends State<StoreScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: const BoxDecoration(
-                        color: Colors.white,
-                        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                        color: Color(0xFF0D1224),
+                        border: Border(top: BorderSide(color: Color(0xFF1E293B))),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.chevron_left_rounded),
+                            icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
                             onPressed: _currentPage > 1
                                 ? () => setState(() => _currentPage--)
                                 : null,
                           ),
                           Text(
                             "Page $_currentPage of $totalPages (${filteredDocs.length} items)",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.chevron_right_rounded),
+                            icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
                             onPressed: _currentPage < totalPages
                                 ? () => setState(() => _currentPage++)
                                 : null,
@@ -623,14 +668,14 @@ class _StoreScreenState extends State<StoreScreen> {
 
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFF4F46E5),
         foregroundColor: Colors.white,
         onPressed: _showAddProductDialog,
         icon: const Icon(Icons.add),
         label: const Text("Add New Product"),
       )
           : FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFE11D48),
+        backgroundColor: const Color(0xFF4F46E5),
         foregroundColor: Colors.white,
         onPressed: () => _showCartBottomSheet(_allDocs),
         icon: const Icon(Icons.shopping_cart),
@@ -644,10 +689,14 @@ class _StoreScreenState extends State<StoreScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 6.0),
       child: ChoiceChip(
-        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFF0F172A))),
+        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
         selected: isSelected,
-        selectedColor: const Color(0xFF0F172A),
-        backgroundColor: const Color(0xFFF1F5F9),
+        selectedColor: const Color(0xFF4F46E5),
+        backgroundColor: const Color(0xFF0D1224),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFF1E293B)),
+        ),
         onSelected: (selected) {
           if (selected) {
             setState(() {
@@ -664,9 +713,14 @@ class _StoreScreenState extends State<StoreScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setBottomSheetState) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0F172A),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+          ),
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -675,16 +729,16 @@ class _StoreScreenState extends State<StoreScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Your Cart", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text("Your Cart", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                   IconButton(
-                    icon: const Icon(Icons.gavel_rounded, size: 18, color: Color(0xFFE11D48)),
+                    icon: const Icon(Icons.gavel_rounded, size: 18, color: Color(0xFF818CF8)),
                     tooltip: 'Read Terms',
                     onPressed: _showTermsAndConditionsDialog,
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              Text("Total Items: $_cartTotalItems", style: const TextStyle(fontSize: 13, color: Color(0xFF334155))),
+              Text("Total Items: $_cartTotalItems", style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
               const SizedBox(height: 16),
 
               // TERMS CHECKBOX IN CHECKOUT
@@ -692,7 +746,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 children: [
                   Checkbox(
                     value: _acceptedTerms,
-                    activeColor: const Color(0xFFE11D48),
+                    activeColor: const Color(0xFF4F46E5),
                     onChanged: (val) {
                       setBottomSheetState(() {
                         _acceptedTerms = val ?? false;
@@ -706,11 +760,11 @@ class _StoreScreenState extends State<StoreScreen> {
                       child: const Text.rich(
                         TextSpan(
                           text: "I agree to the ",
-                          style: TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                           children: [
                             TextSpan(
                               text: "Terms and Conditions",
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE11D48), decoration: TextDecoration.underline),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF818CF8), decoration: TextDecoration.underline),
                             ),
                           ],
                         ),
@@ -725,9 +779,10 @@ class _StoreScreenState extends State<StoreScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _acceptedTerms ? const Color(0xFFE11D48) : Colors.grey,
+                    backgroundColor: _acceptedTerms ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: _acceptedTerms
                       ? () {
@@ -737,7 +792,10 @@ class _StoreScreenState extends State<StoreScreen> {
                     });
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Order successfully placed! Thank you.")),
+                      const SnackBar(
+                        content: Text("Order successfully placed! Thank you."),
+                        backgroundColor: Color(0xFF10B981),
+                      ),
                     );
                   }
                       : null,

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 
 class AppValidators {
   // 1. Required Field Validation

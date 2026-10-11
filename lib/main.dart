@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -8,7 +8,7 @@ void main() async {
   try {
     await Firebase.initializeApp();
   } catch (e) {
-    print("Firebase initialization error: $e");
+    debugPrint("Firebase initialization error: $e");
   }
 
   runApp(const MyApp());
@@ -23,10 +23,16 @@ class MyApp extends StatelessWidget {
       title: 'Kez C-Em Zek Printing Shop',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE11D48)),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF070A14),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF4F46E5),
+          brightness: Brightness.dark,
+        ),
+        fontFamily: null,
         useMaterial3: true,
       ),
-      home: const LoginScreen(), // Diretso sa Login Screen ayon sa flow
+      home: const HomeScreen(), // First screen is HomeScreen
     );
   }
 }
