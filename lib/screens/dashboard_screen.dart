@@ -253,6 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       appBar: AppBar(
         backgroundColor: const Color(0xFF070A14),
         elevation: 0,
+        automaticallyImplyLeading: false,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, color: Color(0xFF1E293B)),
