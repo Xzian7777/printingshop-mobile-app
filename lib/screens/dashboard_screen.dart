@@ -41,6 +41,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   String _selectedServiceCategory = 'All Services';
   bool _isListView = true;
 
+  // --- CUSTOMER TRACKER STATE ---
+  String _customerFilter = 'All Orders';
+  String _customerCategoryFilter = 'All Services & Store Items';
+  Key _customerTrackerRefreshKey = UniqueKey();
+
   // --- ORDERS PAGINATION STATE ---
   int _ordersCurrentPage = 1;
   final int _ordersPerPage = 6;
@@ -1770,6 +1775,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           const SizedBox(height: 8),
           Text(customer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFCBD5E1))),
           Text(service, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+          if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF334155), width: 0.8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.note_alt_outlined, size: 12, color: Color(0xFFFBBF24)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 10.5, color: Color(0xFFFDE68A), fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1801,6 +1831,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           const SizedBox(height: 4),
           Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFCBD5E1))),
           Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.note_alt_outlined, size: 12, color: Color(0xFFFBBF24)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10.5, color: Color(0xFFFDE68A), fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1929,84 +1976,1037 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
+  // ===========================================================================
+  // --- CUSTOMER ORDERS & LIVE STATUS TRACKER TAB (SCREENSHOT DESIGN) ---
+  // ===========================================================================
   Widget _buildCustomerOrdersTab() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
+    final cleanEmail = widget.userEmail.trim().toLowerCase();
+
+    return StreamBuilder<QuerySnapshot>(
+      key: _customerTrackerRefreshKey,
+      stream: _ordersRef.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.cloud_off_rounded, size: 48, color: Color(0xFFF43F5E)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Failed to connect to database',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                    onPressed: () => setState(() => _customerTrackerRefreshKey = UniqueKey()),
+                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
+                    label: const Text('Retry Connection', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+        }
+
+        final allDocs = snapshot.data!.docs;
+
+        // Filter strictly to currently authenticated user's orders (email or customer ID)
+        final myDocs = allDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final orderEmail = (data['email'] ?? data['userEmail'] ?? '').toString().trim().toLowerCase();
+          final orderCustomer = (data['customer'] ?? '').toString().trim().toLowerCase();
+          final username = cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
+
+          return orderEmail == cleanEmail ||
+              (orderCustomer.isNotEmpty && (orderCustomer == cleanEmail || orderCustomer == username));
+        }).toList();
+
+        // Sort newest first by creation timestamp/date
+        myDocs.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+          final timeA = _getOrderTimestamp(dataA);
+          final timeB = _getOrderTimestamp(dataB);
+          return timeB.compareTo(timeA);
+        });
+
+        // Apply Service / Category Dropdown Filter
+        final categoryFiltered = myDocs.where((doc) {
+          if (_customerCategoryFilter == 'All Services & Store Items') return true;
+          final data = doc.data() as Map<String, dynamic>;
+          final service = (data['service'] ?? data['serviceName'] ?? data['item_name'] ?? '').toString();
+          return _checkServiceCategoryMatch(service, _customerCategoryFilter, data);
+        }).toList();
+
+        // Apply Status Filter Chips
+        final filteredDocs = categoryFiltered.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final rawStatus = (data['status'] ?? 'Order Submitted').toString();
+          return _matchesCustomerStatusFilter(rawStatus, _customerFilter);
+        }).toList();
+
+
+        final customerDisplayName = widget.userEmail.contains('@')
+            ? widget.userEmail.split('@').first
+            : widget.userEmail;
+
+        return RefreshIndicator(
+          color: const Color(0xFF4F46E5),
+          backgroundColor: const Color(0xFF0F172A),
+          onRefresh: () async {
+            setState(() => _customerTrackerRefreshKey = UniqueKey());
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             children: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)));
-                  },
-                  icon: const Icon(Icons.add_circle_rounded, color: Colors.white),
-                  label: const Text('Place New Print Order', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), padding: const EdgeInsets.symmetric(vertical: 14)),
+              // ── Header Profile & Stats Banner (Matching Reference) ────
+              _buildCustomerTopBanner(
+                customerName: customerDisplayName,
+                totalOrders: myDocs.length,
+                rfidPoints: 170, // Synced RFID Loyalty Points
+              ),
+              const SizedBox(height: 14),
+
+              // ── Navigation Bar / Pill Row ─────────────────────────────
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    Text(
+                      'SERVICES & ORDERS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white.withOpacity(0.4),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildTrackerTopNavButton(
+                      label: 'Place Print Order',
+                      icon: Icons.print_outlined,
+                      isActive: false,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    _buildTrackerTopNavButton(
+                      label: 'My Orders & Tracker',
+                      icon: Icons.receipt_long_rounded,
+                      isActive: true,
+                      onTap: () {},
+                    ),
+                    const SizedBox(width: 6),
+                    _buildTrackerTopNavButton(
+                      label: 'Visit Store',
+                      icon: Icons.storefront_rounded,
+                      isActive: false,
+                      onTap: () => setState(() => _currentNavIndex = 1),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => _showTermsAndConditionsDialog(context),
-                child: const Text(
-                  "By placing an order, you agree to our Terms & Conditions →",
-                  style: TextStyle(fontSize: 10.5, color: Color(0xFF818CF8), fontWeight: FontWeight.bold),
+              const SizedBox(height: 16),
+
+              // ── Section Title Card & Controls ─────────────────────────
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1224),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF1E293B)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 5, right: 8),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF38BDF8),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                "MY ACTIVE ORDERS & LIVE STATUS TRACKER",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12.5,
+                                  color: Colors.white,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                              SizedBox(height: 3),
+                              Text(
+                                "Track your printing orders and view real-time production updates step-by-step.",
+                                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Filter dropdown + Refresh button row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 36,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF070A14),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF1E293B)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _customerCategoryFilter,
+                                dropdownColor: const Color(0xFF0F172A),
+                                isExpanded: true,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF94A3B8)),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                items: [
+                                  'All Services & Store Items',
+                                  'Standard A4 Print',
+                                  'Business Cards',
+                                  'Tarpaulins',
+                                  'Flyers & Leaflets',
+                                  'Stickers & Labels',
+                                  'Invitations',
+                                  'Shirt Printing',
+                                  'Photo & Canvas',
+                                  'Booklets & Menus',
+                                  'In-Store Supplies',
+                                ].map((cat) => DropdownMenuItem(value: cat, child: Text(cat, overflow: TextOverflow.ellipsis))).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _customerCategoryFilter = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 36,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Color(0xFF1E293B)),
+                              backgroundColor: const Color(0xFF070A14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                            ),
+                            onPressed: () {
+                              setState(() => _customerTrackerRefreshKey = UniqueKey());
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Orders updated from live server."),
+                                  backgroundColor: Color(0xFF10B981),
+                                  duration: Duration(milliseconds: 900),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF38BDF8)),
+                            label: const Text("Refresh", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Status Filter Chips (Matching Reference) ──────────────
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    'All Orders',
+                    'For Approval',
+                    'Approved & Printing',
+                    'Ready for Pickup',
+                    'Completed',
+                    'Rejected / Cancelled',
+                  ].map((filter) {
+                    final isSelected = _customerFilter == filter;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6.0),
+                      child: ChoiceChip(
+                        label: Text(filter),
+                        selected: isSelected,
+                        onSelected: (val) => setState(() => _customerFilter = filter),
+                        selectedColor: const Color(0xFF2563EB),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        backgroundColor: const Color(0xFF0D1224),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // ── Orders List / Empty State ─────────────────────────────
+              if (filteredDocs.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D1224),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF1E293B)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.receipt_long_outlined, size: 48, color: Color(0xFF334155)),
+                      const SizedBox(height: 10),
+                      Text(
+                        myDocs.isEmpty
+                            ? "You don't have any orders placed yet."
+                            : "No orders found under '$_customerFilter'.",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFCBD5E1),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "Tap 'Place Print Order' or visit the Store to begin.",
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...filteredDocs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return _buildTrackedCustomerOrderCard(doc.id, data);
+                }),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // --- TOP CUSTOMER PROFILE & REWARDS BANNER ---
+  Widget _buildCustomerTopBanner({
+    required String customerName,
+    required int totalOrders,
+    required int rfidPoints,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1224),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF1E293B)),
+      ),
+      child: Row(
+        children: [
+          // Avatar Icon with gradient
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF818CF8), Color(0xFFC084FC)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.print_rounded, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 10),
+
+          // User Name & Customer Portal Label
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  customerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      "Customer Portal",
+                      style: TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // RFID Points Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF070A14),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF1E293B)),
+            ),
+            child: Column(
+              children: [
+                const Text("RFID POINTS", style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                Text(
+                  "$rfidPoints PTS",
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // My Orders Count Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF070A14),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF1E293B)),
+            ),
+            child: Column(
+              children: [
+                const Text("MY ORDERS", style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+                Text(
+                  "$totalOrders",
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackerTopNavButton({
+    required String label,
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF2563EB) : const Color(0xFF0D1224),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: isActive ? Colors.white : const Color(0xFF94A3B8)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isActive ? Colors.white : const Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- SINGLE TRACKED CUSTOMER ORDER CARD ---
+  Widget _buildTrackedCustomerOrderCard(String docId, Map<String, dynamic> data) {
+    final String displayRefId = (data['id'] ?? data['refId'] ?? data['ref_id'] ?? data['orderNumber'] ??
+            (docId.length > 8 ? 'PRNT-${docId.substring(0, 6).toUpperCase()}' : docId))
+        .toString();
+
+    final serviceName = (data['service'] ?? data['serviceName'] ?? data['item_name'] ?? 'Document Printing').toString();
+    final rawTotal = data['total'] ?? data['price'] ?? data['amount'] ?? 0;
+    final double totalNum = rawTotal is num ? rawTotal.toDouble() : (double.tryParse(rawTotal.toString()) ?? 0.0);
+    final String totalStr = "₱ ${totalNum.toStringAsFixed(2)}";
+
+    final rawStatus = (data['status'] ?? 'Order Submitted').toString();
+    final payment = (data['payment'] ?? data['payment_method'] ?? 'GCash Online').toString();
+    final fileName = (data['fileName'] ?? data['file'] ?? '').toString();
+    final quantity = data['quantity'] ?? data['copies'] ?? 1;
+
+    final dateTimeStr = _formatDateTime(data['createdAt'] ?? data['created_at'] ?? data['timestamp'] ?? data['orderDate']);
+
+    // Check if store supply item
+    final isStoreItem = serviceName.toLowerCase().contains('store') ||
+        serviceName.toLowerCase().contains('notebook') ||
+        serviceName.toLowerCase().contains('supply') ||
+        serviceName.toLowerCase().contains('pen') ||
+        (data['paperSize'] ?? '').toString().toLowerCase().contains('store');
+
+    final stageIndex = _getTrackerStageIndex(rawStatus);
+    final isRejected = stageIndex == -1;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1224),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isRejected ? const Color(0xFFF43F5E).withOpacity(0.4) : const Color(0xFF1E293B),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Top Header Row: Order ID, Badges, Date, Price & Delete ─
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Ref ID
+              Text(
+                displayRefId,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12.5,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Service category badge (Print Job vs Store Item)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isStoreItem ? Icons.shopping_bag_outlined : Icons.print_outlined,
+                      size: 11,
+                      color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF818CF8),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      isStoreItem ? "Store Item" : "Print Job",
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF818CF8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Payment badge
+              if (payment.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                  decoration: BoxDecoration(
+                    color: payment.toLowerCase().contains('gcash')
+                        ? const Color(0xFF2563EB).withOpacity(0.18)
+                        : const Color(0xFF10B981).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: payment.toLowerCase().contains('gcash')
+                          ? const Color(0xFF3B82F6).withOpacity(0.4)
+                          : const Color(0xFF10B981).withOpacity(0.4),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    payment,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: payment.toLowerCase().contains('gcash')
+                          ? const Color(0xFF60A5FA)
+                          : const Color(0xFF34D399),
+                    ),
+                  ),
+                ),
+
+              const Spacer(),
+
+              // Cancel / Delete Order button with confirmation dialog
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                splashRadius: 16,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Cancel/Delete Order',
+                onPressed: () => _confirmDeleteCustomerOrder(docId, displayRefId),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Date & Time row
+          Row(
+            children: [
+              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+              const SizedBox(width: 4),
+              Text(
+                dateTimeStr,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+              ),
+              const Spacer(),
+              // Price Display
+              Text(
+                totalStr,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14.5,
+                  color: Colors.white,
+                  letterSpacing: -0.3,
                 ),
               ),
             ],
           ),
-        ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _ordersRef.where('email', isEqualTo: widget.userEmail).snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFF43F5E)),
-                        SizedBox(height: 8),
-                        Text('Nabigo sa pagkonekta sa database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                        Text('Gumagamit ng local offline cache kung available.', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                      ],
+          const SizedBox(height: 10),
+
+          // ── Service & Specifications Details ───────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      serviceName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.white,
+                      ),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatOrderSpecs(data, quantity),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                    if (fileName.isNotEmpty && fileName != 'Walang napiling file') ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.attach_file_rounded, size: 11, color: Color(0xFF818CF8)),
+                          const SizedBox(width: 2),
+                          Expanded(
+                            child: Text(
+                              fileName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF818CF8)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B).withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF334155), width: 0.8),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.sticky_note_2_outlined, size: 12, color: Color(0xFFFBBF24)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
+                                style: const TextStyle(fontSize: 10.5, color: Color(0xFFFDE68A), fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Status Pill Right Side
+              if (isRejected)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF43F5E).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFF43F5E).withOpacity(0.4)),
                   ),
-                );
-              }
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
-              final docs = snapshot.data!.docs;
-              if (docs.isEmpty) return const Center(child: Text('Wala ka pang order.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)));
-              return ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1E293B))),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cancel_rounded, size: 12, color: Color(0xFFF43F5E)),
+                      const SizedBox(width: 4),
+                      Text(
+                        rawStatus.startsWith("Rejected:") ? rawStatus : "Rejected",
+                        style: const TextStyle(
+                          color: Color(0xFFF43F5E),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // ── Visual Order Progress Tracker / Rejection Notice ────────
+          if (isRejected)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF450A0A).withOpacity(0.4),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF43F5E).withOpacity(0.3)),
+              ),
+              child: Text(
+                rawStatus.startsWith("Rejected:")
+                    ? "Order Notice: ${rawStatus.replaceFirst('Rejected:', '').trim()}"
+                    : "This order was cancelled or rejected and is not progressing.",
+                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11),
+              ),
+            )
+          else
+            _buildOrderTimelineProgress(stageIndex),
+        ],
+      ),
+    );
+  }
+
+  // Helper to format detailed specs line
+  String _formatOrderSpecs(Map<String, dynamic> data, dynamic quantity) {
+    final List<String> parts = [];
+    final details = data['details'];
+
+    if (details is Map) {
+      if (details['dimensions'] != null) parts.add(details['dimensions'].toString());
+      if (details['size'] != null) parts.add(details['size'].toString());
+      if (details['paper'] != null) parts.add(details['paper'].toString());
+      if (details['sides'] != null) parts.add(details['sides'].toString());
+      if (details['method'] != null) parts.add(details['method'].toString());
+    }
+
+    if (data['paperSize'] != null && data['paperSize'].toString().isNotEmpty) {
+      parts.add(data['paperSize'].toString());
+    }
+
+    parts.add("$quantity ${quantity == 1 ? 'copy' : 'copies'}");
+    return parts.join(' • ');
+  }
+
+  // --- VISUAL HORIZONTAL STEPPER TIMELINE ---
+  Widget _buildOrderTimelineProgress(int currentStage) {
+    const stages = [
+      {'label': 'Submitted', 'icon': Icons.file_present_rounded},
+      {'label': 'Approved', 'icon': Icons.check_circle_outline_rounded},
+      {'label': 'Printing', 'icon': Icons.print_rounded},
+      {'label': 'Ready', 'icon': Icons.inventory_2_outlined},
+      {'label': 'Completed', 'icon': Icons.flag_outlined},
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF070A14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF1E293B)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalSteps = stages.length;
+          final double stepWidth = constraints.maxWidth / totalSteps;
+
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Background track line
+              Positioned(
+                top: 15,
+                left: stepWidth / 2,
+                right: stepWidth / 2,
+                child: Container(
+                  height: 2.5,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
+
+              // Active track progress line
+              if (currentStage > 0)
+                Positioned(
+                  top: 15,
+                  left: stepWidth / 2,
+                  child: Container(
+                    height: 2.5,
+                    width: ((constraints.maxWidth - stepWidth) / (totalSteps - 1)) *
+                        math.min(currentStage, totalSteps - 1),
+                    color: const Color(0xFF2563EB),
+                  ),
+                ),
+
+              // Step Circles & Labels
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(totalSteps, (index) {
+                  final isDone = index <= currentStage;
+                  final isCurrent = index == currentStage;
+
+                  return SizedBox(
+                    width: stepWidth,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(data['id'] ?? 'PRNT-xxxx', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                        const SizedBox(height: 2),
-                        Text(data['service'] ?? 'Print Service', style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
-                        const SizedBox(height: 4),
-                        Text('Total: ₱${data['total'] ?? '30.00'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                        // Circle Indicator
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isCurrent
+                                ? const Color(0xFF2563EB)
+                                : (isDone ? const Color(0xFF1D4ED8) : const Color(0xFF0F172A)),
+                            border: Border.all(
+                              color: isDone ? const Color(0xFF3B82F6) : const Color(0xFF334155),
+                              width: isCurrent ? 2.5 : 1.5,
+                            ),
+                            boxShadow: isCurrent
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFF2563EB).withOpacity(0.5),
+                                      blurRadius: 8,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Icon(
+                            isDone && !isCurrent ? Icons.check_rounded : (stages[index]['icon'] as IconData),
+                            size: 14,
+                            color: isDone ? Colors.white : const Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Label
+                        Text(
+                          stages[index]['label'] as String,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: isDone ? FontWeight.w800 : FontWeight.w500,
+                            color: isDone ? Colors.white : const Color(0xFF64748B),
+                          ),
+                        ),
                       ],
                     ),
                   );
-                }).toList(),
-              );
-            },
-          ),
-        ),
-      ],
+                }),
+              ),
+            ],
+          );
+        },
+      ),
     );
+  }
+
+  // --- STAGE MAPPING HELPER ---
+  int _getTrackerStageIndex(String rawStatus) {
+    final s = rawStatus.toLowerCase().trim();
+    if (s.contains('reject') || s.contains('cancel')) return -1;
+    if (s.contains('complet') || s.contains('done') || s.contains('finish')) return 4;
+    if (s.contains('ready') || s.contains('pickup')) return 3;
+    if (s.contains('print') || s.contains('production')) return 2;
+    if (s.contains('approve') && !s.contains('for approve') && !s.contains('for approval')) return 1;
+    return 0; // Default: 0 (Submitted / For Approval)
+  }
+
+  // --- FILTER MATCHING HELPER ---
+  bool _matchesCustomerStatusFilter(String rawStatus, String filter) {
+    if (filter == 'All Orders') return true;
+    final s = rawStatus.toLowerCase().trim();
+
+    if (filter == 'For Approval') {
+      return (s.contains('submitted') || s.contains('for approval') || s.contains('pending')) &&
+          !s.contains('print') &&
+          !s.contains('ready') &&
+          !s.contains('complet') &&
+          !s.contains('reject');
+    }
+    if (filter == 'Approved & Printing') {
+      return (s.contains('print') || s.contains('approve')) &&
+          !s.contains('ready') &&
+          !s.contains('complet') &&
+          !s.contains('reject');
+    }
+    if (filter == 'Ready for Pickup') {
+      return (s.contains('ready') || s.contains('pickup')) &&
+          !s.contains('complet') &&
+          !s.contains('reject');
+    }
+    if (filter == 'Completed') {
+      return s.contains('complet') || s.contains('done') || s.contains('finish');
+    }
+    if (filter == 'Rejected / Cancelled') {
+      return s.contains('reject') || s.contains('cancel');
+    }
+    return true;
+  }
+
+  // --- EXTRACT ORDER TIMESTAMP FOR PROPER SORTING ---
+  DateTime _getOrderTimestamp(Map<String, dynamic> data) {
+    final raw = data['createdAt'] ?? data['created_at'] ?? data['timestamp'];
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is String) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  // --- CANCEL / DELETE ORDER WITH CONFIRMATION DIALOG ---
+  Future<void> _confirmDeleteCustomerOrder(String docId, String refId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
+            SizedBox(width: 8),
+            Text("Cancel Order", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "Are you sure you want to cancel or delete order $refId?\nThis action cannot be undone.",
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Keep Order", style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Yes, Cancel Order", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _ordersRef.doc(docId).delete();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Order $refId successfully removed."),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to remove order: $e"),
+            backgroundColor: const Color(0xFFF43F5E),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildProfileTab() {

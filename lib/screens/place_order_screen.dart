@@ -37,6 +37,8 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   final TextEditingController _pagesController = TextEditingController(text: '1');
   final TextEditingController _widthController = TextEditingController(text: '3');
   final TextEditingController _heightController = TextEditingController(text: '4');
+  final TextEditingController _noteController = TextEditingController();
+  static const int _maxNoteLength = 500;
 
   // Dynamic Form Field States
   String _bcSize = 'Standard (3.5 x 2 in)';
@@ -98,6 +100,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     _pagesController.dispose();
     _widthController.dispose();
     _heightController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -170,6 +173,17 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   }
 
   Future<void> _submitOrder() async {
+    final noteText = _noteController.text.trim();
+    if (noteText.length > _maxNoteLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Special instructions cannot exceed 500 characters.'),
+          backgroundColor: Color(0xFFF43F5E),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -199,6 +213,8 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
         'payment': _paymentMethod,
         'fileName': _selectedFileName,
         'fileUrl': fileDownloadUrl,
+        'customerNote': noteText,
+        'specialInstructions': noteText,
         'createdAt': FieldValue.serverTimestamp(),
         'quantity': int.tryParse(_quantityController.text) ?? 1,
         'details': {
@@ -484,6 +500,66 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+
+            _buildSectionHeader('STEP 4: SPECIAL INSTRUCTIONS / ORDER NOTE (OPTIONAL)'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D1224),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1E293B)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Order Note (Optional)',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+                      ),
+                      Text(
+                        '${_noteController.text.length}/$_maxNoteLength',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: _noteController.text.length > _maxNoteLength
+                              ? const Color(0xFFF43F5E)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _noteController,
+                    maxLines: 4,
+                    maxLength: _maxNoteLength,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    onChanged: (_) => setState(() {}),
+                    buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
+                    decoration: InputDecoration(
+                      hintText: 'Write any special instructions for your order...\n(e.g., orientation, paper preference, urgent timing)',
+                      hintStyle: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.4),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF4F46E5)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 

@@ -41,56 +41,6 @@ class _StoreScreenState extends State<StoreScreen> {
 
   int get _cartTotalItems => _cart.values.fold(0, (acc, qty) => acc + qty);
 
-  // --- TERMS AND CONDITIONS DIALOG ---
-  void _showTermsAndConditionsDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
-        ),
-        title: Row(
-          children: const [
-            Icon(Icons.gavel_rounded, color: Color(0xFF6366F1)),
-            SizedBox(width: 8),
-            Text("Terms & Conditions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text("1. Store Purchase & Availability", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
-              SizedBox(height: 2),
-              Text("All school and office supplies listed in the store are subject to physical stock availability. Items added to cart are not reserved until checkout.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-              SizedBox(height: 10),
-              Text("2. Pricing & Payments", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
-              SizedBox(height: 2),
-              Text("Prices are in Philippine Pesos (₱) and include applicable taxes. Payments via GCash or Cash on Pickup must be verified upon claiming.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-              SizedBox(height: 10),
-              Text("3. Returns & Exchange Policy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
-              SizedBox(height: 2),
-              Text("Defective or damaged items must be reported within 24 hours of receiving for exchange with official store receipt.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-              SizedBox(height: 10),
-              Text("4. Order Claiming", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
-              SizedBox(height: 2),
-              Text("Purchased items for store pickup must be claimed within 14 days from the order date.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("I Understand & Agree"),
-          ),
-        ],
-      ),
-    );
-  }
 
   // --- ADMIN FUNCTION: Add New Product ---
   void _showAddProductDialog() {
@@ -414,10 +364,38 @@ class _StoreScreenState extends State<StoreScreen> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.gavel_rounded, size: 18, color: Color(0xFF818CF8)),
-                      tooltip: 'Terms & Conditions',
-                      onPressed: _showTermsAndConditionsDialog,
+                    Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.shopping_cart_outlined, size: 20, color: Color(0xFF818CF8)),
+                          tooltip: 'Shopping Cart',
+                          onPressed: () => _showCartBottomSheet(_allDocs),
+                        ),
+                        if (_cartTotalItems > 0)
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(3.5),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF4F46E5),
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              child: Text(
+                                '$_cartTotalItems',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -663,7 +641,9 @@ class _StoreScreenState extends State<StoreScreen> {
                                         style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
                                       ),
                                       Text(
-                                        "₱${price.toStringAsFixed(2)}",
+                                        price > 999999999
+                                            ? "₱999,999.00"
+                                            : "₱${price.toStringAsFixed(2)}",
                                         style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13),
                                       ),
                                     ],
@@ -817,19 +797,13 @@ class _StoreScreenState extends State<StoreScreen> {
 
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF4F46E5),
-        foregroundColor: Colors.white,
-        onPressed: _showAddProductDialog,
-        icon: const Icon(Icons.add),
-        label: const Text("Add New Product"),
-      )
-          : FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF4F46E5),
-        foregroundColor: Colors.white,
-        onPressed: () => _showCartBottomSheet(_allDocs),
-        icon: const Icon(Icons.shopping_cart),
-        label: Text("Cart ($_cartTotalItems)"),
-      ),
+              backgroundColor: const Color(0xFF4F46E5),
+              foregroundColor: Colors.white,
+              onPressed: _showAddProductDialog,
+              icon: const Icon(Icons.add),
+              label: const Text("Add New Product"),
+            )
+          : null,
     );
   }
 
