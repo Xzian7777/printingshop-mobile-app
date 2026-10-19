@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
-import 'store_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,37 +28,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  void _showInfoDialog(String title, String content) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: Color(0xFF1E293B)),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        content: Text(
-          content,
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isDesktop = size.width > 768;
 
     return Scaffold(
       backgroundColor: const Color(0xFF070A14),
@@ -156,42 +126,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ],
                         ),
 
-                        // Center Nav Links (Visible on wider screens or scrollable row)
-                        if (isDesktop)
-                          Row(
-                            children: [
-                              _buildNavLink('About', () {
-                                _showInfoDialog(
-                                  'About KCZ Printing',
-                                  'Kez C-Em Zek Printing Shop is your all-in-one web and mobile printing service. We provide fast document proofing, instant price calculation, stage tracking, and RFID customer loyalty points.',
-                                );
-                              }),
-                              _buildNavLink('Services', () {
-                                _showInfoDialog(
-                                  'Our Services',
-                                  '• Documents & Bookbinding\n• High-Res Photo & Stickers\n• PVC ID Cards & Lanyards\n• Tarpaulin & Large Formats\n• Graphic Proofing & Custom Layouts',
-                                );
-                              }),
-                              _buildNavLink('Store Supplies', () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const StoreScreen(
-                                      isAdmin: false,
-                                      userEmail: 'Guest Customer',
-                                    ),
-                                  ),
-                                );
-                              }),
-                              _buildNavLink('FAQ', () {
-                                _showInfoDialog(
-                                  'Frequently Asked Questions',
-                                  'Q: How long until prints are ready?\nA: Most standard orders take 2-4 hours. Rush orders can be requested.\n\nQ: How does OTP verification work?\nA: Simply register with your Gmail, enter the 6-digit verification code, and your account will be activated immediately.',
-                                );
-                              }),
-                            ],
-                          ),
-
                         // Auth Action Buttons (Login & Sign Up)
                         Row(
                           children: [
@@ -245,49 +179,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ],
                     ),
                   ),
-
-                  // Mobile Navigation Pills (if small screen)
-                  if (!isDesktop)
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                      child: Row(
-                        children: [
-                          _buildMobileNavChip('About', () {
-                            _showInfoDialog(
-                              'About KCZ Printing',
-                              'Kez C-Em Zek Printing Shop is your all-in-one web & mobile print service with real-time order tracking and shop supplies.',
-                            );
-                          }),
-                          const SizedBox(width: 8),
-                          _buildMobileNavChip('Services', () {
-                            _showInfoDialog(
-                              'Printing Services',
-                              '• A4 / Legal Documents\n• Photo Paper & Glossy Stickers\n• Heavy PVC ID Printing\n• Large Format Banners & Tarpaulin',
-                            );
-                          }),
-                          const SizedBox(width: 8),
-                          _buildMobileNavChip('Store Supplies', () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const StoreScreen(
-                                  isAdmin: false,
-                                  userEmail: 'Guest Customer',
-                                ),
-                              ),
-                            );
-                          }),
-                          const SizedBox(width: 8),
-                          _buildMobileNavChip('FAQ', () {
-                            _showInfoDialog(
-                              'FAQ',
-                              'Unclaimed prints will be kept for up to 30 days. Register now to receive real-time email & SMS status updates!',
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
 
                   const SizedBox(height: 36),
 
@@ -665,50 +556,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  static Widget _buildNavLink(String text, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildMobileNavChip(String text, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1E293B)),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Color(0xFFCBD5E1),
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
       ),
     );
   }

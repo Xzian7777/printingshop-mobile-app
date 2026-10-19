@@ -3,8 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import '../services/local_db_service.dart';
+import '../services/supabase_storage_service.dart';
 
 class PlaceOrderScreen extends StatefulWidget {
   final String userEmail;
@@ -30,6 +30,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   late String _selectedService;
   String _paymentMethod = 'GCash Online';
   String _selectedFileName = 'Walang napiling file';
+  int _selectedFileSize = 0;
   File? _selectedFileObj;
 
   // Common Controllers
@@ -155,13 +156,26 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'ai', 'psd'],
+        allowedExtensions: SupabaseStorageService.allowedExtensions,
       );
 
       if (result != null && result.files.single.path != null) {
+        final pickedFile = File(result.files.single.path!);
+        final pickedName = result.files.single.name;
+
+        final validationErr = SupabaseStorageService.validateFile(pickedFile, pickedName);
+        if (validationErr != null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(validationErr), backgroundColor: const Color(0xFFF43F5E)),
+          );
+          return;
+        }
+
         setState(() {
-          _selectedFileName = result.files.single.name;
-          _selectedFileObj = File(result.files.single.path!);
+          _selectedFileName = pickedName;
+          _selectedFileSize = pickedFile.lengthSync();
+          _selectedFileObj = pickedFile;
         });
       }
     } catch (e) {
@@ -170,6 +184,14 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
         SnackBar(content: Text('Error picking file: $e'), backgroundColor: const Color(0xFFF43F5E)),
       );
     }
+  }
+
+  void _removeSelectedFile() {
+    setState(() {
+      _selectedFileName = 'Walang napiling file';
+      _selectedFileSize = 0;
+      _selectedFileObj = null;
+    });
   }
 
   Future<void> _submitOrder() async {
@@ -187,21 +209,28 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      final String customOrderRef = 'PRNT-${Random().nextInt(900000) + 100000}';
       String fileDownloadUrl = 'Pending / Direct In-Store Upload';
 
       if (_selectedFileObj != null) {
         try {
-          final storageRef = FirebaseStorage.instance
-              .ref()
-              .child('order_files/${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName');
-          final uploadTask = await storageRef.putFile(_selectedFileObj!);
-          fileDownloadUrl = await uploadTask.ref.getDownloadURL();
+          fileDownloadUrl = await SupabaseStorageService.uploadFile(
+            file: _selectedFileObj!,
+            originalFilename: _selectedFileName,
+            orderId: customOrderRef,
+          );
         } catch (storageErr) {
-          debugPrint('Storage Upload Warning: $storageErr');
+          debugPrint('Supabase Storage Upload Warning: $storageErr');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File upload warning: $storageErr'),
+              backgroundColor: const Color(0xFFF43F5E),
+            ),
+          );
+          return;
         }
       }
-
-      final String customOrderRef = 'PRNT-${Random().nextInt(900000) + 100000}';
 
       final Map<String, dynamic> orderPayload = {
         'id': customOrderRef,
@@ -372,14 +401,43 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                 children: [
                   const Icon(Icons.upload_file_rounded, size: 40, color: Color(0xFF818CF8)),
                   const SizedBox(height: 8),
-                  Text(_selectedFileName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white), textAlign: TextAlign.center),
-                  const SizedBox(height: 4),
-                  const Text('Upload PDF, Word, AI, PSD, or Image file from device', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)), textAlign: TextAlign.center),
+                  if (_selectedFileObj != null) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _selectedFileName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFFF43F5E), size: 18),
+                          tooltip: 'Remove file',
+                          onPressed: _removeSelectedFile,
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Size: ${(_selectedFileSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                    ),
+                  ] else ...[
+                    Text(_selectedFileName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white), textAlign: TextAlign.center),
+                  ],
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Allowed: PDF, PNG, JPG, JPEG, DOC, DOCX (Max 10MB per file, up to 5 files / 25MB total)',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: _pickDeviceFile,
                     icon: const Icon(Icons.folder_open_rounded, size: 16, color: Colors.white),
-                    label: const Text('Choose File', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: Text(_selectedFileObj != null ? 'Change File' : 'Choose File', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4F46E5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -440,16 +498,19 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5).withOpacity(0.15) : const Color(0xFF0D1224),
+                        color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5).withValues(alpha: 0.15) : const Color(0xFF0D1224),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5) : const Color(0xFF1E293B), width: 1.5),
                       ),
                       child: Row(
                         children: [
+                          // ignore: deprecated_member_use
                           Radio<String>(
                             value: 'GCash Online',
+                            // ignore: deprecated_member_use
                             groupValue: _paymentMethod,
                             activeColor: const Color(0xFF818CF8),
+                            // ignore: deprecated_member_use
                             onChanged: (val) => setState(() => _paymentMethod = val!),
                           ),
                           const Expanded(
@@ -473,16 +534,19 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5).withOpacity(0.15) : const Color(0xFF0D1224),
+                        color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5).withValues(alpha: 0.15) : const Color(0xFF0D1224),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5) : const Color(0xFF1E293B), width: 1.5),
                       ),
                       child: Row(
                         children: [
+                          // ignore: deprecated_member_use
                           Radio<String>(
                             value: 'Cash on Pickup',
+                            // ignore: deprecated_member_use
                             groupValue: _paymentMethod,
                             activeColor: const Color(0xFF818CF8),
+                            // ignore: deprecated_member_use
                             onChanged: (val) => setState(() => _paymentMethod = val!),
                           ),
                           const Expanded(

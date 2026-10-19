@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
 import 'login_screen.dart';
 import 'store_screen.dart';
 import 'place_order_screen.dart';
 import 'admin_products_screen.dart';
 import '../services/order_repository.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userEmail;
@@ -175,8 +177,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+              try {
+                await FirebaseAuth.instance.signOut();
+              } catch (e) {
+                debugPrint('Logout error: $e');
+              }
+              if (!context.mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
                 PageRouteBuilder(
@@ -184,7 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   transitionsBuilder: (context, animation, secondaryAnimation, child) => FadeTransition(opacity: animation, child: child),
                   transitionDuration: const Duration(milliseconds: 400),
                 ),
-                    (route) => false,
+                (route) => false,
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E), elevation: 0),
@@ -1805,7 +1813,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
-              _buildDynamicActionButton(docId, status),
+              _buildAdminOrderActions(docId, refId, status, data),
             ],
           ),
         ],
@@ -1853,7 +1861,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-              _buildDynamicActionButton(docId, status),
+              _buildAdminOrderActions(docId, refId, status, data),
             ],
           ),
         ],
@@ -1901,29 +1909,613 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     }
   }
 
-  Widget _buildDynamicActionButton(String orderId, String status) {
+  Widget _buildAdminOrderActions(String orderId, String refId, String status, Map<String, dynamic> data) {
     final category = _getStatusCategory(status);
-    if (category == 'approval') {
-      return ElevatedButton(
-        onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Printing', 'Approve Order'),
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-        child: const Text('Approve', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
-      );
-    } else if (category == 'printing') {
-      return ElevatedButton(
-        onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Ready for Pickup', 'Mark Ready'),
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-        child: const Text('Mark Ready', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
-      );
+    final isFinished = category == 'completed' || category == 'rejected';
+
+    String nextStatus = 'Printing';
+    String actionLabel = 'Approve';
+    Color btnColor = const Color(0xFF10B981); // Emerald green like screenshot
+
+    if (category == 'printing') {
+      nextStatus = 'Ready for Pickup';
+      actionLabel = 'Ready';
+      btnColor = const Color(0xFFD97706);
     } else if (category == 'ready') {
-      return ElevatedButton(
-        onPressed: () => _confirmAndUpdateOrderStatus(orderId, 'Completed', 'Complete Order'),
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-        child: const Text('Complete', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
-      );
-    } else {
-      return const Text('Done', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)));
+      nextStatus = 'Completed';
+      actionLabel = 'Done';
+      btnColor = const Color(0xFF10B981);
     }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!isFinished) ...[
+          // Split action button matching reference: [✓ Approve | v]
+          Container(
+            decoration: BoxDecoration(
+              color: btnColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => _confirmAndUpdateOrderStatus(orderId, nextStatus, '$actionLabel Order'),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          actionLabel,
+                          style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 18,
+                  color: Colors.white.withValues(alpha: 0.25),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: Colors.white),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  color: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFF1E293B)),
+                  ),
+                  tooltip: 'Change Status',
+                  onSelected: (selectedStatus) {
+                    _confirmAndUpdateOrderStatus(orderId, selectedStatus, 'Update Status');
+                  },
+                  itemBuilder: (context) => [
+                    _buildStatusMenuItem('For Approval', '✓ For Approval', const Color(0xFFFBBF24)),
+                    _buildStatusMenuItem('Printing', '🖨️ Start Printing', const Color(0xFF818CF8)),
+                    _buildStatusMenuItem('Ready for Pickup', '📦 Ready for Pickup', const Color(0xFF38BDF8)),
+                    _buildStatusMenuItem('Completed', '🎉 Complete Order', const Color(0xFF10B981)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+
+        // Three-dots menu button with exact options from reference screenshot
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, size: 16, color: Color(0xFF94A3B8)),
+            padding: EdgeInsets.zero,
+            color: const Color(0xFF0F172A),
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFF1E293B)),
+            ),
+            tooltip: 'Order Options',
+            onSelected: (value) {
+              if (value == 'review') {
+                _showReviewSpecsModal(orderId, refId, data);
+              } else if (value == 'file') {
+                _openAttachedFile(data);
+              } else if (value == 'slip') {
+                _showPrintJobSlipModal(refId, data);
+              } else if (value == 'reject') {
+                _showRejectOrderModal(orderId, refId);
+              }
+            },
+            itemBuilder: (context) {
+              final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? data['url'] ?? data['file'] ?? '').toString().trim();
+              final bool hasFile = fileUrl.isNotEmpty && fileUrl != 'Pending / Direct In-Store Upload' && fileUrl != 'Walang napiling file';
+
+              return [
+                PopupMenuItem<String>(
+                  value: 'review',
+                  height: 38,
+                  child: Row(
+                    children: const [
+                      Icon(Icons.remove_red_eye_rounded, size: 16, color: Color(0xFF38BDF8)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Review Specs & File',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'file',
+                  height: 38,
+                  enabled: hasFile,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.description_rounded,
+                        size: 16,
+                        color: hasFile ? const Color(0xFF3B82F6) : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Open Attached File',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: hasFile ? const Color(0xFF60A5FA) : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'slip',
+                  height: 38,
+                  child: Row(
+                    children: const [
+                      Icon(Icons.print_rounded, size: 16, color: Color(0xFFA855F7)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Print Job Slip',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(height: 1),
+                PopupMenuItem<String>(
+                  value: 'reject',
+                  height: 38,
+                  child: Row(
+                    children: const [
+                      Icon(Icons.cancel_rounded, size: 16, color: Color(0xFFF43F5E)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Reject Order',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF43F5E)),
+                      ),
+                    ],
+                  ),
+                ),
+              ];
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _buildStatusMenuItem(String value, String label, Color color) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 36,
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+      ),
+    );
+  }
+
+  // ── MODAL 1: REVIEW SPECS & FILE ───────────────────────────────────────────
+  void _showReviewSpecsModal(String orderId, String refId, Map<String, dynamic> data) {
+    final customer = (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
+    final service = (data['service'] ?? 'Standard A4 Print').toString();
+    final total = (data['total'] ?? data['price'] ?? 0).toString();
+    final payment = (data['payment'] ?? 'GCash Online').toString();
+    final status = (data['status'] ?? 'Order Submitted').toString();
+    final fileName = (data['fileName'] ?? data['file'] ?? 'Walang in-attach na file').toString();
+    final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? '').toString();
+    final note = (data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim();
+    final details = data['details'] as Map<String, dynamic>?;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.assignment_outlined, color: Color(0xFF38BDF8), size: 20),
+                SizedBox(width: 8),
+                Text('Order Specifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildSpecRow('Order ID', refId, isMono: true),
+              _buildSpecRow('Customer', customer),
+              _buildSpecRow('Service', service),
+              _buildSpecRow('Status', status),
+              _buildSpecRow('Payment', payment),
+              _buildSpecRow('Total', '₱$total', isHighlight: true),
+              if (details != null && details.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Custom Specs:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF818CF8))),
+                const SizedBox(height: 4),
+                ...details.entries.map((e) => _buildSpecRow(e.key.toUpperCase(), e.value.toString())),
+              ],
+              const SizedBox(height: 10),
+              const Divider(color: Color(0xFF1E293B)),
+              const SizedBox(height: 6),
+              const Text('Customer Note / Instructions:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  note.isNotEmpty ? note : 'No special instructions provided.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: note.isNotEmpty ? FontStyle.normal : FontStyle.italic,
+                    color: note.isNotEmpty ? const Color(0xFFFDE68A) : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Attached File:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.file_present_rounded, color: Color(0xFF60A5FA), size: 24),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        fileName,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (fileUrl.isNotEmpty && fileUrl.startsWith('http'))
+                      ElevatedButton.icon(
+                        onPressed: () => _openAttachedFile(data),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
+                        label: const Text('Open', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E293B),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecRow(String label, String value, {bool isMono = false, bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+                fontFamily: isMono ? 'monospace' : null,
+                color: isHighlight ? const Color(0xFF10B981) : Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── MODAL 2: OPEN ATTACHED FILE ───────────────────────────────────────────
+  Future<void> _openAttachedFile(Map<String, dynamic> data) async {
+    final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? data['url'] ?? data['file'] ?? '').toString().trim();
+    if (fileUrl.isEmpty || !fileUrl.startsWith('http')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Walang valid web link o file URL na naka-attach.'),
+          backgroundColor: Color(0xFFF43F5E),
+        ),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(fileUrl);
+    if (uri != null) {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hindi mabuksan ang file link.'),
+            backgroundColor: Color(0xFFF43F5E),
+          ),
+        );
+      }
+    }
+  }
+
+  // ── MODAL 3: PRINT JOB SLIP TICKET ─────────────────────────────────────────
+  void _showPrintJobSlipModal(String refId, Map<String, dynamic> data) {
+    final customer = (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
+    final service = (data['service'] ?? 'Standard A4 Print').toString();
+    final total = (data['total'] ?? data['price'] ?? 0).toString();
+    final payment = (data['payment'] ?? 'GCash Online').toString();
+    final status = (data['status'] ?? 'Order Submitted').toString();
+    final qty = (data['quantity'] ?? data['copies'] ?? 1).toString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.receipt_long_rounded, color: Color(0xFFA855F7), size: 20),
+                SizedBox(width: 8),
+                Text('Job Slip Ticket', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+        content: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF070A14),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF1E293B)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: Text(
+                  'KEZ C-EM ZEK PRINT SHOP',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, letterSpacing: 1.1),
+                ),
+              ),
+              const Center(
+                child: Text('Official Production Job Ticket', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+              ),
+              const Divider(color: Color(0xFF1E293B), height: 16),
+              _buildSlipLine('JOB TICKET #:', refId),
+              _buildSlipLine('CLIENT:', customer),
+              _buildSlipLine('SERVICE:', service),
+              _buildSlipLine('QUANTITY:', '$qty pcs'),
+              _buildSlipLine('TOTAL:', '₱$total'),
+              _buildSlipLine('PAYMENT:', payment),
+              _buildSlipLine('STATUS:', status),
+              const Divider(color: Color(0xFF1E293B), height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  DateTime.now().toString().substring(0, 19),
+                  style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontFamily: 'monospace'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.print_rounded, size: 14, color: Colors.white),
+                  label: const Text('Print Ticket', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Job ticket queued for printing!'),
+                        backgroundColor: Color(0xFF10B981),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlipLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8), fontFamily: 'monospace')),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'monospace'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── MODAL 4: REJECT ORDER REASON ───────────────────────────────────────────
+  void _showRejectOrderModal(String orderId, String refId) {
+    final reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E293B)),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.cancel_outlined, color: Color(0xFFF43F5E), size: 20),
+            SizedBox(width: 8),
+            Text('Reject Order Reason', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Order: $refId', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              decoration: InputDecoration(
+                hintText: 'Reason (e.g., Low file resolution, unreadable text)...',
+                hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                filled: true,
+                fillColor: const Color(0xFF070A14),
+                contentPadding: const EdgeInsets.all(12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFF43F5E)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF43F5E),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () async {
+                    final reason = reasonController.text.trim();
+                    if (reason.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a rejection reason.'), backgroundColor: Color(0xFFF43F5E)),
+                      );
+                      return;
+                    }
+                    Navigator.pop(ctx);
+                    await _ordersRef.doc(orderId).update({
+                      'status': 'Rejected',
+                      'rejectionReason': reason,
+                      'rejectedAt': FieldValue.serverTimestamp(),
+                    });
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Order $refId marked as Rejected.'), backgroundColor: const Color(0xFFF43F5E)),
+                    );
+                  },
+                  child: const Text('Confirm Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildStatusCounterBox(String label, String count, Color bgColor, Color textColor) {

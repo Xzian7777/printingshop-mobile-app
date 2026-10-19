@@ -20,6 +20,7 @@ dependencies:
   connectivity_plus: ^6.0.5  # Para ma-detect kung online o offline
   mailer: ^6.1.0
   image_picker: ^1.1.2
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
