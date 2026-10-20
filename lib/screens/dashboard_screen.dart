@@ -6,6 +6,10 @@ import 'login_screen.dart';
 import 'store_screen.dart';
 import 'place_order_screen.dart';
 import 'admin_products_screen.dart';
+import 'customer_chat_screen.dart';
+import 'admin_live_chat_view.dart';
+import 'admin_rfid_loyalty_view.dart';
+import 'admin_registered_users_view.dart';
 import '../services/order_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -37,16 +41,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   int _currentNavIndex = 0;
-  int _adminSubTab = 0; // 0: Orders Queue, 1: Live Chat, 2: Analytics, 3: RFID Monitor
+  int _adminSubTab = 0; // 0: Orders Management, 1: Live Chat, 2: Analytics, 3: RFID Loyalty, 4: Registered Users
 
   String _statusFilter = 'All Active';
   String _selectedServiceCategory = 'All Services';
+  String _orderSortOrder = 'Latest to Previous'; // 'Latest to Previous' or 'Previous to Latest'
   bool _isListView = true;
 
   // --- CUSTOMER TRACKER STATE ---
   String _customerFilter = 'All Orders';
   String _customerCategoryFilter = 'All Services & Store Items';
   Key _customerTrackerRefreshKey = UniqueKey();
+  int _customerOrdersCurrentPage = 1;
+  final int _customerOrdersPerPage = 5;
 
   // --- ORDERS PAGINATION STATE ---
   int _ordersCurrentPage = 1;
@@ -80,12 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       .doc('data')
       .collection('orders');
 
-  CollectionReference get _chatsRef => FirebaseFirestore.instance
-      .collection('artifacts')
-      .doc('printcraft-pro')
-      .collection('public')
-      .doc('data')
-      .collection('chats');
+
 
   CollectionReference get _rfidLogsRef => FirebaseFirestore.instance
       .collection('artifacts')
@@ -297,6 +299,52 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ],
         ),
         actions: [
+          if (!_isAdmin)
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('artifacts')
+                  .doc('printcraft-pro')
+                  .collection('public')
+                  .doc('data')
+                  .collection('chats')
+                  .doc(widget.userEmail.trim().contains('@') ? widget.userEmail.trim().split('@').first : widget.userEmail.trim())
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final data = snapshot.data?.data() as Map<String, dynamic>?;
+                final bool hasUnread = data?['customerUnread'] == true;
+
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF818CF8)),
+                      tooltip: 'Live Chat Support',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CustomerChatScreen(userEmail: widget.userEmail),
+                          ),
+                        );
+                      },
+                    ),
+                    if (hasUnread)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF43F5E),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.gavel_rounded, color: Color(0xFF94A3B8)),
             tooltip: 'Terms & Conditions',
@@ -317,24 +365,78 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
         ],
       ),
+      extendBody: true,
       body: _buildSelectedTabContent(),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16),
+          child: Container(
+            height: 64,
+            decoration: BoxDecoration(
+              color: const Color(0xFF11141C).withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(
+                color: const Color(0xFF2A2E3D),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildFloatingNavItem(0, Icons.home_rounded, 'Home'),
+                _buildFloatingNavItem(1, Icons.storefront_rounded, 'Store'),
+                _buildFloatingNavItem(2, Icons.receipt_long_rounded, 'Orders'),
+                _buildFloatingNavItem(3, Icons.person_rounded, 'Profile'),
+              ],
+            ),
+          ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentNavIndex,
-          onTap: (index) => setState(() => _currentNavIndex = index),
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: const Color(0xFF818CF8),
-          unselectedItemColor: const Color(0xFF64748B),
-          backgroundColor: const Color(0xFF0B0E1B),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'Store'),
-            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
-          ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingNavItem(int index, IconData icon, String label) {
+    final isSelected = _currentNavIndex == index;
+    // Vibrant neon lime matching the reference image, with muted gray when unselected
+    const activeColor = Color(0xFFCCFF00);
+    const inactiveColor = Color(0xFF8E95A5);
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(30),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          onTap: () => setState(() => _currentNavIndex = index),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: isSelected ? activeColor : inactiveColor,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? activeColor : inactiveColor,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -381,13 +483,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildAdminSubTabButton(0, 'Orders Queue', Icons.receipt_long_rounded),
+                _buildAdminSubTabButton(0, 'Orders Management', Icons.receipt_long_rounded),
                 const SizedBox(width: 8),
                 _buildAdminSubTabButton(1, 'Live Chat', Icons.chat_bubble_rounded),
                 const SizedBox(width: 8),
                 _buildAdminSubTabButton(2, 'Analytics', Icons.analytics_rounded),
                 const SizedBox(width: 8),
                 _buildAdminSubTabButton(3, 'RFID Loyalty', Icons.nfc_rounded),
+                const SizedBox(width: 8),
+                _buildAdminSubTabButton(4, 'Registered Users', Icons.people_alt_rounded),
               ],
             ),
           ),
@@ -401,7 +505,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ? _buildAdminLiveChatView()
               : _adminSubTab == 2
               ? _buildAdminAnalyticsView()
-              : _buildAdminRfidView(),
+              : _adminSubTab == 3
+              ? AdminRfidLoyaltyView(userEmail: widget.userEmail)
+              : const AdminRegisteredUsersView(),
         ),
       ],
     );
@@ -432,183 +538,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   // 1. LIVE CUSTOMER CHAT SUPPORT
   // ===========================================================================
   Widget _buildAdminLiveChatView() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _chatsRef.orderBy('lastUpdated', descending: true).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Chat Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
-
-        final chatDocs = snapshot.data!.docs;
-
-        if (chatDocs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.chat_outlined, size: 48, color: Color(0xFF64748B)),
-                SizedBox(height: 12),
-                Text('No active customer chats yet.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                Text('New messages from web/app customers will appear here in realtime.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: chatDocs.length,
-          itemBuilder: (context, index) {
-            final doc = chatDocs[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final customerName = (data['customerName'] ?? data['email'] ?? 'Customer').toString();
-            final lastMsg = (data['lastMessage'] ?? 'Sent an inquiry...').toString();
-            final unread = data['unread'] == true;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: unread ? const Color(0xFFF43F5E) : const Color(0xFF1E293B)),
-              ),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: unread ? const Color(0xFF4F46E5).withOpacity(0.2) : const Color(0xFF0F172A),
-                  child: Icon(Icons.person, color: unread ? const Color(0xFF818CF8) : const Color(0xFF94A3B8)),
-                ),
-                title: Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                subtitle: Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B)),
-                onTap: () => _openChatConversationModal(doc.id, customerName),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _openChatConversationModal(String chatId, String customerName) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            height: MediaQuery.of(ctx).size.height * 0.75,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border(top: BorderSide(color: Color(0xFF1E293B))),
-            ),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const CircleAvatar(radius: 16, backgroundColor: Color(0xFF1E293B), child: Icon(Icons.person, color: Color(0xFF818CF8), size: 18)),
-                          const SizedBox(width: 10),
-                          Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                        ],
-                      ),
-                      IconButton(icon: const Icon(Icons.close, color: Color(0xFF94A3B8)), onPressed: () => Navigator.pop(ctx)),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: Color(0xFF1E293B)),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _chatsRef.doc(chatId).collection('messages').orderBy('timestamp', descending: true).snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
-                      final msgs = snapshot.data!.docs;
-
-                      return ListView.builder(
-                        reverse: true,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: msgs.length,
-                        itemBuilder: (context, index) {
-                          final mData = msgs[index].data() as Map<String, dynamic>;
-                          final isMe = mData['sender'] == 'admin';
-                          final text = (mData['text'] ?? '').toString();
-
-                          return Align(
-                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isMe ? const Color(0xFF4F46E5) : const Color(0xFF1E293B),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                text,
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  color: const Color(0xFF0F172A),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _chatReplyController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'Type your reply...',
-                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            filled: true,
-                            fillColor: const Color(0xFF070A14),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFF4F46E5),
-                        child: IconButton(
-                          icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                          onPressed: () async {
-                            final txt = _chatReplyController.text.trim();
-                            if (txt.isNotEmpty) {
-                              _chatReplyController.clear();
-                              await _chatsRef.doc(chatId).collection('messages').add({
-                                'sender': 'admin',
-                                'text': txt,
-                                'timestamp': FieldValue.serverTimestamp(),
-                              });
-                              await _chatsRef.doc(chatId).update({
-                                'lastMessage': 'Admin: $txt',
-                                'lastUpdated': FieldValue.serverTimestamp(),
-                                'unread': false,
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    return const AdminLiveChatView();
   }
 
   // ===========================================================================
@@ -1238,7 +1168,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         elevation: 0,
                       ),
                       child: Text(
-                        _isAdmin ? 'Manage Orders Queue' : 'Place New Print Order',
+                        _isAdmin ? 'Manage Orders' : 'Place New Print Order',
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
                       ),
                     ),
@@ -1522,6 +1452,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           return matchesCategory && matchesSearch && matchesStatus;
         }).toList();
 
+        // Sort orders based on _orderSortOrder
+        filteredDocs.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+          final timeA = _getOrderTimestamp(dataA);
+          final timeB = _getOrderTimestamp(dataB);
+          if (_orderSortOrder == 'Latest to Previous') {
+            return timeB.compareTo(timeA);
+          } else {
+            return timeA.compareTo(timeB);
+          }
+        });
+
         int totalPages = (filteredDocs.length / _ordersPerPage).ceil();
         if (totalPages < 1) totalPages = 1;
         if (_ordersCurrentPage > totalPages) _ordersCurrentPage = totalPages;
@@ -1607,37 +1550,79 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF1E293B))),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      dropdownColor: const Color(0xFF0D1224),
-                      value: _serviceCategories.contains(_selectedServiceCategory) ? _selectedServiceCategory : 'All Services',
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _selectedServiceCategory = val;
-                            _ordersCurrentPage = 1;
-                          });
-                        }
-                      },
-                      items: _serviceCategories.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Sort Dropdown (Latest to Previous / Previous to Latest)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D1224),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF1E293B)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              dropdownColor: const Color(0xFF0D1224),
+                              value: _orderSortOrder,
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _orderSortOrder = val;
+                                    _ordersCurrentPage = 1;
+                                  });
+                                }
+                              },
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'Latest to Previous',
+                                  child: Text('Latest to Previous'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Previous to Latest',
+                                  child: Text('Previous to Latest'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Service Category Dropdown
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D1224),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF1E293B)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              dropdownColor: const Color(0xFF0D1224),
+                              value: _serviceCategories.contains(_selectedServiceCategory) ? _selectedServiceCategory : 'All Services',
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _selectedServiceCategory = val;
+                                    _ordersCurrentPage = 1;
+                                  });
+                                }
+                              },
+                              items: _serviceCategories.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF1E293B))),
-                  child: Row(
-                    children: [
-                      _buildViewToggleBtn('List', Icons.list_alt_rounded, _isListView, () => setState(() => _isListView = true)),
-                      _buildViewToggleBtn('Cards', Icons.grid_view_rounded, !_isListView, () => setState(() => _isListView = false)),
-                    ],
-                  ),
-                ),
+
               ],
             ),
             const SizedBox(height: 12),
@@ -2651,6 +2636,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           return _matchesCustomerStatusFilter(rawStatus, _customerFilter);
         }).toList();
 
+        final custTotalPages = (filteredDocs.length / _customerOrdersPerPage).ceil().clamp(1, 9999);
+        if (_customerOrdersCurrentPage > custTotalPages) _customerOrdersCurrentPage = custTotalPages;
+        if (_customerOrdersCurrentPage < 1) _customerOrdersCurrentPage = 1;
+        final custStartIndex = (_customerOrdersCurrentPage - 1) * _customerOrdersPerPage;
+        final custEndIndex = math.min(custStartIndex + _customerOrdersPerPage, filteredDocs.length);
+        final pagedDocs = filteredDocs.sublist(custStartIndex, custEndIndex);
+
 
         final customerDisplayName = widget.userEmail.contains('@')
             ? widget.userEmail.split('@').first
@@ -2915,12 +2907,43 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     ],
                   ),
                 )
-              else
-                ...filteredDocs.map((doc) {
+              else ...[
+                ...pagedDocs.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   return _buildTrackedCustomerOrderCard(doc.id, data);
                 }),
-              const SizedBox(height: 20),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D1224),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF1E293B)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                        onPressed: _customerOrdersCurrentPage > 1
+                            ? () => setState(() => _customerOrdersCurrentPage--)
+                            : null,
+                      ),
+                      Text(
+                        "Page $_customerOrdersCurrentPage of $custTotalPages (${filteredDocs.length} orders)",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                        onPressed: _customerOrdersCurrentPage < custTotalPages
+                            ? () => setState(() => _customerOrdersCurrentPage++)
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 90),
             ],
           ),
         );
