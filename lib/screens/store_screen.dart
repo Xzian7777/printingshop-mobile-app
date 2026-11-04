@@ -42,6 +42,115 @@ class _StoreScreenState extends State<StoreScreen> {
   int get _cartTotalItems => _cart.values.fold(0, (acc, qty) => acc + qty);
 
 
+  // --- PLACE ORDER TO FIRESTORE ---
+  Future<void> _checkoutCart(BuildContext bottomSheetCtx, List<MapEntry<String, int>> cartEntries, double total) async {
+    if (widget.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bawal mag-order ang Admin account. Para lamang ito sa mga customer."),
+          backgroundColor: Color(0xFFF43F5E),
+        ),
+      );
+      Navigator.pop(bottomSheetCtx);
+      return;
+    }
+    try {
+      // 1. Verify items and live stock before placing order
+      final itemsToOrder = <Map<String, dynamic>>[];
+      for (final entry in cartEntries) {
+        final prodDoc = _allDocs.firstWhere(
+          (d) => d.id == entry.key,
+          orElse: () => throw Exception("Product ${entry.key} not found"),
+        );
+        final data = prodDoc.data() as Map<String, dynamic>;
+        final currentStock = (data['stock'] as num?)?.toInt() ?? 0;
+        final name = (data['name'] ?? 'Product').toString();
+        final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+
+        if (currentStock < entry.value) {
+          throw Exception("Insufficient stock for '$name'. Available: $currentStock, Ordered: ${entry.value}");
+        }
+
+        itemsToOrder.add({
+          'id': entry.key,
+          'productId': entry.key,
+          'name': name,
+          'qty': entry.value,
+          'price': price,
+        });
+      }
+
+      final now = DateTime.now();
+      final orderId = "PRNT-${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}${now.microsecond.toString().padLeft(6, '0').substring(0, 2)}";
+      final emailClean = widget.userEmail.trim();
+      final customerName = emailClean.contains('@') ? emailClean.split('@')[0] : emailClean;
+      final itemDescriptions = itemsToOrder.map((i) => "${i['name']} (${i['qty']}x)").join(', ');
+      final totalCopies = itemsToOrder.fold<int>(0, (acc, i) => acc + (i['qty'] as int));
+
+      final orderPayload = {
+        'id': orderId,
+        'customerId': 'CUST-101',
+        'customer': customerName,
+        'email': emailClean.contains('@') ? emailClean : '$emailClean@gmail.com',
+        'service': 'In-Store: $itemDescriptions',
+        'items': itemsToOrder,
+        'pages': 1,
+        'copies': totalCopies,
+        'quantity': totalCopies,
+        'paperSize': 'Store Supply',
+        'colorMode': 'N/A',
+        'sides': 'N/A',
+        'total': total,
+        'file': 'Store_Receipt.pdf',
+        'payment': _selectedPaymentMethod,
+        'status': 'Order Submitted',
+        'stockDeducted': false,
+        'createdAt': now.toIso8601String(),
+        'orderDate': "${_formatMonthDayYear(now)} • ${_formatHourMinute(now)}",
+      };
+
+      // Write to shared orders collection: artifacts/printcraft-pro/public/data/orders
+      await _db
+          .collection('artifacts')
+          .doc('printcraft-pro')
+          .collection('public')
+          .doc('data')
+          .collection('orders')
+          .doc(orderId)
+          .set(orderPayload);
+
+      if (!mounted) return;
+      setState(() => _cart.clear());
+      Navigator.pop(bottomSheetCtx);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Order #$orderId successfully placed! Pending admin approval."),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Checkout error: ${e.toString().replaceAll('Exception: ', '')}"),
+          backgroundColor: const Color(0xFFF43F5E),
+        ),
+      );
+    }
+  }
+
+  String _formatMonthDayYear(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${months[dt.month - 1]} ${dt.day}, ${dt.year}";
+  }
+
+  String _formatHourMinute(DateTime dt) {
+    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return "${hour.toString().padLeft(2, '0')}:$minute $ampm";
+  }
+
   // --- ADMIN FUNCTION: Add New Product ---
   void _showAddProductDialog() {
     final nameController = TextEditingController();
@@ -52,16 +161,16 @@ class _StoreScreenState extends State<StoreScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
-            Icon(Icons.add_box_rounded, color: Color(0xFF818CF8)),
+            Icon(Icons.add_box_rounded, color: Color(0xFF15803D)),
             SizedBox(width: 8),
-            Text("Add Store Item", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text("Add Store Item", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
           ],
         ),
         content: SingleChildScrollView(
@@ -70,48 +179,48 @@ class _StoreScreenState extends State<StoreScreen> {
             children: [
               TextField(
                 controller: nameController,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                 decoration: const InputDecoration(
                   labelText: "Product Name",
-                  labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  labelStyle: TextStyle(color: Color(0xFF4B7A5E)),
                   hintText: "e.g., A4 Paper Pack",
-                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                  hintStyle: TextStyle(color: Color(0xFF4B7A5E)),
                 ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                 decoration: const InputDecoration(
                   labelText: "Price (₱)",
-                  labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  labelStyle: TextStyle(color: Color(0xFF4B7A5E)),
                   hintText: "50.0",
-                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                  hintStyle: TextStyle(color: Color(0xFF4B7A5E)),
                 ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: stockController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                 decoration: const InputDecoration(
                   labelText: "Initial Stock",
-                  labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  labelStyle: TextStyle(color: Color(0xFF4B7A5E)),
                   hintText: "100",
-                  hintStyle: TextStyle(color: Color(0xFF64748B)),
+                  hintStyle: TextStyle(color: Color(0xFF4B7A5E)),
                 ),
               ),
               const SizedBox(height: 10),
               StatefulBuilder(
                 builder: (context, setDialogState) {
                   return DropdownButtonFormField<String>(
-                    dropdownColor: const Color(0xFF0F172A),
+                    dropdownColor: const Color(0xFFF0FDF4),
                     initialValue: category,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                     decoration: const InputDecoration(
                       labelText: "Category",
-                      labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                      labelStyle: TextStyle(color: Color(0xFF4B7A5E)),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'notebooks', child: Text('Notebooks & Paper')),
@@ -130,10 +239,10 @@ class _StoreScreenState extends State<StoreScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
             onPressed: () async {
               final name = nameController.text.trim();
               final price = double.tryParse(priceController.text) ?? 0.0;
@@ -173,34 +282,34 @@ class _StoreScreenState extends State<StoreScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
-        title: const Text("Edit Inventory Stock", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text("Edit Inventory Stock", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameController,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(labelText: "Product Name", labelStyle: TextStyle(color: Color(0xFF94A3B8))),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                decoration: const InputDecoration(labelText: "Product Name", labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(labelText: "Price (₱)", labelStyle: TextStyle(color: Color(0xFF94A3B8))),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                decoration: const InputDecoration(labelText: "Price (₱)", labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: stockController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(labelText: "Current Stock Level", labelStyle: TextStyle(color: Color(0xFF94A3B8))),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                decoration: const InputDecoration(labelText: "Current Stock Level", labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
               ),
               const SizedBox(height: 16),
               Row(
@@ -211,18 +320,18 @@ class _StoreScreenState extends State<StoreScreen> {
                       int current = int.tryParse(stockController.text) ?? 0;
                       stockController.text = (current + 10).toString();
                     },
-                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF818CF8)),
-                    label: const Text("+10 Stock", style: TextStyle(color: Color(0xFF818CF8), fontSize: 11)),
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E293B))),
+                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF15803D)),
+                    label: const Text("+10 Stock", style: TextStyle(color: Color(0xFF15803D), fontSize: 11)),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                   OutlinedButton.icon(
                     onPressed: () {
                       int current = int.tryParse(stockController.text) ?? 0;
                       stockController.text = (current + 50).toString();
                     },
-                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF818CF8)),
-                    label: const Text("+50 Stock", style: TextStyle(color: Color(0xFF818CF8), fontSize: 11)),
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E293B))),
+                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF15803D)),
+                    label: const Text("+50 Stock", style: TextStyle(color: Color(0xFF15803D), fontSize: 11)),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                 ],
               ),
@@ -231,68 +340,88 @@ class _StoreScreenState extends State<StoreScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_forever_rounded, color: Color(0xFFF43F5E)),
+            icon: const Icon(Icons.archive_outlined, color: Color(0xFFD97706)),
+            tooltip: "Archive Product",
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
-                  backgroundColor: const Color(0xFF0F172A),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
+                  backgroundColor: const Color(0xFFF0FDF4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
                   title: Row(
                     children: const [
                       Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
                       SizedBox(width: 8),
-                      Text("Confirm Delete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text("Archive Product", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
                     ],
                   ),
-                  content: const Text("Are you sure you want to delete this product? This action cannot be undone.", style: TextStyle(color: Color(0xFF94A3B8))),
+                  content: const Text("Ilipat ang produktong ito sa Archive? Maaari mo pa itong i-restore anumang oras.", style: TextStyle(color: Color(0xFF4B7A5E))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
-                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
+                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706)),
                       onPressed: () => Navigator.pop(c, true),
-                      child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text("Archive", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
               );
 
               if (confirm == true) {
-                await _db.collection('products').doc(docId).delete();
+                await _db.collection('products').doc(docId).update({
+                  'archived': true,
+                  'archivedAt': FieldValue.serverTimestamp(),
+                });
+                try {
+                  await _db
+                      .collection('artifacts')
+                      .doc('printcraft-pro')
+                      .collection('public')
+                      .doc('data')
+                      .collection('store_products')
+                      .doc(docId)
+                      .update({
+                    'archived': true,
+                    'archivedAt': FieldValue.serverTimestamp(),
+                  });
+                } catch (_) {}
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Product deleted successfully!"), backgroundColor: Color(0xFFF43F5E)),
+                  const SnackBar(
+                    content: Text("Nai-archive ang produkto! Puwede mo itong i-restore sa Archive icon sa itaas."),
+                    backgroundColor: Color(0xFF15803D),
+                  ),
                 );
               }
             },
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
-                  backgroundColor: const Color(0xFF0F172A),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
-                  title: const Text("Confirm Stock Update", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                  content: Text("Save new stock level (${stockController.text}) for '${nameController.text}'?", style: const TextStyle(color: Color(0xFF94A3B8))),
+                  backgroundColor: const Color(0xFFF0FDF4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
+                  title: const Text("Confirm Stock Update", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
+                  content: Text("Save new stock level (${stockController.text}) for '${nameController.text}'?", style: const TextStyle(color: Color(0xFF4B7A5E))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
-                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B))),
+                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
                       onPressed: () => Navigator.pop(c, true),
-                      child: const Text("Confirm & Save", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text("Confirm & Save", style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -320,13 +449,24 @@ class _StoreScreenState extends State<StoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF070A14),
+    // Add extra bottom padding so content isn't hidden under FAB + outer nav bar
+    final double extraBottom = widget.isAdmin ? 100 : 0;
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        padding: MediaQuery.of(context).padding.copyWith(
+          bottom: MediaQuery.of(context).padding.bottom + extraBottom,
+        ),
+        viewPadding: MediaQuery.of(context).viewPadding.copyWith(
+          bottom: MediaQuery.of(context).viewPadding.bottom + extraBottom,
+        ),
+      ),
+      child: Scaffold(
+      backgroundColor: const Color(0xFFF8FFF9),
       body: Column(
         children: [
           // Search & Category Bar
           Container(
-            color: const Color(0xFF0B0E1B),
+            color: Colors.white,
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
@@ -336,16 +476,16 @@ class _StoreScreenState extends State<StoreScreen> {
                     _searchQuery = val;
                     _currentPage = 1;
                   }),
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                   decoration: InputDecoration(
                     hintText: widget.isAdmin ? "Search inventory database..." : "Search store items...",
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF64748B)),
+                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
+                    prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF4B7A5E)),
                     contentPadding: EdgeInsets.zero,
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A))),
                     filled: true,
-                    fillColor: const Color(0xFF0D1224),
+                    fillColor: const Color(0xFFFFFFFF),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -364,39 +504,40 @@ class _StoreScreenState extends State<StoreScreen> {
                         ),
                       ),
                     ),
-                    Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.none,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.shopping_cart_outlined, size: 20, color: Color(0xFF818CF8)),
-                          tooltip: 'Shopping Cart',
-                          onPressed: () => _showCartBottomSheet(_allDocs),
-                        ),
-                        if (_cartTotalItems > 0)
-                          Positioned(
-                            top: 6,
-                            right: 6,
-                            child: Container(
-                              padding: const EdgeInsets.all(3.5),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF4F46E5),
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                              child: Text(
-                                '$_cartTotalItems',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
+                    if (!widget.isAdmin)
+                      Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.shopping_cart_outlined, size: 20, color: Color(0xFF15803D)),
+                            tooltip: 'Shopping Cart',
+                            onPressed: () => _showCartBottomSheet(_allDocs),
+                          ),
+                          if (_cartTotalItems > 0)
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Container(
+                                padding: const EdgeInsets.all(3.5),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF16A34A),
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                child: Text(
+                                  '$_cartTotalItems',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFF14532D),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ],
@@ -417,15 +558,15 @@ class _StoreScreenState extends State<StoreScreen> {
                         children: const [
                           Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFF43F5E)),
                           SizedBox(height: 8),
-                          Text('Nabigo sa pagkonekta sa inventory database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                          Text('Pakisuri ang iyong koneksyon sa internet.', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                          Text('Nabigo sa pagkonekta sa inventory database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                          Text('Pakisuri ang iyong koneksyon sa internet.', style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
                         ],
                       ),
                     ),
                   );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
                 }
 
                 final docs = snapshot.data?.docs ?? [];
@@ -433,6 +574,9 @@ class _StoreScreenState extends State<StoreScreen> {
 
                 final filteredDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
+                  // Filter out archived products
+                  if (data['archived'] == true) return false;
+
                   final name = (data['name'] ?? '').toString().toLowerCase();
                   final category = (data['category'] ?? '').toString().toLowerCase();
 
@@ -451,7 +595,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         const SizedBox(height: 8),
                         Text(
                           widget.isAdmin ? "No items in inventory. Tap '+' to add." : "No items available in store.",
-                          style: const TextStyle(color: Color(0xFF94A3B8)),
+                          style: const TextStyle(color: Color(0xFF4B7A5E)),
                         ),
                       ],
                     ),
@@ -493,31 +637,35 @@ class _StoreScreenState extends State<StoreScreen> {
 
                           return GestureDetector(
                             onTap: () {
-                              ProductDetailScreen.showOverviewDialog(
-                                context,
-                                productId: prodId,
-                                productData: data,
-                                onAddToCart: (qty) {
-                                  setState(() {
-                                    _cart[prodId] = (_cart[prodId] ?? 0) + qty;
-                                  });
-                                },
-                                onBuyNow: (qty) {
-                                  setState(() {
-                                    _cart[prodId] = (_cart[prodId] ?? 0) + qty;
-                                  });
-                                  _showCartBottomSheet(_allDocs);
-                                },
-                              );
+                              if (widget.isAdmin) {
+                                _showEditProductDialog(prodId, data);
+                              } else {
+                                ProductDetailScreen.showOverviewDialog(
+                                  context,
+                                  productId: prodId,
+                                  productData: data,
+                                  onAddToCart: (qty) {
+                                    setState(() {
+                                      _cart[prodId] = (_cart[prodId] ?? 0) + qty;
+                                    });
+                                  },
+                                  onBuyNow: (qty) {
+                                    setState(() {
+                                      _cart[prodId] = (_cart[prodId] ?? 0) + qty;
+                                    });
+                                    _showCartBottomSheet(_allDocs);
+                                  },
+                                );
+                              }
                             },
                             child: Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0F172A),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: isLowStock && widget.isAdmin
                                       ? Colors.orangeAccent
-                                      : const Color(0xFF1E293B),
+                                      : const Color(0xFFBBF7D0),
                                   width: 1.2,
                                 ),
                                 boxShadow: [
@@ -537,7 +685,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                     child: Container(
                                       width: double.infinity,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF1E293B),
+                                        color: const Color(0xFFBBF7D0),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       clipBehavior: Clip.antiAlias,
@@ -549,11 +697,11 @@ class _StoreScreenState extends State<StoreScreen> {
                                                     imageUrl,
                                                     fit: BoxFit.cover,
                                                     errorBuilder: (_, __, ___) => const Center(
-                                                      child: Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF475569)),
+                                                      child: Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF86EFAC)),
                                                     ),
                                                   )
                                                 : const Center(
-                                                    child: Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF475569)),
+                                                    child: Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF86EFAC)),
                                                   ),
                                           ),
                                           // Stock Badge Top Right (matching screenshot)
@@ -608,7 +756,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                     name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, color: Colors.white),
+                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, color: Color(0xFF0F172A)),
                                   ),
                                   const SizedBox(height: 4),
 
@@ -618,14 +766,14 @@ class _StoreScreenState extends State<StoreScreen> {
                                     children: [
                                       const Text(
                                         "Available Stock:",
-                                        style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                                        style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E)),
                                       ),
                                       Text(
                                         "$stock pcs",
                                         style: TextStyle(
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.bold,
-                                          color: isLowStock ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
+                                          color: isLowStock ? const Color(0xFFF59E0B) : const Color(0xFF4B7A5E),
                                         ),
                                       ),
                                     ],
@@ -638,13 +786,13 @@ class _StoreScreenState extends State<StoreScreen> {
                                     children: [
                                       const Text(
                                         "Price:",
-                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E)),
                                       ),
                                       Text(
                                         price > 999999999
                                             ? "₱999,999.00"
                                             : "₱${price.toStringAsFixed(2)}",
-                                        style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13),
+                                        style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF14532D), fontSize: 13),
                                       ),
                                     ],
                                   ),
@@ -657,7 +805,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                       height: 32,
                                       child: ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF4F46E5),
+                                          backgroundColor: const Color(0xFF16A34A),
                                           foregroundColor: Colors.white,
                                           padding: EdgeInsets.zero,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -762,24 +910,24 @@ class _StoreScreenState extends State<StoreScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: const BoxDecoration(
-                        color: Color(0xFF0D1224),
-                        border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+                        color: Color(0xFFFFFFFF),
+                        border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
+                            icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF15803D)),
                             onPressed: _currentPage > 1
                                 ? () => setState(() => _currentPage--)
                                 : null,
                           ),
                           Text(
                             "Page $_currentPage of $totalPages (${filteredDocs.length} items)",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                            icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF15803D)),
                             onPressed: _currentPage < totalPages
                                 ? () => setState(() => _currentPage++)
                                 : null,
@@ -797,13 +945,15 @@ class _StoreScreenState extends State<StoreScreen> {
 
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton.extended(
-              backgroundColor: const Color(0xFF4F46E5),
+              backgroundColor: const Color(0xFF16A34A),
               foregroundColor: Colors.white,
               onPressed: _showAddProductDialog,
               icon: const Icon(Icons.add),
               label: const Text("Add New Product"),
             )
           : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      ),
     );
   }
 
@@ -812,13 +962,13 @@ class _StoreScreenState extends State<StoreScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 6.0),
       child: ChoiceChip(
-        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
+        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFF4B7A5E))),
         selected: isSelected,
-        selectedColor: const Color(0xFF4F46E5),
-        backgroundColor: const Color(0xFF0D1224),
+        selectedColor: const Color(0xFF16A34A),
+        backgroundColor: const Color(0xFFFFFFFF),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFF1E293B)),
+          side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFBBF7D0)),
         ),
         onSelected: (selected) {
           if (selected) {
@@ -862,9 +1012,9 @@ class _StoreScreenState extends State<StoreScreen> {
               maxHeight: MediaQuery.of(context).size.height * 0.85,
             ),
             decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
+              color: Color(0xFFF0FDF4),
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+              border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
             ),
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
             child: Column(
@@ -881,12 +1031,12 @@ class _StoreScreenState extends State<StoreScreen> {
                             fontWeight: FontWeight.bold,
                             color: Colors.white)),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                      icon: const Icon(Icons.close, color: Color(0xFF4B7A5E)),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
                 ),
-                const Divider(color: Color(0xFF1E293B)),
+                const Divider(color: Color(0xFFBBF7D0)),
 
                 // ── Cart Items ────────────────────────────────────────────
                 if (cartEntries.isEmpty)
@@ -894,7 +1044,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
                       child: Text("Your cart is empty.",
-                          style: TextStyle(color: Color(0xFF94A3B8))),
+                          style: TextStyle(color: Color(0xFF4B7A5E))),
                     ),
                   )
                 else
@@ -903,7 +1053,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       shrinkWrap: true,
                       itemCount: cartEntries.length,
                       separatorBuilder: (_, __) =>
-                          const Divider(color: Color(0xFF1E293B), height: 1),
+                          const Divider(color: Color(0xFFBBF7D0), height: 1),
                       itemBuilder: (_, i) {
                         final prodId = cartEntries[i].key;
                         final qty = cartEntries[i].value;
@@ -923,13 +1073,13 @@ class _StoreScreenState extends State<StoreScreen> {
                                   children: [
                                     Text(name,
                                         style: const TextStyle(
-                                            color: Colors.white,
+                                            color: Color(0xFF14532D),
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13)),
                                     const SizedBox(height: 2),
                                     Text("₱${price.toStringAsFixed(2)} each",
                                         style: const TextStyle(
-                                            color: Color(0xFF94A3B8),
+                                            color: Color(0xFF4B7A5E),
                                             fontSize: 11)),
                                   ],
                                 ),
@@ -946,13 +1096,13 @@ class _StoreScreenState extends State<StoreScreen> {
                                           }
                                         : null,
                                     child: const Icon(Icons.remove_circle_outline,
-                                        color: Color(0xFF818CF8), size: 20),
+                                        color: Color(0xFF15803D), size: 20),
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 8),
                                     child: Text("$qty",
                                         style: const TextStyle(
-                                            color: Colors.white,
+                                            color: Color(0xFF14532D),
                                             fontWeight: FontWeight.bold)),
                                   ),
                                   InkWell(
@@ -964,7 +1114,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                           }
                                         : null,
                                     child: const Icon(Icons.add_circle_outline,
-                                        color: Color(0xFF818CF8), size: 20),
+                                        color: Color(0xFF15803D), size: 20),
                                   ),
                                 ],
                               ),
@@ -976,7 +1126,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                   "₱${(price * qty).toStringAsFixed(2)}",
                                   textAlign: TextAlign.right,
                                   style: const TextStyle(
-                                      color: Color(0xFF38BDF8),
+                                      color: Color(0xFF15803D),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13),
                                 ),
@@ -997,12 +1147,12 @@ class _StoreScreenState extends State<StoreScreen> {
                     ),
                   ),
 
-                const Divider(color: Color(0xFF1E293B)),
+                const Divider(color: Color(0xFFBBF7D0)),
 
                 // ── Payment Method ────────────────────────────────────────
                 const Text("Payment Method",
                     style: TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF14532D),
                         fontWeight: FontWeight.bold,
                         fontSize: 13)),
                 const SizedBox(height: 8),
@@ -1017,10 +1167,10 @@ class _StoreScreenState extends State<StoreScreen> {
                               fontSize: 11,
                               color: selected
                                   ? Colors.white
-                                  : const Color(0xFF94A3B8))),
+                                  : const Color(0xFF4B7A5E))),
                       selected: selected,
-                      selectedColor: const Color(0xFF4F46E5),
-                      backgroundColor: const Color(0xFF1E293B),
+                      selectedColor: const Color(0xFF16A34A),
+                      backgroundColor: const Color(0xFFBBF7D0),
                       onSelected: (_) {
                         setBottomSheetState(
                             () => _selectedPaymentMethod = method);
@@ -1037,12 +1187,12 @@ class _StoreScreenState extends State<StoreScreen> {
                   children: [
                     const Text("Order Total",
                         style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF14532D),
                             fontWeight: FontWeight.bold,
                             fontSize: 15)),
                     Text("₱${total.toStringAsFixed(2)}",
                         style: const TextStyle(
-                            color: Color(0xFF38BDF8),
+                            color: Color(0xFF15803D),
                             fontWeight: FontWeight.bold,
                             fontSize: 18)),
                   ],
@@ -1055,8 +1205,8 @@ class _StoreScreenState extends State<StoreScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cartEntries.isEmpty
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFF4F46E5),
+                          ? const Color(0xFFBBF7D0)
+                          : const Color(0xFF16A34A),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
@@ -1064,17 +1214,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     ),
                     onPressed: cartEntries.isEmpty
                         ? null
-                        : () {
-                            setState(() => _cart.clear());
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    "Order successfully placed! Thank you."),
-                                backgroundColor: Color(0xFF10B981),
-                              ),
-                            );
-                          },
+                        : () => _checkoutCart(ctx, cartEntries, total),
                     child: const Text("Checkout Order",
                         style: TextStyle(fontWeight: FontWeight.bold)),
                   ),

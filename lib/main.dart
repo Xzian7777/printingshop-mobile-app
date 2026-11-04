@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'screens/home_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/fcm_service.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
     await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   } catch (e) {
     debugPrint("Firebase initialization error: $e");
   }
@@ -17,12 +22,25 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize FCM notification services with the root navigatorKey
+    FcmService().initialize(navigatorKey);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Kez C-Em Zek Printing Shop',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -48,6 +66,11 @@ class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   Future<Map<String, dynamic>> _fetchUserRole(User user) async {
+    // Automatically register/update customer's device FCM push token in Firestore
+    if (user.email != null && user.email!.isNotEmpty) {
+      FcmService().registerUserToken(user.email!);
+    }
+
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')

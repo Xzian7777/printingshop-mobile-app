@@ -1,18 +1,26 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math' as math;
+
+/// Returns safe Firestore conversation document ID matching Flask backend:
+/// re.sub(r'[^a-zA-Z0-9]', '_', email.strip().lower()) -> f"conv_{safe_email}"
+String getSafeConversationId(String email) {
+  if (email.isEmpty) return 'conv_general';
+  final safeEmail = email.trim().toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+  return 'conv_$safeEmail';
+}
 
 // ---------------------------------------------------------------------------
-// Data model for a merged customer + optional chat row
+// Data model for a merged customer + optional conversation row
 // ---------------------------------------------------------------------------
 class _CustomerChatEntry {
   final String uid;
   final String fullName;
   final String email;
-  final String customerId; // email prefix used as chat doc ID
-  // Chat data (null = no conversation exists yet)
+  final String convId; // conv_{safe_email}
   final String? lastMessage;
-  final Timestamp? lastUpdated;
+  final String? lastMessageAt;
   final bool hasUnread;
   final bool hasChat;
 
@@ -20,16 +28,16 @@ class _CustomerChatEntry {
     required this.uid,
     required this.fullName,
     required this.email,
-    required this.customerId,
+    required this.convId,
     this.lastMessage,
-    this.lastUpdated,
+    this.lastMessageAt,
     this.hasUnread = false,
     this.hasChat = false,
   });
 }
 
 // ---------------------------------------------------------------------------
-// AdminLiveChatView — shows all registered customers with optional chat data
+// AdminLiveChatView — shows all registered customers with real conversations
 // ---------------------------------------------------------------------------
 class AdminLiveChatView extends StatefulWidget {
   const AdminLiveChatView({super.key});
@@ -46,27 +54,23 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
 
   // Live streams
   StreamSubscription<QuerySnapshot>? _usersSub;
-  StreamSubscription<QuerySnapshot>? _chatsSub;
+  StreamSubscription<QuerySnapshot>? _convsSub;
 
   List<Map<String, dynamic>> _users = [];
-  Map<String, Map<String, dynamic>> _chatsById = {}; // keyed by customerId
+  Map<String, Map<String, dynamic>> _convsByEmail = {}; // keyed by clean email
 
   bool _usersLoaded = false;
-  bool _chatsLoaded = false;
+  bool _convsLoaded = false;
   String? _error;
 
-  final CollectionReference _chatsRef = FirebaseFirestore.instance
-      .collection('artifacts')
-      .doc('printcraft-pro')
-      .collection('public')
-      .doc('data')
-      .collection('chats');
+  final CollectionReference _conversationsRef =
+      FirebaseFirestore.instance.collection('conversations');
 
   @override
   void initState() {
     super.initState();
     _subscribeUsers();
-    _subscribeChats();
+    _subscribeConversations();
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
     });
@@ -75,7 +79,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
   @override
   void dispose() {
     _usersSub?.cancel();
-    _chatsSub?.cancel();
+    _convsSub?.cancel();
     _searchController.dispose();
     _replyController.dispose();
     super.dispose();
@@ -91,7 +95,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
         if (!mounted) return;
         setState(() {
           _users = snap.docs.map((d) {
-            final data = d.data() as Map<String, dynamic>;
+            final data = d.data();
             return {
               'uid': d.id,
               'full_name': (data['full_name'] ?? data['displayName'] ?? '').toString(),
@@ -103,33 +107,37 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
       },
       onError: (e) {
         if (!mounted) return;
-        setState(() => _error = 'Failed to load customers: $e');
+        setState(() {
+          _error = 'Error loading customer users: $e';
+          _usersLoaded = true;
+        });
       },
     );
   }
 
-  void _subscribeChats() {
-    _chatsSub = _chatsRef
-        .orderBy('lastUpdated', descending: true)
-        .snapshots()
-        .listen(
+  void _subscribeConversations() {
+    _convsSub = _conversationsRef.snapshots().listen(
       (snap) {
         if (!mounted) return;
         final map = <String, Map<String, dynamic>>{};
         for (final doc in snap.docs) {
-          map[doc.id] = {
-            ...(doc.data() as Map<String, dynamic>),
-            '_docId': doc.id,
-          };
+          final data = doc.data() as Map<String, dynamic>;
+          final cEmail = (data['customerEmail'] ?? '').toString().trim().toLowerCase();
+          if (cEmail.isNotEmpty) {
+            map[cEmail] = {
+              ...data,
+              '_docId': doc.id,
+            };
+          }
         }
         setState(() {
-          _chatsById = map;
-          _chatsLoaded = true;
+          _convsByEmail = map;
+          _convsLoaded = true;
         });
       },
       onError: (_) {
         if (!mounted) return;
-        setState(() => _chatsLoaded = true); // still show customers even if chats fail
+        setState(() => _convsLoaded = true);
       },
     );
   }
@@ -137,27 +145,57 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
   // Build merged, sorted, filtered list
   List<_CustomerChatEntry> _buildEntries() {
     final entries = <_CustomerChatEntry>[];
+    final seenEmails = <String>{};
 
     for (final u in _users) {
-      final email = u['email'] as String;
-      final customerId = email.contains('@') ? email.split('@').first : email;
-      final chatData = _chatsById[customerId];
+      final email = (u['email'] as String).trim().toLowerCase();
+      if (email.isEmpty) continue;
+      seenEmails.add(email);
+
+      final convData = _convsByEmail[email];
+      final convId = convData?['_docId'] as String? ?? getSafeConversationId(email);
 
       final fullName = (u['full_name'] as String).isNotEmpty
           ? u['full_name'] as String
-          : customerId;
+          : (convData?['customerName'] ?? email.split('@').first).toString();
+
+      final lastMsg = convData?['lastMessage'] as String?;
+      final lastMsgAt = (convData?['lastMessageAt'] ?? convData?['updatedAt']) as String?;
+      final unreadAdmin = (convData?['unreadCountAdmin'] as num? ?? 0) > 0 || convData?['unread'] == true;
+      final hasChat = lastMsg != null && lastMsg.isNotEmpty;
 
       entries.add(_CustomerChatEntry(
         uid: u['uid'] as String,
         fullName: fullName,
         email: email,
-        customerId: customerId,
-        lastMessage: chatData?['lastMessage'] as String?,
-        lastUpdated: chatData?['lastUpdated'] as Timestamp?,
-        hasUnread: chatData?['unread'] == true,
-        hasChat: chatData != null,
+        convId: convId,
+        lastMessage: lastMsg,
+        lastMessageAt: lastMsgAt,
+        hasUnread: unreadAdmin,
+        hasChat: hasChat,
       ));
     }
+
+    // Also include any conversation present in Firestore that might not have a mobile users doc
+    _convsByEmail.forEach((cEmail, convData) {
+      if (!seenEmails.contains(cEmail)) {
+        final lastMsg = convData['lastMessage'] as String?;
+        final lastMsgAt = (convData['lastMessageAt'] ?? convData['updatedAt']) as String?;
+        final unreadAdmin = (convData['unreadCountAdmin'] as num? ?? 0) > 0 || convData['unread'] == true;
+        final hasChat = lastMsg != null && lastMsg.isNotEmpty;
+
+        entries.add(_CustomerChatEntry(
+          uid: convData['customerId']?.toString() ?? cEmail,
+          fullName: (convData['customerName'] ?? cEmail.split('@').first).toString(),
+          email: cEmail,
+          convId: (convData['_docId'] ?? getSafeConversationId(cEmail)).toString(),
+          lastMessage: lastMsg,
+          lastMessageAt: lastMsgAt,
+          hasUnread: unreadAdmin,
+          hasChat: hasChat,
+        ));
+      }
+    });
 
     // Apply search filter
     final filtered = _searchQuery.isEmpty
@@ -167,11 +205,11 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 e.email.toLowerCase().contains(_searchQuery);
           }).toList();
 
-    // Sort: customers with chats first (by lastUpdated desc), then no-chat customers (by name asc)
+    // Sort: customers with chats first (by lastMessageAt desc), then no-chat customers (by name asc)
     final withChat = filtered.where((e) => e.hasChat).toList()
       ..sort((a, b) {
-        final at = a.lastUpdated?.millisecondsSinceEpoch ?? 0;
-        final bt = b.lastUpdated?.millisecondsSinceEpoch ?? 0;
+        final at = a.lastMessageAt ?? '';
+        final bt = b.lastMessageAt ?? '';
         return bt.compareTo(at);
       });
 
@@ -181,17 +219,21 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
     return [...withChat, ...withoutChat];
   }
 
-  // Format relative timestamp
-  String _formatTime(Timestamp? ts) {
-    if (ts == null) return '';
-    final dt = ts.toDate();
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
+  // Format relative timestamp from ISO String
+  String _formatTime(String? isoStr) {
+    if (isoStr == null || isoStr.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(isoStr);
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inMinutes < 1) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {
+      return '';
+    }
   }
 
   // Initials avatar
@@ -207,6 +249,12 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
   void _openConversation(_CustomerChatEntry entry) {
     _replyController.clear();
 
+    // Mark as read when admin opens conversation
+    _conversationsRef.doc(entry.convId).set({
+      'unreadCountAdmin': 0,
+      'unread': false,
+    }, SetOptions(merge: true)).catchError((_) {});
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -217,9 +265,9 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
           child: Container(
             height: MediaQuery.of(ctx).size.height * 0.80,
             decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
+              color: Color(0xFFF0FDF4),
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+              border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
             ),
             child: Column(
               children: [
@@ -227,17 +275,17 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
                   decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Color(0xFF1E293B))),
+                    border: Border(bottom: BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: const Color(0xFF312E81),
+                        backgroundColor: const Color(0xFF166534),
                         child: Text(
                           _initials(entry.fullName),
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF14532D),
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -251,7 +299,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                             Text(
                               entry.fullName,
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: Color(0xFF14532D),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -259,7 +307,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                             Text(
                               entry.email,
                               style: const TextStyle(
-                                color: Color(0xFF64748B),
+                                color: Color(0xFF4B7A5E),
                                 fontSize: 10.5,
                               ),
                             ),
@@ -267,7 +315,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                        icon: const Icon(Icons.close, color: Color(0xFF4B7A5E)),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -277,10 +325,9 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 // ── Messages stream ──
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
-                    stream: _chatsRef
-                        .doc(entry.customerId)
+                    stream: _conversationsRef
+                        .doc(entry.convId)
                         .collection('messages')
-                        .orderBy('timestamp', descending: true)
                         .snapshots(),
                     builder: (context, snap) {
                       if (snap.hasError) {
@@ -292,12 +339,22 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                         );
                       }
                       if (!snap.hasData) {
-                        return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
                       }
 
-                      final msgs = snap.data!.docs;
+                      final rawDocs = snap.data!.docs;
 
-                      if (msgs.isEmpty) {
+                      // Sort ascending so newest messages are at the bottom of ListView (reverse: true)
+                      final sortedDocs = List<QueryDocumentSnapshot>.from(rawDocs)
+                        ..sort((a, b) {
+                          final da = a.data() as Map<String, dynamic>;
+                          final db = b.data() as Map<String, dynamic>;
+                          final ta = (da['createdAt'] ?? da['timestamp'] ?? '').toString();
+                          final tb = (db['createdAt'] ?? db['timestamp'] ?? '').toString();
+                          return tb.compareTo(ta);
+                        });
+
+                      if (sortedDocs.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -305,20 +362,20 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                               Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
                                   Icons.chat_bubble_outline_rounded,
                                   size: 36,
-                                  color: Color(0xFF818CF8),
+                                  color: Color(0xFF15803D),
                                 ),
                               ),
                               const SizedBox(height: 12),
                               Text(
                                 'Start a conversation with ${entry.fullName}',
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFF14532D),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -327,7 +384,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                               const SizedBox(height: 6),
                               const Text(
                                 'Send a message below to begin chatting.',
-                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11),
                                 textAlign: TextAlign.center,
                               ),
                             ],
@@ -335,18 +392,17 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                         );
                       }
 
-                      // Mark as read when admin opens conversation
-                      _chatsRef.doc(entry.customerId).update({'unread': false}).catchError((_) {});
-
                       return ListView.builder(
                         reverse: true,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        itemCount: msgs.length,
+                        itemCount: sortedDocs.length,
                         itemBuilder: (context, i) {
-                          final mData = msgs[i].data() as Map<String, dynamic>;
-                          final isAdmin = mData['sender'] == 'admin';
-                          final text = (mData['text'] ?? '').toString();
+                          final mData = sortedDocs[i].data() as Map<String, dynamic>;
+                          final senderRole = (mData['senderRole'] ?? mData['sender'] ?? 'customer').toString().toLowerCase();
+                          final isAdmin = senderRole == 'admin' || senderRole == 'staff';
+                          final text = (mData['text'] ?? mData['message'] ?? '').toString();
                           final timeStr = (mData['time'] ?? '').toString();
+                          final senderName = (mData['senderName'] ?? (isAdmin ? 'You (Staff)' : entry.fullName)).toString();
 
                           return Align(
                             alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
@@ -364,8 +420,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
                                       color: isAdmin
-                                          ? const Color(0xFF4F46E5)
-                                          : const Color(0xFF1E293B),
+                                          ? const Color(0xFF16A34A)
+                                          : const Color(0xFFBBF7D0),
                                       borderRadius: BorderRadius.only(
                                         topLeft: const Radius.circular(16),
                                         topRight: const Radius.circular(16),
@@ -378,15 +434,15 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                                     ),
                                     child: Text(
                                       text,
-                                      style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.4),
+                                      style: const TextStyle(color: Color(0xFF14532D), fontSize: 12.5, height: 1.4),
                                     ),
                                   ),
                                   if (timeStr.isNotEmpty)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 3, left: 4, right: 4),
                                       child: Text(
-                                        '${isAdmin ? 'You' : entry.fullName} • $timeStr',
-                                        style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B)),
+                                        '$senderName • $timeStr',
+                                        style: const TextStyle(fontSize: 9.5, color: Color(0xFF4B7A5E)),
                                       ),
                                     ),
                                 ],
@@ -403,27 +459,27 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
                   decoration: const BoxDecoration(
-                    color: Color(0xFF0F172A),
-                    border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+                    color: Color(0xFFF0FDF4),
+                    border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF070A14),
+                            color: const Color(0xFFF8FFF9),
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFF1E293B)),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
                           ),
                           child: TextField(
                             controller: _replyController,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                             maxLines: 4,
                             minLines: 1,
                             textCapitalization: TextCapitalization.sentences,
                             decoration: const InputDecoration(
                               hintText: 'Type your reply...',
-                              hintStyle: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              hintStyle: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
                               contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               border: InputBorder.none,
                             ),
@@ -437,19 +493,19 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                         height: 42,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                            colors: [Color(0xFF16A34A), Color(0xFF16A34A)],
                           ),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                              color: const Color(0xFF16A34A).withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                          icon: const Icon(Icons.send_rounded, color: Color(0xFF14532D), size: 18),
                           onPressed: () => _sendReply(entry),
                         ),
                       ),
@@ -474,22 +530,38 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
     final minute = now.minute.toString().padLeft(2, '0');
     final period = now.hour >= 12 ? 'PM' : 'AM';
     final timeStr = '$hour:$minute $period';
+    final nowIso = now.toIso8601String();
 
     try {
-      final chatDoc = _chatsRef.doc(entry.customerId);
+      final convDoc = _conversationsRef.doc(entry.convId);
+      final msgId = 'msg_${now.millisecondsSinceEpoch}_${math.Random().nextInt(999999).toString().padLeft(6, '0')}';
 
-      await chatDoc.collection('messages').add({
-        'sender': 'admin',
+      await convDoc.collection('messages').doc(msgId).set({
+        'id': msgId,
+        'conversationId': entry.convId,
+        'senderId': 'admin@kczprint.com',
+        'senderRole': 'admin',
+        'senderName': 'Staff',
+        'sender': 'admin', // compatibility
+        'message': txt,
         'text': txt,
         'time': timeStr,
-        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': nowIso,
+        'timestamp': nowIso,
+        'read': false,
       });
 
-      await chatDoc.set({
+      await convDoc.set({
+        'id': entry.convId,
         'customerName': entry.fullName,
-        'email': entry.email,
-        'lastMessage': 'Admin: $txt',
-        'lastUpdated': FieldValue.serverTimestamp(),
+        'customerEmail': entry.email,
+        'lastMessage': txt.length > 120 ? txt.substring(0, 120) : txt,
+        'lastMessageSender': 'admin',
+        'lastMessageSenderName': 'Staff',
+        'lastMessageAt': nowIso,
+        'updatedAt': nowIso,
+        'unreadCountAdmin': 0,
+        'unreadCountCustomer': FieldValue.increment(1),
         'unread': false,
         'customerUnread': true,
       }, SetOptions(merge: true));
@@ -518,8 +590,24 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
               const SizedBox(height: 12),
               Text(
                 _error!,
-                style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 12),
+                style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 13),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _error = null;
+                    _usersLoaded = false;
+                    _convsLoaded = false;
+                  });
+                  _subscribeUsers();
+                  _subscribeConversations();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                ),
+                child: const Text('Retry', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -528,242 +616,263 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
     }
 
     // ── Loading state ──
-    if (!_usersLoaded || !_chatsLoaded) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    if (!_usersLoaded || !_convsLoaded) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
     }
 
     final entries = _buildEntries();
-    final withChatCount = entries.where((e) => e.hasChat).length;
-    final withoutChatCount = entries.where((e) => !e.hasChat).length;
 
     return Column(
       children: [
-        // ── Search bar ──
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0D1224),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF1E293B)),
-            ),
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(
-                hintText: 'Search by name or email...',
-                hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
-                prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
+        // ── Search & Header bar ──
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF0FDF4),
+            border: Border(bottom: BorderSide(color: Color(0xFFBBF7D0))),
           ),
-        ),
-
-        // ── Stats chips ──
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
+          child: Column(
             children: [
-              _statChip('${entries.length} Customers', const Color(0xFF1E293B), Colors.white),
-              const SizedBox(width: 8),
-              _statChip('$withChatCount Active', const Color(0xFF312E81), const Color(0xFF818CF8)),
-              const SizedBox(width: 8),
-              _statChip('$withoutChatCount New', const Color(0xFF0D2211), const Color(0xFF34D399)),
+              Row(
+                children: [
+                  const Icon(Icons.forum_rounded, color: Color(0xFF15803D), size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Live Customer Chat',
+                    style: TextStyle(
+                      color: Color(0xFF14532D),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16A34A).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      '${entries.length} registered',
+                      style: const TextStyle(
+                        color: Color(0xFF15803D),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _searchController,
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search customer name or email...',
+                  hintStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF4B7A5E), size: 18),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, color: Color(0xFF4B7A5E), size: 16),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF8FFF9),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF16A34A)),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
 
-        // ── Customer list ──
+        // ── Customer List ──
         Expanded(
           child: entries.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.person_search_rounded, size: 44, color: Color(0xFF64748B)),
+                      Icon(
+                        _searchQuery.isNotEmpty ? Icons.search_off : Icons.people_outline,
+                        color: const Color(0xFF86EFAC),
+                        size: 44,
+                      ),
                       const SizedBox(height: 12),
                       Text(
-                        _searchQuery.isEmpty ? 'No registered customers yet.' : 'No customers match "$_searchQuery".',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                        textAlign: TextAlign.center,
+                        _searchQuery.isNotEmpty
+                            ? 'No customers match "$_searchQuery"'
+                            : 'No registered customers found.',
+                        style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 13),
                       ),
                     ],
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: entries.length,
+                  separatorBuilder: (_, __) => const Divider(
+                    height: 1,
+                    color: Color(0xFF111827),
+                    indent: 68,
+                  ),
                   itemBuilder: (context, index) {
                     final entry = entries[index];
+                    final timeText = _formatTime(entry.lastMessageAt);
 
-                    // Section headers
-                    final showActiveHeader = index == 0 && entry.hasChat;
-                    final showNewHeader = !entry.hasChat &&
-                        (index == 0 || entries[index - 1].hasChat);
+                    return InkWell(
+                      onTap: () => _openConversation(entry),
+                      splashColor: const Color(0xFF16A34A).withValues(alpha: 0.1),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          children: [
+                            // ── Avatar ──
+                            Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: entry.hasChat
+                                      ? const Color(0xFF166534)
+                                      : const Color(0xFFBBF7D0),
+                                  child: Text(
+                                    _initials(entry.fullName),
+                                    style: TextStyle(
+                                      color: entry.hasChat
+                                          ? const Color(0xFF15803D)
+                                          : const Color(0xFF4B7A5E),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                if (entry.hasUnread)
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFF43F5E),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(width: 12),
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (showActiveHeader) ...[
-                          _sectionHeader('Active Conversations', Icons.chat_bubble_rounded, const Color(0xFF818CF8)),
-                          const SizedBox(height: 8),
-                        ],
-                        if (showNewHeader) ...[
-                          if (withChatCount > 0) const SizedBox(height: 6),
-                          _sectionHeader('All Customers', Icons.people_rounded, const Color(0xFF34D399)),
-                          const SizedBox(height: 8),
-                        ],
-                        _buildCustomerTile(entry),
-                        const SizedBox(height: 8),
-                      ],
+                            // ── Name & Last message / No messages yet ──
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          entry.fullName,
+                                          style: TextStyle(
+                                            color: Color(0xFF14532D),
+                                            fontWeight: entry.hasUnread
+                                                ? FontWeight.bold
+                                                : FontWeight.w600,
+                                            fontSize: 13.5,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (timeText.isNotEmpty)
+                                        Text(
+                                          timeText,
+                                          style: TextStyle(
+                                            color: entry.hasUnread
+                                                ? const Color(0xFF15803D)
+                                                : const Color(0xFF86EFAC),
+                                            fontSize: 10,
+                                            fontWeight: entry.hasUnread
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          entry.hasChat
+                                              ? (entry.lastMessage ?? '')
+                                              : 'No messages yet',
+                                          style: TextStyle(
+                                            color: entry.hasChat
+                                                ? (entry.hasUnread
+                                                    ? Colors.white
+                                                    : const Color(0xFF4B7A5E))
+                                                : const Color(0xFF86EFAC),
+                                            fontSize: 11.5,
+                                            fontStyle: entry.hasChat
+                                                ? FontStyle.normal
+                                                : FontStyle.italic,
+                                            fontWeight: entry.hasUnread
+                                                ? FontWeight.w600
+                                                : FontWeight.normal,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (entry.hasUnread)
+                                        Container(
+                                          margin: const EdgeInsets.only(left: 6),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF43F5E),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            'NEW',
+                                            style: TextStyle(
+                                              color: Color(0xFF14532D),
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   },
                 ),
         ),
       ],
-    );
-  }
-
-  Widget _sectionHeader(String title, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _statChip(String label, Color bg, Color fg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label, style: TextStyle(color: fg, fontSize: 10.5, fontWeight: FontWeight.w600)),
-    );
-  }
-
-  Widget _buildCustomerTile(_CustomerChatEntry entry) {
-    final initials = _initials(entry.fullName);
-    final hasUnread = entry.hasUnread;
-
-    return GestureDetector(
-      onTap: () => _openConversation(entry),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF0D1224),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: hasUnread
-                ? const Color(0xFFF43F5E)
-                : entry.hasChat
-                    ? const Color(0xFF1E3A5F)
-                    : const Color(0xFF1E293B),
-            width: hasUnread ? 1.5 : 1.0,
-          ),
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: entry.hasChat
-                    ? const Color(0xFF312E81)
-                    : const Color(0xFF1E293B),
-                child: Text(
-                  initials,
-                  style: TextStyle(
-                    color: entry.hasChat ? const Color(0xFFA5B4FC) : const Color(0xFF64748B),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              if (hasUnread)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF43F5E),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF0D1224), width: 1.5),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  entry.fullName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (entry.lastUpdated != null)
-                Text(
-                  _formatTime(entry.lastUpdated),
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
-                ),
-            ],
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 2),
-              if (entry.hasChat)
-                Text(
-                  entry.lastMessage ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: hasUnread ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
-                    fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                )
-              else
-                Row(
-                  children: const [
-                    Icon(Icons.add_comment_outlined, size: 11, color: Color(0xFF34D399)),
-                    SizedBox(width: 4),
-                    Text(
-                      'No messages yet',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF34D399)),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 2),
-              Text(
-                entry.email,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF475569)),
-              ),
-            ],
-          ),
-          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF475569), size: 20),
-        ),
-      ),
     );
   }
 }

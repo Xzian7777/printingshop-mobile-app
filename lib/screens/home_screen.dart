@@ -32,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
 
     return Scaffold(
-      backgroundColor: const Color(0xFF070A14),
+      backgroundColor: const Color(0xFFF8FFF9),
       body: Stack(
         children: [
           // Ambient Glow Background
@@ -46,8 +46,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF3B82F6).withValues(alpha: 0.18),
-                    const Color(0xFF6366F1).withValues(alpha: 0.08),
+                    const Color(0xFF22C55E).withValues(alpha: 0.18),
+                    const Color(0xFF16A34A).withValues(alpha: 0.08),
                     Colors.transparent,
                   ],
                 ),
@@ -64,8 +64,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF4F46E5).withValues(alpha: 0.12),
-                    const Color(0xFF06B6D4).withValues(alpha: 0.05),
+                    const Color(0xFF16A34A).withValues(alpha: 0.12),
+                    const Color(0xFF34D399).withValues(alpha: 0.05),
                     Colors.transparent,
                   ],
                 ),
@@ -93,31 +93,28 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               width: 34,
                               height: 34,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF3B82F6), Color(0xFF6366F1)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFBBF7D0)),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF4F46E5).withValues(alpha: 0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
+                                    color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
-                              child: const Icon(
-                                Icons.print_rounded,
-                                color: Colors.white,
-                                size: 20,
+                              padding: const EdgeInsets.all(2),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.asset('assets/images/kcz_logo.jpg', fit: BoxFit.contain),
                               ),
                             ),
                             const SizedBox(width: 10),
                             const Text(
                               'KCZ Printing',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Color(0xFF0F172A),
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.5,
@@ -137,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 );
                               },
                               style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFFE2E8F0),
+                                foregroundColor: const Color(0xFF14532D),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               ),
                               child: const Text(
@@ -157,14 +154,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 );
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4F46E5),
+                                backgroundColor: const Color(0xFF16A34A),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(22),
                                 ),
-                                shadowColor: const Color(0xFF4F46E5).withValues(alpha: 0.5),
+                                shadowColor: const Color(0xFF16A34A).withValues(alpha: 0.5),
                               ),
                               child: const Text(
                                 'Sign up',
@@ -191,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           'Elevate Your\nPrinting Experience',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF0F172A),
                             fontSize: 34,
                             fontWeight: FontWeight.w900,
                             letterSpacing: -0.5,
@@ -205,8 +202,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             'Unlock your printing potential in a fully connected environment, powered by Kez C-Em Zek Printing Shop',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Color(0xFF94A3B8),
+                              color: Color(0xFF334155),
                               fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
                               height: 1.5,
                             ),
                           ),
@@ -225,15 +223,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       alignment: Alignment.center,
                       clipBehavior: Clip.none,
                       children: [
-                        // Animated Futuristic Wireframe Sphere
-                        AnimatedBuilder(
-                          animation: _animController,
-                          builder: (context, child) {
-                            return CustomPaint(
-                              size: const Size(360, 280),
-                              painter: _FuturisticSpherePainter(progress: _animController.value),
-                            );
-                          },
+                        // Centered KCZ App Logo
+                        Center(
+                          child: Container(
+                            width: 175,
+                            height: 175,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(32),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF16A34A).withValues(alpha: 0.20),
+                                  blurRadius: 30,
+                                  spreadRadius: 2,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(12),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(22),
+                              child: Image.asset(
+                                'assets/images/kcz_logo.jpg',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
                         ),
 
                         // Center Top Pill: "Sign Up & Print"
@@ -258,13 +273,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 );
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF0F172A),
+                                backgroundColor: const Color(0xFF16A34A),
+                                foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(30),
                                 ),
-                                elevation: 0,
+                                elevation: 4,
+                                shadowColor: const Color(0xFF16A34A).withValues(alpha: 0.4),
                               ),
                               child: const Text(
                                 'Sign Up & Print',
@@ -272,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   fontWeight: FontWeight.w800,
                                   fontSize: 13.5,
                                   letterSpacing: 0.2,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
@@ -294,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     const Text(
                                       'Print Services',
                                       style: TextStyle(
-                                        color: Color(0xFF94A3B8),
+                                        color: Color(0xFF4B7A5E),
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -328,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 const Text(
                                   '100% Guaranteed',
                                   style: TextStyle(
-                                    color: Color(0xFF38BDF8),
+                                    color: Color(0xFF4ADE80),
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -354,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     const Text(
                                       'Order Tracking',
                                       style: TextStyle(
-                                        color: Color(0xFF94A3B8),
+                                        color: Color(0xFF4B7A5E),
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -398,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     child: Container(
                                       decoration: BoxDecoration(
                                         gradient: const LinearGradient(
-                                          colors: [Color(0xFF818CF8), Color(0xFFEC4899)],
+                                          colors: [Color(0xFF4ADE80), Color(0xFF22C55E)],
                                         ),
                                         borderRadius: BorderRadius.circular(2),
                                       ),
@@ -424,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         const Text(
                           'PLATFORM CAPABILITIES',
                           style: TextStyle(
-                            color: Color(0xFF6366F1),
+                            color: Color(0xFF16A34A),
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.5,
@@ -434,7 +451,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         const Text(
                           'Everything you need for hassle-free printing',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF0F172A),
                             fontSize: 19,
                             fontWeight: FontWeight.bold,
                           ),
@@ -469,12 +486,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
+                        colors: [Color(0xFF16A34A), Color(0xFF14532D)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF312E81)),
+                      border: Border.all(color: const Color(0xFF166534)),
                     ),
                     child: Column(
                       children: [
@@ -492,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           'Create an account in less than a minute with safe OTP email verification.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Color(0xFF94A3B8),
+                            color: Color(0xFFBBF7D0),
                             fontSize: 12.5,
                           ),
                         ),
@@ -508,7 +525,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 );
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4F46E5),
+                                backgroundColor: const Color(0xFF16A34A),
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                                 shape: RoundedRectangleBorder(
@@ -527,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
-                                side: const BorderSide(color: Color(0xFF475569)),
+                                side: const BorderSide(color: Color(0xFF86EFAC)),
                                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20),
@@ -548,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     padding: EdgeInsets.only(bottom: 24),
                     child: Text(
                       '© 2026 Kez C-Em Zek Printing Shop. All rights reserved.',
-                      style: TextStyle(color: Color(0xFF475569), fontSize: 11),
+                      style: TextStyle(color: Color(0xFF86EFAC), fontSize: 11),
                     ),
                   ),
                 ],
@@ -565,7 +582,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       width: width,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224).withValues(alpha: 0.85),
+        color: const Color(0xFFFFFFFF).withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
         boxShadow: [
@@ -588,9 +605,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,11 +615,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF4F46E5).withValues(alpha: 0.15),
+              color: const Color(0xFF16A34A).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
+              border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3)),
             ),
-            child: Icon(icon, color: const Color(0xFF818CF8), size: 22),
+            child: Icon(icon, color: const Color(0xFF4ADE80), size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -621,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Text(
                   desc,
                   style: const TextStyle(
-                    color: Color(0xFF94A3B8),
+                    color: Color(0xFF4B7A5E),
                     fontSize: 12,
                     height: 1.4,
                   ),
@@ -647,18 +664,18 @@ class _FuturisticSpherePainter extends CustomPainter {
     final radiusY = size.height * 0.38;
 
     final paintGlow = Paint()
-      ..color = const Color(0xFF3B82F6).withValues(alpha: 0.25)
+      ..color = const Color(0xFF22C55E).withValues(alpha: 0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
     final paintStroke = Paint()
-      ..color = const Color(0xFF4F46E5).withValues(alpha: 0.65)
+      ..color = const Color(0xFF16A34A).withValues(alpha: 0.65)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     final paintHighlight = Paint()
-      ..color = const Color(0xFF60A5FA).withValues(alpha: 0.8)
+      ..color = const Color(0xFF86EFAC).withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
 
@@ -666,7 +683,7 @@ class _FuturisticSpherePainter extends CustomPainter {
     final auraPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFF4338CA).withValues(alpha: 0.20),
+          const Color(0xFF15803D).withValues(alpha: 0.20),
           const Color(0xFF1D4ED8).withValues(alpha: 0.08),
           Colors.transparent,
         ],

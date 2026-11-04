@@ -72,11 +72,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ..subject = subjectText
       ..html = '''
         <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0b0f19; color: #ffffff; border-radius: 12px; border: 1px solid #1e293b;">
-          <h2 style="color: #6366f1; margin-top: 0;">Kez C-Em Zek Printing Shop</h2>
+          <h2 style="color: #16a34a; margin-top: 0;">Kez C-Em Zek Printing Shop</h2>
           <p style="color: #cbd5e1;">Hello,</p>
           <p style="color: #cbd5e1;">Your 6-digit account verification code is:</p>
           <div style="background-color: #111827; padding: 14px 24px; border-radius: 8px; display: inline-block; margin: 12px 0;">
-            <h1 style="color: #38bdf8; letter-spacing: 6px; margin: 0; font-size: 32px;">$otpCode</h1>
+            <h1 style="color: #4ade80; letter-spacing: 6px; margin: 0; font-size: 32px;">$otpCode</h1>
           </div>
           <p style="color: #94a3b8; font-size: 12px;">This code will expire in 5 minutes. If you did not request this, please ignore this email.</p>
         </div>
@@ -251,7 +251,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Icon(
             isMet ? Icons.check_circle_rounded : Icons.cancel_rounded,
             size: 15,
-            color: isMet ? const Color(0xFF10B981) : const Color(0xFF64748B),
+            color: isMet ? const Color(0xFF10B981) : const Color(0xFF4B7A5E),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -259,7 +259,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               text,
               style: TextStyle(
                 fontSize: 11.5,
-                color: isMet ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
+                color: isMet ? const Color(0xFF14532D) : const Color(0xFF4B7A5E),
                 fontWeight: isMet ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -305,18 +305,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: const TextStyle(fontSize: 13, color: Colors.white),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF4B7A5E)),
             counterText: '',
             filled: true,
-            fillColor: const Color(0xFF0F172A),
+            fillColor: const Color(0xFFF0FDF4),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF1E293B)),
+              borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+              borderSide: const BorderSide(color: Color(0xFF16A34A), width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -332,7 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         if (subtext != null) ...[
           const SizedBox(height: 4),
-          Text(subtext, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          Text(subtext, style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
         ],
       ],
     );
@@ -376,16 +376,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF070A14),
+      backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           _regStep == 1 ? 'Create Account' : 'Verify Email OTP',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 16),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF14532D)),
           onPressed: () {
             if (_regStep == 2) {
               setState(() => _regStep = 1);
@@ -408,8 +408,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF4F46E5).withValues(alpha: 0.18),
-                    const Color(0xFF38BDF8).withValues(alpha: 0.06),
+                    const Color(0xFF16A34A).withValues(alpha: 0.18),
+                    const Color(0xFF15803D).withValues(alpha: 0.06),
                     Colors.transparent,
                   ],
                 ),
@@ -427,7 +427,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0D1224).withValues(alpha: 0.9),
+                      color: Colors.white.withValues(alpha: 0.97),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                       boxShadow: [
@@ -446,12 +446,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: [
                           const Text(
                             'Get Started with KCZ Printing',
-                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: Color(0xFF14532D), fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           const Text(
                             'Register to place orders and track print jobs in real time',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                           ),
                           const SizedBox(height: 20),
 
@@ -499,7 +499,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                color: const Color(0xFF64748B),
+                                color: const Color(0xFF4B7A5E),
                                 size: 20,
                               ),
                               onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -529,7 +529,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 borderRadius: BorderRadius.circular(4),
                                 child: LinearProgressIndicator(
                                   value: strengthValue,
-                                  backgroundColor: const Color(0xFF1E293B),
+                                  backgroundColor: const Color(0xFFBBF7D0),
                                   valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
                                   minHeight: 5,
                                 ),
@@ -542,16 +542,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
+                              color: const Color(0xFFF0FDF4),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF1E293B)),
+                              border: Border.all(color: const Color(0xFFBBF7D0)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
                                   'PASSWORD REQUIREMENTS:',
-                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), letterSpacing: 0.5),
+                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E), letterSpacing: 0.5),
                                 ),
                                 const SizedBox(height: 6),
                                 _buildRequirementItem('Must be at least 8 characters', req1),
@@ -574,7 +574,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscureConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                color: const Color(0xFF64748B),
+                                color: const Color(0xFF4B7A5E),
                                 size: 20,
                               ),
                               onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
@@ -596,7 +596,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 height: 22,
                                 child: Checkbox(
                                   value: _agreeToTerms,
-                                  activeColor: const Color(0xFF4F46E5),
+                                  activeColor: const Color(0xFF16A34A),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                   onChanged: (val) {
                                     setState(() {
@@ -611,11 +611,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 child: Text.rich(
                                   TextSpan(
                                     text: "Sumasang-ayon ako sa ",
-                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), height: 1.3),
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF4B7A5E), height: 1.3),
                                     children: [
                                       TextSpan(
                                         text: "Terms & Conditions",
-                                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF818CF8)),
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                                       ),
                                       TextSpan(
                                         text: " (Ang prints na hindi kukunin sa loob ng 30 araw ay ida-dispose).",
@@ -652,7 +652,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       }
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF4F46E5),
+                                      backgroundColor: const Color(0xFF16A34A),
                                       foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                       elevation: 0,
@@ -669,8 +669,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 child: OutlinedButton(
                                   onPressed: () => Navigator.pop(context),
                                   style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF94A3B8),
-                                    side: const BorderSide(color: Color(0xFF1E293B)),
+                                    foregroundColor: const Color(0xFF4B7A5E),
+                                    side: const BorderSide(color: Color(0xFFBBF7D0)),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
                                   child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
@@ -693,11 +693,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               child: const Text.rich(
                                 TextSpan(
                                   text: "Already have an account? ",
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                                   children: [
                                     TextSpan(
                                       text: 'Log In',
-                                      style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold),
+                                      style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
@@ -714,12 +714,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: [
                           const Text(
                             'Enter OTP Verification Code',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'A 6-digit verification code was sent to your email:\n$_recipientEmail',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.4),
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E), height: 1.4),
                           ),
                           const SizedBox(height: 22),
 
@@ -729,21 +729,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             keyboardType: TextInputType.number,
                             maxLength: 6,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8, color: Colors.white),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8, color: Color(0xFF0F172A)),
                             decoration: InputDecoration(
                               hintText: '000000',
-                              hintStyle: const TextStyle(color: Color(0xFF475569)),
+                              hintStyle: const TextStyle(color: Color(0xFF86EFAC)),
                               counterText: '',
                               filled: true,
-                              fillColor: const Color(0xFF0F172A),
+                              fillColor: const Color(0xFFF0FDF4),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                                borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                                borderSide: const BorderSide(color: Color(0xFF16A34A), width: 2),
                               ),
                             ),
                             validator: (v) => (v == null || v.trim().length != 6) ? 'Please enter valid 6-digit OTP' : null,
@@ -756,14 +756,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             children: [
                               Text(
                                 _secondsRemaining > 0 ? 'Resend code in ${_secondsRemaining}s' : 'Code expired',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
                               ),
                               TextButton(
                                 onPressed: _canResend && !_isLoading ? _sendRegisterOtp : null,
                                 child: Text(
                                   'Resend OTP',
                                   style: TextStyle(
-                                    color: _canResend ? const Color(0xFF818CF8) : const Color(0xFF475569),
+                                    color: _canResend ? const Color(0xFF15803D) : const Color(0xFF86EFAC),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                   ),
@@ -796,7 +796,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             height: 44,
                             child: TextButton(
                               onPressed: () => setState(() => _regStep = 1),
-                              child: const Text('← Back to Registration Form', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w600, fontSize: 12)),
+                              child: const Text('← Back to Registration Form', style: TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.w600, fontSize: 12)),
                             ),
                           ),
                         ],

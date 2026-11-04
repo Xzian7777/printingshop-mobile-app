@@ -139,9 +139,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text('Password Recovery', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text('Password Recovery', style: TextStyle(color: Color(0xFFF0FDF4), fontWeight: FontWeight.bold, fontSize: 16)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFFF0FDF4)),
           onPressed: () {
             if (_currentStep > 1) {
               setState(() => _currentStep--);
@@ -174,9 +174,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Forgot Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+          const Text('Forgot Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFF0FDF4))),
           const SizedBox(height: 6),
-          const Text('Enter your registered Email or PH Mobile Number to receive a dual verification code.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          const Text('Enter your registered Email or PH Mobile Number to receive a dual verification code.', style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
           const SizedBox(height: 20),
           TextFormField(
             controller: _identityController,
@@ -193,7 +193,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: ElevatedButton(
               onPressed: _submitStepA,
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Send Verification Code', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: const Text('Send Verification Code', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14)),
             ),
           ),
         ],
@@ -208,9 +208,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Enter OTP Code', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+          const Text('Enter OTP Code', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFF0FDF4))),
           const SizedBox(height: 6),
-          Text('We sent a 6-digit verification code to: $_maskedContact', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Text('We sent a 6-digit verification code to: $_maskedContact', style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
           const SizedBox(height: 20),
           TextFormField(
             controller: _otpController,
@@ -231,7 +231,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: ElevatedButton(
               onPressed: _submitStepB,
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Verify OTP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: const Text('Verify OTP', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14)),
             ),
           ),
           const SizedBox(height: 16),
@@ -241,7 +241,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               child: Text(
                 _canResend ? 'Resend Code' : 'Resend Code in ${_secondsRemaining}s',
                 style: TextStyle(
-                  color: _canResend ? const Color(0xFFE11D48) : const Color(0xFF94A3B8),
+                  color: _canResend ? const Color(0xFFE11D48) : const Color(0xFF4B7A5E),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -259,16 +259,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Set New Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+          const Text('Set New Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFF0FDF4))),
           const SizedBox(height: 6),
-          const Text('Create a strong new password for your print shop account.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          const Text('Create a strong new password for your print shop account.', style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
           const SizedBox(height: 20),
           TextFormField(
             controller: _newPasswordController,
             obscureText: _obscureNewPass,
             decoration: _buildInputDecoration('New Password', Icons.lock_outline_rounded).copyWith(
               suffixIcon: IconButton(
-                icon: Icon(_obscureNewPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
+                icon: Icon(_obscureNewPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF4B7A5E)),
                 onPressed: () => setState(() => _obscureNewPass = !_obscureNewPass),
               ),
             ),
@@ -283,7 +283,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             obscureText: _obscureConfirmPass,
             decoration: _buildInputDecoration('Confirm New Password', Icons.lock_reset_rounded).copyWith(
               suffixIcon: IconButton(
-                icon: Icon(_obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF64748B)),
+                icon: Icon(_obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF4B7A5E)),
                 onPressed: () => setState(() => _obscureConfirmPass = !_obscureConfirmPass),
               ),
             ),
@@ -299,7 +299,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: ElevatedButton(
               onPressed: _submitStepC,
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Reset Password', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: const Text('Reset Password', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14)),
             ),
           ),
         ],
@@ -310,12 +310,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   InputDecoration _buildInputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF64748B)),
+      labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
+      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF4B7A5E)),
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF14532D))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48))),
       focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),

@@ -1,4 +1,6 @@
+import 'admin_archive_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
@@ -7,10 +9,11 @@ import 'store_screen.dart';
 import 'place_order_screen.dart';
 import 'admin_products_screen.dart';
 import 'customer_chat_screen.dart';
-import 'admin_live_chat_view.dart';
+import 'admin_live_chat_view.dart' hide getSafeConversationId;
 import 'admin_rfid_loyalty_view.dart';
 import 'admin_registered_users_view.dart';
 import '../services/order_repository.dart';
+import '../services/fcm_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -34,6 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   void initState() {
     super.initState();
     OrderRepository().syncOfflineOrders();
+
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -109,16 +113,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
-            Icon(Icons.gavel_rounded, color: Color(0xFF6366F1)),
+            Icon(Icons.gavel_rounded, color: Color(0xFF16A34A)),
             SizedBox(width: 8),
-            Text("Terms & Conditions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text("Terms & Conditions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
           ],
         ),
         content: SingleChildScrollView(
@@ -126,27 +130,27 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Text("1. Print File Proofing & Responsibility", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
+              Text("1. Print File Proofing & Responsibility", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Customers are responsible for reviewing uploaded documents, layout sizing, and spelling before submitting print orders.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+              Text("Customers are responsible for reviewing uploaded documents, layout sizing, and spelling before submitting print orders.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
-              Text("2. Turnaround Time & Processing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
+              Text("2. Turnaround Time & Processing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Standard print jobs take 1-2 business days. Bulk orders (Tarpaulins, Shirts, Booklets) may require additional processing time.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+              Text("Standard print jobs take 1-2 business days. Bulk orders (Tarpaulins, Shirts, Booklets) may require additional processing time.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
-              Text("3. Cancellation & Non-Refundable Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
+              Text("3. Cancellation & Non-Refundable Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Once a job moves to 'Printing' status, orders cannot be cancelled or refunded due to customized materials used.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+              Text("Once a job moves to 'Printing' status, orders cannot be cancelled or refunded due to customized materials used.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
-              Text("4. Unclaimed Prints & RFID Rewards", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
+              Text("4. Unclaimed Prints & RFID Rewards", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Orders ready for pickup must be claimed within 30 days. RFID loyalty points are earned upon successful payment verification.", style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+              Text("Orders ready for pickup must be claimed within 30 days. RFID loyalty points are earned upon successful payment verification.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
             ],
           ),
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx),
             child: const Text("I Agree"),
           ),
@@ -156,32 +160,72 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // LOGOUT DIALOG
+  Future<bool> _showExitConfirmationDialog(BuildContext context) async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFFF0FDF4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.exit_to_app_rounded, color: Color(0xFF15803D)),
+            SizedBox(width: 10),
+            Text('Exit App', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to close and exit the app?',
+          style: TextStyle(fontSize: 13, color: Color(0xFF4B7A5E)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              elevation: 0,
+            ),
+            child: const Text('Exit', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    return shouldExit ?? false;
+  }
+
   void _showLogoutConfirmationDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: const Row(
           children: [
             Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
             SizedBox(width: 10),
-            Text('Confirm Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+            Text('Confirm Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
           ],
         ),
-        content: const Text('Are you sure you want to log out of your account?', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+        content: const Text('Are you sure you want to log out of your account?', style: TextStyle(fontSize: 13, color: Color(0xFF4B7A5E))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               try {
+                await FcmService().removeUserToken(widget.userEmail);
                 await FirebaseAuth.instance.signOut();
               } catch (e) {
                 debugPrint('Logout error: $e');
@@ -198,7 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E), elevation: 0),
-            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Log Out', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -263,25 +307,54 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF070A14),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        // If not on Home tab (e.g. Orders, Store, Profile), return to Home tab first
+        if (_currentNavIndex != 0) {
+          setState(() => _currentNavIndex = 0);
+          return;
+        }
+
+        // If already on Home tab, show exit confirmation dialog
+        final shouldExit = await _showExitConfirmationDialog(context);
+        if (shouldExit) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+      backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF070A14),
+        backgroundColor: const Color(0xFFF8FFF9),
         elevation: 0,
         automaticallyImplyLeading: false,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFF1E293B)),
+          child: Divider(height: 1, color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF6366F1)]),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                    blurRadius: 6,
+                  ),
+                ],
               ),
-              child: const Icon(Icons.print_rounded, color: Colors.white, size: 16),
+              padding: const EdgeInsets.all(2),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset('assets/images/kcz_logo.jpg', fit: BoxFit.contain),
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -290,9 +363,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 children: [
                   Text(
                     _isAdmin ? 'KCZ Printing (Admin)' : 'KCZ Printing',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-                  Text(widget.userEmail, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                  Text(widget.userEmail, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 10)),
                 ],
               ),
             ),
@@ -302,22 +375,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           if (!_isAdmin)
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('artifacts')
-                  .doc('printcraft-pro')
-                  .collection('public')
-                  .doc('data')
-                  .collection('chats')
-                  .doc(widget.userEmail.trim().contains('@') ? widget.userEmail.trim().split('@').first : widget.userEmail.trim())
+                  .collection('conversations')
+                  .doc(getSafeConversationId(widget.userEmail))
                   .snapshots(),
               builder: (context, snapshot) {
                 final data = snapshot.data?.data() as Map<String, dynamic>?;
-                final bool hasUnread = data?['customerUnread'] == true;
+                final bool hasUnread = (data?['unreadCountCustomer'] as num? ?? 0) > 0 || data?['customerUnread'] == true;
 
                 return Stack(
                   alignment: Alignment.center,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF818CF8)),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF15803D)),
                       tooltip: 'Live Chat Support',
                       onPressed: () {
                         Navigator.push(
@@ -346,16 +415,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               },
             ),
           IconButton(
-            icon: const Icon(Icons.gavel_rounded, color: Color(0xFF94A3B8)),
+            icon: const Icon(Icons.gavel_rounded, color: Color(0xFF4B7A5E)),
             tooltip: 'Terms & Conditions',
             onPressed: () => _showTermsAndConditionsDialog(context),
           ),
           if (_isAdmin)
             IconButton(
-              icon: const Icon(Icons.inventory_2_rounded, color: Color(0xFF818CF8)),
-              tooltip: 'Manage Products',
+              icon: const Icon(Icons.archive_rounded, color: Color(0xFF15803D)),
+              tooltip: 'Archived Products',
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminProductsScreen()));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminArchiveScreen()));
               },
             ),
           IconButton(
@@ -373,15 +442,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           child: Container(
             height: 64,
             decoration: BoxDecoration(
-              color: const Color(0xFF11141C).withValues(alpha: 0.95),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(36),
               border: Border.all(
-                color: const Color(0xFF2A2E3D),
+                color: const Color(0xFFBBF7D0),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -399,14 +468,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
         ),
       ),
+    ),
     );
   }
 
   Widget _buildFloatingNavItem(int index, IconData icon, String label) {
     final isSelected = _currentNavIndex == index;
     // Vibrant neon lime matching the reference image, with muted gray when unselected
-    const activeColor = Color(0xFFCCFF00);
-    const inactiveColor = Color(0xFF8E95A5);
+    const activeColor = Color(0xFF15803D);
+    const inactiveColor = Color(0xFF64748B);
 
     return Expanded(
       child: Material(
@@ -477,7 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Column(
       children: [
         Container(
-          color: const Color(0xFF0B0E1B),
+          color: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -496,7 +566,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ),
           ),
         ),
-        const Divider(height: 1, color: Color(0xFF1E293B)),
+        const Divider(height: 1, color: Color(0xFFBBF7D0)),
 
         Expanded(
           child: _adminSubTab == 0
@@ -516,20 +586,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildAdminSubTabButton(int index, String title, IconData icon) {
     final isSelected = _adminSubTab == index;
     return ChoiceChip(
-      avatar: Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
+      avatar: Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF4B7A5E)),
       label: Text(title),
       selected: isSelected,
-      selectedColor: const Color(0xFF4F46E5),
-      backgroundColor: const Color(0xFF0F172A),
+      selectedColor: const Color(0xFF16A34A),
+      backgroundColor: const Color(0xFFF0FDF4),
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+        color: isSelected ? Colors.white : const Color(0xFF4B7A5E),
         fontSize: 11.5,
         fontWeight: FontWeight.bold,
       ),
       onSelected: (_) => setState(() => _adminSubTab = index),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFF1E293B)),
+        side: BorderSide(color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFBBF7D0)),
       ),
     );
   }
@@ -549,7 +619,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       stream: _ordersRef.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text('Analytics Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
         final docs = snapshot.data!.docs;
         double totalRevenue = 0.0;
@@ -639,18 +709,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   value: '$totalOrders',
                   subtitle: 'Submitted print jobs',
                   icon: Icons.inventory_2_rounded,
-                  iconColor: const Color(0xFF38BDF8),
-                  valueColor: const Color(0xFF38BDF8),
-                  bgColor: const Color(0xFF38BDF8).withOpacity(0.15),
+                  iconColor: const Color(0xFF15803D),
+                  valueColor: const Color(0xFF15803D),
+                  bgColor: const Color(0xFF15803D).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'PAGES PRINTED',
                   value: _formatNumberWithCommas(pagesPrinted),
                   subtitle: 'Total paper consumption',
                   icon: Icons.description_rounded,
-                  iconColor: const Color(0xFF818CF8),
-                  valueColor: const Color(0xFF818CF8),
-                  bgColor: const Color(0xFF818CF8).withOpacity(0.15),
+                  iconColor: const Color(0xFF15803D),
+                  valueColor: const Color(0xFF15803D),
+                  bgColor: const Color(0xFF15803D).withOpacity(0.15),
                 ),
                 _buildWebAnalyticsMetricCard(
                   title: 'TOTAL CUSTOMERS',
@@ -687,8 +757,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               title: 'ORDER STATUS DISTRIBUTION',
               subtitle: 'Live active job status breakdown',
               badgeLabel: 'Real-Time',
-              badgeColor: const Color(0xFF4F46E5).withOpacity(0.2),
-              badgeTextColor: const Color(0xFF818CF8),
+              badgeColor: const Color(0xFF16A34A).withOpacity(0.2),
+              badgeTextColor: const Color(0xFF15803D),
               child: Column(
                 children: [
                   SizedBox(
@@ -706,7 +776,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       _buildChartLegendItem('Completed', const Color(0xFFF59E0B)),
                       _buildChartLegendItem('Order Submitted', const Color(0xFF8B5CF6)),
-                      _buildChartLegendItem('Printing', const Color(0xFF3B82F6)),
+                      _buildChartLegendItem('Printing', const Color(0xFF22C55E)),
                       _buildChartLegendItem('Rejected', const Color(0xFFF43F5E)),
                     ],
                   ),
@@ -719,8 +789,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               title: 'ORDERS BY SERVICE TYPE',
               subtitle: 'Popular print products volume',
               badgeLabel: 'Live Data',
-              badgeColor: const Color(0xFF4F46E5).withOpacity(0.2),
-              badgeTextColor: const Color(0xFF818CF8),
+              badgeColor: const Color(0xFF16A34A).withOpacity(0.2),
+              badgeTextColor: const Color(0xFF15803D),
               child: Column(
                 children: [
                   SizedBox(
@@ -733,7 +803,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   const SizedBox(height: 12),
                   const Text(
                     'Flyers & Leaflets • Spiral Notebooks • In-Store Supplies • Invitations',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -763,7 +833,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildChartLegendItem('Print Services', const Color(0xFF38BDF8)),
+                      _buildChartLegendItem('Print Services', const Color(0xFF15803D)),
                       const SizedBox(width: 20),
                       _buildChartLegendItem('Store Supplies', const Color(0xFFFB923C)),
                     ],
@@ -790,9 +860,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -804,7 +874,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.5),
+                  style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Color(0xFF4B7A5E), letterSpacing: 0.5),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -823,7 +893,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 9, color: Color(0xFF64748B)),
+            style: const TextStyle(fontSize: 9, color: Color(0xFF4B7A5E)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -843,9 +913,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,9 +926,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.white, letterSpacing: 0.5)),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF14532D), letterSpacing: 0.5)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                  Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
                 ],
               ),
               Container(
@@ -881,7 +951,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
       ],
     );
   }
@@ -898,7 +968,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       stream: _rfidLogsRef.orderBy('timestamp', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text('RFID Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
         final rfidDocs = snapshot.data!.docs;
 
@@ -908,9 +978,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Row(
                 children: [
@@ -926,7 +996,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       children: const [
                         Text('RFID Reader Active (Store Counter)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                         SizedBox(height: 2),
-                        Text('Live card taps, customer points & discount tapping', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
+                        Text('Live card taps, customer points & discount tapping', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5)),
                       ],
                     ),
                   ),
@@ -950,10 +1020,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   ),
                 );
               },
-              icon: const Icon(Icons.tap_and_play, color: Colors.white, size: 18),
-              label: const Text('Simulate Test Card Tap (+10 Points)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              icon: const Icon(Icons.tap_and_play, color: Color(0xFF14532D), size: 18),
+              label: const Text('Simulate Test Card Tap (+10 Points)', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
+                backgroundColor: const Color(0xFF16A34A),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -966,11 +1036,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 padding: const EdgeInsets.all(24),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1224),
+                  color: const Color(0xFFFFFFFF),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF1E293B)),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
                 ),
-                child: const Text('No RFID taps logged yet.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                child: const Text('No RFID taps logged yet.', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
               )
             else
               ...rfidDocs.map((doc) {
@@ -984,16 +1054,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: const Color(0xFF38BDF8).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF38BDF8), size: 20),
+                        decoration: BoxDecoration(color: const Color(0xFF15803D).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF15803D), size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1001,7 +1071,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('$name ($uid)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                            Text(dt, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                            Text(dt, style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
                           ],
                         ),
                       ),
@@ -1036,31 +1106,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
+                  colors: [Color(0xFFF0FDF4), Color(0xFF14532D)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF312E81)),
+                border: Border.all(color: const Color(0xFF166534)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withOpacity(0.25),
+                      color: const Color(0xFF16A34A).withOpacity(0.25),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF818CF8), size: 24),
+                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF15803D), size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Text('Admin Product Management', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('Admin Product Management', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 13)),
                         SizedBox(height: 2),
-                        Text('Edit prices, update stocks & import product photos', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
+                        Text('Edit prices, update stocks & import product photos', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5)),
                       ],
                     ),
                   ),
@@ -1069,7 +1139,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminProductsScreen()));
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFF16A34A),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1091,7 +1161,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   'Elevate Your\nPrinting Experience',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF14532D),
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.5,
@@ -1105,7 +1175,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     'Unlock your printing potential in a fully connected environment, powered by Kez C-Em Zek Printing Shop',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Color(0xFF94A3B8),
+                      color: Color(0xFF4B7A5E),
                       fontSize: 12.5,
                       height: 1.4,
                     ),
@@ -1125,15 +1195,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               alignment: Alignment.center,
               clipBehavior: Clip.none,
               children: [
-                // Animated Orbital Sphere
-                AnimatedBuilder(
-                  animation: _animController,
-                  builder: (context, child) {
-                    return CustomPaint(
-                      size: const Size(340, 260),
-                      painter: _FuturisticSpherePainter(progress: _animController.value),
-                    );
-                  },
+                // Centered App Logo
+                Center(
+                  child: Container(
+                    width: 175,
+                    height: 175,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF16A34A).withOpacity(0.20),
+                          blurRadius: 30,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.asset(
+                        'assets/images/kcz_logo.jpg',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
                 ),
 
                 // Center Action Button
@@ -1162,7 +1249,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF0F172A),
+                        foregroundColor: const Color(0xFFF0FDF4),
                         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                         elevation: 0,
@@ -1188,19 +1275,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Print Services', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
+                            const Text('Print Services', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10, fontWeight: FontWeight.w600)),
                             Container(
                               width: 18,
                               height: 18,
                               decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.north_east_rounded, color: Colors.white, size: 10),
+                              child: const Icon(Icons.north_east_rounded, color: Color(0xFF14532D), size: 10),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        const Text('Unparalleled\nQuality Proofing', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, height: 1.2)),
+                        const Text('Unparalleled\nQuality Proofing', style: TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold, height: 1.2)),
                         const SizedBox(height: 6),
-                        const Text('100% Guaranteed', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                        const Text('100% Guaranteed', style: TextStyle(color: Color(0xFF15803D), fontSize: 9.5, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -1219,17 +1306,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Order Tracking', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600)),
+                            const Text('Order Tracking', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10, fontWeight: FontWeight.w600)),
                             Container(
                               width: 18,
                               height: 18,
                               decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.north_east_rounded, color: Colors.white, size: 10),
+                              child: const Icon(Icons.north_east_rounded, color: Color(0xFF14532D), size: 10),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        const Text('99.4%', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+                        const Text('99.4%', style: TextStyle(color: Color(0xFF0F172A), fontSize: 17, fontWeight: FontWeight.w900)),
                         const SizedBox(height: 6),
                         Container(
                           width: double.infinity,
@@ -1240,7 +1327,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             widthFactor: 0.94,
                             child: Container(
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(colors: [Color(0xFF818CF8), Color(0xFFEC4899)]),
+                                gradient: const LinearGradient(colors: [Color(0xFF15803D), Color(0xFF22C55E)]),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -1264,15 +1351,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
-                      );
+                      if (_isAdmin) {
+                        setState(() => _currentNavIndex = 2);
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+                        );
+                      }
                     },
-                    icon: const Icon(Icons.add_circle_rounded, size: 18),
-                    label: const Text('Order Prints', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                    icon: Icon(_isAdmin ? Icons.assignment_turned_in_rounded : Icons.add_circle_rounded, size: 18),
+                    label: Text(_isAdmin ? 'View Orders' : 'Order Prints', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFF16A34A),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1287,8 +1378,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     label: const Text('Store Supplies', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF1E293B)),
-                      backgroundColor: const Color(0xFF0D1224),
+                      side: const BorderSide(color: Color(0xFFBBF7D0)),
+                      backgroundColor: const Color(0xFFFFFFFF),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -1306,10 +1397,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('OUR SERVICES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF818CF8), letterSpacing: 1.2)),
+                const Text('OUR SERVICES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF15803D), letterSpacing: 1.2)),
                 const SizedBox(height: 4),
-                const Text('Everything your business needs printed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                const Text('Tap a service to customize and calculate instant prices.', style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+                const Text('Everything your business needs printed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                const Text('Tap a service to customize and calculate instant prices.', style: TextStyle(fontSize: 11.5, color: Color(0xFF4B7A5E))),
                 const SizedBox(height: 14),
                 GridView.count(
                   crossAxisCount: 2,
@@ -1319,7 +1410,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisSpacing: 12,
                   childAspectRatio: 0.95,
                   children: [
-                    _buildDarkServiceCard('Document Print', 'Short, Long, A4 B&W or Color.', 'Starts at ₱3.00 / pg', Icons.description_rounded, const Color(0xFF38BDF8)),
+                    _buildDarkServiceCard('Document Print', 'Short, Long, A4 B&W or Color.', 'Starts at ₱3.00 / pg', Icons.description_rounded, const Color(0xFF15803D)),
                     _buildDarkServiceCard('PVC ID Cards', 'Durable waterproof PVC cards.', 'Starts at ₱50.00 / pc', Icons.badge_rounded, const Color(0xFFFBBF24)),
                     _buildDarkServiceCard('Stickers & Labels', 'Glossy, Matte, or Vinyl die-cut.', 'Starts at ₱45.00 / sheet', Icons.auto_awesome_rounded, const Color(0xFFA78BFA)),
                     _buildDarkServiceCard('Store Supplies', 'Notebooks, pens, and paper packs.', 'Available in Store Tab', Icons.storefront_rounded, const Color(0xFF10B981)),
@@ -1340,7 +1431,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       width: width,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224).withOpacity(0.85),
+        color: const Color(0xFFFFFFFF).withOpacity(0.85),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.10)),
         boxShadow: [
@@ -1358,18 +1449,27 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildDarkServiceCard(String title, String desc, String price, IconData icon, Color accentColor) {
     return InkWell(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
-        );
+        if (_isAdmin) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Naka-login bilang Admin. Ang mga customers lamang ang maaaring mag-order.'),
+              backgroundColor: Color(0xFF15803D),
+            ),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+          );
+        }
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF0D1224),
+          color: const Color(0xFFFFFFFF),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1E293B)),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1383,9 +1483,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               child: Icon(icon, size: 20, color: accentColor),
             ),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 3),
-            Expanded(child: Text(desc, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(desc, style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E)), maxLines: 2, overflow: TextOverflow.ellipsis)),
             const SizedBox(height: 4),
             Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF10B981))),
           ],
@@ -1402,7 +1502,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       stream: _ordersRef.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
         final docs = snapshot.data!.docs;
         int approvalCount = 0;
@@ -1480,9 +1580,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1491,8 +1591,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
-                        child: const Icon(Icons.print_rounded, color: Color(0xFF818CF8)),
+                        decoration: BoxDecoration(color: const Color(0xFF16A34A).withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.print_rounded, color: Color(0xFF15803D)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1505,13 +1605,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                                  child: Text('${docs.length} Active', style: const TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  decoration: BoxDecoration(color: const Color(0xFF16A34A).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                  child: Text('${docs.length} Active', style: const TextStyle(color: Color(0xFF15803D), fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
-                            const Text('Organized print job management • FIFO', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                            const Text('Organized print job management • FIFO', style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
                           ],
                         ),
                       ),
@@ -1522,7 +1622,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       _buildStatusCounterBox('APPROVAL', approvalCount.toString(), const Color(0xFFFBBF24).withOpacity(0.15), const Color(0xFFFBBF24)),
                       const SizedBox(width: 8),
-                      _buildStatusCounterBox('PRINTING', printingCount.toString(), const Color(0xFF38BDF8).withOpacity(0.15), const Color(0xFF38BDF8)),
+                      _buildStatusCounterBox('PRINTING', printingCount.toString(), const Color(0xFF15803D).withOpacity(0.15), const Color(0xFF15803D)),
                       const SizedBox(width: 8),
                       _buildStatusCounterBox('READY', readyCount.toString(), const Color(0xFF10B981).withOpacity(0.15), const Color(0xFF10B981)),
                     ],
@@ -1534,16 +1634,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             TextField(
               controller: _searchController,
               onChanged: (_) => setState(() => _ordersCurrentPage = 1),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search PRNT-7767, Client, or Item...',
-                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF64748B)),
+                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
+                prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF4B7A5E)),
                 filled: true,
-                fillColor: const Color(0xFF0D1224),
+                fillColor: const Color(0xFFFFFFFF),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A), width: 1.5)),
               ),
             ),
             const SizedBox(height: 12),
@@ -1560,16 +1660,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0D1224),
+                            color: const Color(0xFFFFFFFF),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFF1E293B)),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
-                              dropdownColor: const Color(0xFF0D1224),
+                              dropdownColor: const Color(0xFFFFFFFF),
                               value: _orderSortOrder,
                               icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF14532D), fontSize: 11, fontWeight: FontWeight.bold),
                               onChanged: (val) {
                                 if (val != null) {
                                   setState(() {
@@ -1596,16 +1696,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0D1224),
+                            color: const Color(0xFFFFFFFF),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFF1E293B)),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
-                              dropdownColor: const Color(0xFF0D1224),
+                              dropdownColor: const Color(0xFFFFFFFF),
                               value: _serviceCategories.contains(_selectedServiceCategory) ? _selectedServiceCategory : 'All Services',
                               icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF14532D), fontSize: 11, fontWeight: FontWeight.bold),
                               onChanged: (val) {
                                 if (val != null) {
                                   setState(() {
@@ -1640,10 +1740,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         _statusFilter = status;
                         _ordersCurrentPage = 1;
                       }),
-                      selectedColor: const Color(0xFF4F46E5),
-                      labelStyle: TextStyle(color: isSelected ? Colors.white : const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
-                      backgroundColor: const Color(0xFF0D1224),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFF1E293B))),
+                      selectedColor: const Color(0xFF16A34A),
+                      labelStyle: TextStyle(color: isSelected ? Colors.white : const Color(0xFF4B7A5E), fontSize: 11, fontWeight: FontWeight.bold),
+                      backgroundColor: const Color(0xFFFFFFFF),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFBBF7D0))),
                     ),
                   );
                 }).toList(),
@@ -1654,8 +1754,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Container(
                 padding: const EdgeInsets.all(32),
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1E293B))),
-                child: Text('No matching orders found under "$_selectedServiceCategory".', style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 13)),
+                decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFBBF7D0))),
+                child: Text('No matching orders found under "$_selectedServiceCategory".', style: const TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold, fontSize: 13)),
               )
             else
               ...pagedDocs.map((doc) {
@@ -1680,9 +1780,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 margin: const EdgeInsets.only(top: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1224),
+                  color: const Color(0xFFFFFFFF),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF1E293B)),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1719,14 +1819,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4F46E5) : Colors.transparent,
+          color: isSelected ? const Color(0xFF16A34A) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
+            Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF4B7A5E)),
             const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF4B7A5E))),
           ],
         ),
       ),
@@ -1738,8 +1838,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     Color statusBgColor = const Color(0xFFFBBF24).withOpacity(0.2);
     Color statusTextColor = const Color(0xFFFBBF24);
     if (statusCategory == 'printing') {
-      statusBgColor = const Color(0xFF38BDF8).withOpacity(0.2);
-      statusTextColor = const Color(0xFF38BDF8);
+      statusBgColor = const Color(0xFF15803D).withOpacity(0.2);
+      statusTextColor = const Color(0xFF15803D);
     } else if (statusCategory == 'ready') {
       statusBgColor = const Color(0xFF10B981).withOpacity(0.2);
       statusTextColor = const Color(0xFF10B981);
@@ -1754,28 +1854,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF1E293B))),
+      decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFBBF7D0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
               Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)), child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusTextColor))),
             ],
           ),
           const SizedBox(height: 8),
-          Text(customer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFCBD5E1))),
-          Text(service, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+          Text(customer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF334155))),
+          Text(service, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
           if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFBBF7D0),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF334155), width: 0.8),
+                border: Border.all(color: const Color(0xFFFDE68A), width: 1.0),
               ),
               child: Row(
                 children: [
@@ -1786,7 +1886,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10.5, color: Color(0xFFFDE68A), fontStyle: FontStyle.italic),
+                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF92400E), fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -1810,20 +1910,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF1E293B))),
+      decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFBBF7D0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
               Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981))),
             ],
           ),
           const SizedBox(height: 4),
-          Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFCBD5E1))),
-          Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155))),
+          Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
           if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Row(
@@ -1835,7 +1935,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10.5, color: Color(0xFFFDE68A), fontStyle: FontStyle.italic),
+                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF92400E), fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1845,7 +1945,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFFBBF7D0), borderRadius: BorderRadius.circular(6)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF14532D)))),
               _buildAdminOrderActions(docId, refId, status, data),
             ],
           ),
@@ -1854,43 +1954,198 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Future<void> _confirmAndUpdateOrderStatus(String orderId, String newStatus, String actionLabel) async {
+  // --- STOCK DEDUCTION / RESTORATION LOGIC FOR ORDERS ---
+  List<Map<String, dynamic>> _extractOrderItems(Map<String, dynamic> orderData) {
+    final itemsToProcess = <Map<String, dynamic>>[];
+    if (orderData['items'] is List && (orderData['items'] as List).isNotEmpty) {
+      for (final item in (orderData['items'] as List)) {
+        if (item is Map) {
+          itemsToProcess.add({
+            'id': item['id'] ?? item['productId'],
+            'name': item['name'] ?? '',
+            'qty': (item['qty'] ?? item['quantity'] ?? 1) as int,
+          });
+        }
+      }
+      return itemsToProcess;
+    }
+
+    final serviceStr = (orderData['service'] ?? '').toString();
+    if (serviceStr.contains('In-Store:') || (orderData['paperSize'] ?? '').toString().contains('Store Supply')) {
+      final cleanStr = serviceStr.replaceAll('In-Store:', '').trim();
+      final reg = RegExp(r'([^,\(\)]+?)\s*\((\d+)x\)');
+      final matches = reg.allMatches(cleanStr);
+      if (matches.isNotEmpty) {
+        for (final m in matches) {
+          itemsToProcess.add({
+            'id': null,
+            'name': m.group(1)?.trim() ?? '',
+            'qty': int.tryParse(m.group(2) ?? '1') ?? 1,
+          });
+        }
+      } else {
+        final orderQty = (orderData['quantity'] ?? orderData['copies'] ?? 1) as int;
+        itemsToProcess.add({
+          'id': null,
+          'name': cleanStr,
+          'qty': orderQty,
+        });
+      }
+    }
+    return itemsToProcess;
+  }
+
+  Future<bool> _deductOrderStockIfNecessary(String orderId, Map<String, dynamic> orderData) async {
+    if (orderData['stockDeducted'] == true) {
+      return true; // Already deducted
+    }
+    final itemsToDeduct = _extractOrderItems(orderData);
+    if (itemsToDeduct.isEmpty) {
+      return true; // No inventory items to deduct
+    }
+
+    final prodsSnap = await FirebaseFirestore.instance.collection('products').get();
+    final allProds = prodsSnap.docs.map((d) {
+      final data = d.data();
+      data['doc_id'] = d.id;
+      return data;
+    }).toList();
+
+    // Verify stock availability
+    final deductionPlan = <Map<String, dynamic>>[];
+    for (final target in itemsToDeduct) {
+      final targetId = target['id']?.toString();
+      final targetName = (target['name'] ?? '').toString().trim().toLowerCase();
+      final qtyToDeduct = (target['qty'] as num?)?.toInt() ?? 1;
+
+      Map<String, dynamic>? matched;
+      for (final p in allProds) {
+        final pId = (p['id'] ?? p['doc_id'] ?? '').toString();
+        final pName = (p['name'] ?? '').toString().trim().toLowerCase();
+        if (targetId != null && targetId.isNotEmpty && pId == targetId) {
+          matched = p;
+          break;
+        }
+        if (targetName.isNotEmpty && (pName == targetName || (targetName.length >= 3 && (pName.contains(targetName) || targetName.contains(pName))))) {
+          matched = p;
+          break;
+        }
+      }
+
+      if (matched == null) {
+        throw Exception("Product '${target['name']}' not found in inventory.");
+      }
+
+      final currentStock = (matched['stock'] as num?)?.toInt() ?? 0;
+      if (currentStock < qtyToDeduct) {
+        throw Exception("Insufficient stock for '${matched['name']}'. Available: $currentStock, Requested: $qtyToDeduct.");
+      }
+
+      deductionPlan.add({
+        'doc_id': matched['doc_id'],
+        'name': matched['name'],
+        'new_stock': currentStock - qtyToDeduct,
+      });
+    }
+
+    // Apply deduction atomically
+    final batch = FirebaseFirestore.instance.batch();
+    for (final plan in deductionPlan) {
+      final pRef = FirebaseFirestore.instance.collection('products').doc(plan['doc_id'].toString());
+      batch.update(pRef, {'stock': plan['new_stock']});
+    }
+    batch.update(_ordersRef.doc(orderId), {'stockDeducted': true});
+    await batch.commit();
+    return true;
+  }
+
+  Future<void> _restoreOrderStockIfNecessary(String orderId, Map<String, dynamic> orderData) async {
+    if (orderData['stockDeducted'] != true) {
+      return; // Stock was never deducted
+    }
+    final itemsToRestore = _extractOrderItems(orderData);
+    if (itemsToRestore.isEmpty) return;
+
+    final prodsSnap = await FirebaseFirestore.instance.collection('products').get();
+    final allProds = prodsSnap.docs.map((d) {
+      final data = d.data();
+      data['doc_id'] = d.id;
+      return data;
+    }).toList();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (final target in itemsToRestore) {
+      final targetId = target['id']?.toString();
+      final targetName = (target['name'] ?? '').toString().trim().toLowerCase();
+      final qtyToRestore = (target['qty'] as num?)?.toInt() ?? 1;
+
+      for (final p in allProds) {
+        final pId = (p['id'] ?? p['doc_id'] ?? '').toString();
+        final pName = (p['name'] ?? '').toString().trim().toLowerCase();
+        if ((targetId != null && targetId.isNotEmpty && pId == targetId) ||
+            (targetName.isNotEmpty && (pName == targetName || (targetName.length >= 3 && (pName.contains(targetName) || targetName.contains(pName)))))) {
+          final currentStock = (p['stock'] as num?)?.toInt() ?? 0;
+          final pRef = FirebaseFirestore.instance.collection('products').doc(p['doc_id'].toString());
+          batch.update(pRef, {'stock': currentStock + qtyToRestore});
+          break;
+        }
+      }
+    }
+    batch.update(_ordersRef.doc(orderId), {'stockDeducted': false});
+    await batch.commit();
+  }
+
+  Future<void> _confirmAndUpdateOrderStatus(String orderId, String newStatus, String actionLabel, Map<String, dynamic> orderData) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
+        backgroundColor: const Color(0xFFF0FDF4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
         title: Row(
           children: const [
-            Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF4F46E5)),
+            Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF16A34A)),
             SizedBox(width: 8),
             Text('Confirm Action', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ],
         ),
-        content: Text('Are you sure you want to change order status to "$newStatus"?', style: const TextStyle(color: Color(0xFF94A3B8))),
+        content: Text('Are you sure you want to change order status to "$newStatus"?', style: const TextStyle(color: Color(0xFF4B7A5E))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
             onPressed: () => Navigator.pop(c, true),
-            child: Text(actionLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(actionLabel, style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      await _ordersRef.doc(orderId).update({'status': newStatus});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order status updated to "$newStatus"'),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
+      try {
+        if (newStatus == 'Approved' || newStatus == 'Printing') {
+          // If moving to Approved/Printing and stock wasn't deducted yet, perform safe deduction
+          await _deductOrderStockIfNecessary(orderId, orderData);
+        }
+        await _ordersRef.doc(orderId).update({'status': newStatus});
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order status updated to "$newStatus"'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: const Color(0xFFF43F5E),
+          ),
+        );
+      }
     }
   }
 
@@ -1926,7 +2181,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               mainAxisSize: MainAxisSize.min,
               children: [
                 InkWell(
-                  onTap: () => _confirmAndUpdateOrderStatus(orderId, nextStatus, '$actionLabel Order'),
+                  onTap: () => _confirmAndUpdateOrderStatus(orderId, nextStatus, '$actionLabel Order', data),
                   borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1937,7 +2192,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         const SizedBox(width: 4),
                         Text(
                           actionLabel,
-                          style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF14532D), fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -1952,19 +2207,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: Colors.white),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  color: const Color(0xFF0F172A),
+                  color: const Color(0xFFF0FDF4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: Color(0xFF1E293B)),
+                    side: const BorderSide(color: Color(0xFFBBF7D0)),
                   ),
                   tooltip: 'Change Status',
                   onSelected: (selectedStatus) {
-                    _confirmAndUpdateOrderStatus(orderId, selectedStatus, 'Update Status');
+                    _confirmAndUpdateOrderStatus(orderId, selectedStatus, 'Update Status', data);
                   },
                   itemBuilder: (context) => [
                     _buildStatusMenuItem('For Approval', '✓ For Approval', const Color(0xFFFBBF24)),
-                    _buildStatusMenuItem('Printing', '🖨️ Start Printing', const Color(0xFF818CF8)),
-                    _buildStatusMenuItem('Ready for Pickup', '📦 Ready for Pickup', const Color(0xFF38BDF8)),
+                    _buildStatusMenuItem('Printing', '🖨️ Start Printing', const Color(0xFF15803D)),
+                    _buildStatusMenuItem('Ready for Pickup', '📦 Ready for Pickup', const Color(0xFF15803D)),
                     _buildStatusMenuItem('Completed', '🎉 Complete Order', const Color(0xFF10B981)),
                   ],
                 ),
@@ -1979,17 +2234,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFFBBF7D0),
             borderRadius: BorderRadius.circular(8),
           ),
           child: PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, size: 16, color: Color(0xFF94A3B8)),
+            icon: const Icon(Icons.more_vert_rounded, size: 16, color: Color(0xFF4B7A5E)),
             padding: EdgeInsets.zero,
-            color: const Color(0xFF0F172A),
+            color: const Color(0xFFF0FDF4),
             elevation: 8,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Color(0xFF1E293B)),
+              side: const BorderSide(color: Color(0xFFBBF7D0)),
             ),
             tooltip: 'Order Options',
             onSelected: (value) {
@@ -2000,7 +2255,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               } else if (value == 'slip') {
                 _showPrintJobSlipModal(refId, data);
               } else if (value == 'reject') {
-                _showRejectOrderModal(orderId, refId);
+                _showRejectOrderModal(orderId, refId, data);
               }
             },
             itemBuilder: (context) {
@@ -2013,7 +2268,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   height: 38,
                   child: Row(
                     children: const [
-                      Icon(Icons.remove_red_eye_rounded, size: 16, color: Color(0xFF38BDF8)),
+                      Icon(Icons.remove_red_eye_rounded, size: 16, color: Color(0xFF15803D)),
                       SizedBox(width: 10),
                       Text(
                         'Review Specs & File',
@@ -2031,7 +2286,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       Icon(
                         Icons.description_rounded,
                         size: 16,
-                        color: hasFile ? const Color(0xFF3B82F6) : const Color(0xFF475569),
+                        color: hasFile ? const Color(0xFF22C55E) : const Color(0xFF86EFAC),
                       ),
                       const SizedBox(width: 10),
                       Text(
@@ -2039,7 +2294,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: hasFile ? const Color(0xFF60A5FA) : const Color(0xFF475569),
+                          color: hasFile ? const Color(0xFF86EFAC) : const Color(0xFF86EFAC),
                         ),
                       ),
                     ],
@@ -2108,23 +2363,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: const [
-                Icon(Icons.assignment_outlined, color: Color(0xFF38BDF8), size: 20),
+                Icon(Icons.assignment_outlined, color: Color(0xFF15803D), size: 20),
                 SizedBox(width: 8),
                 Text('Order Specifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 20),
+              icon: const Icon(Icons.close_rounded, color: Color(0xFF4B7A5E), size: 20),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () => Navigator.pop(ctx),
@@ -2144,20 +2399,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _buildSpecRow('Total', '₱$total', isHighlight: true),
               if (details != null && details.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Text('Custom Specs:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF818CF8))),
+                const Text('Custom Specs:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
                 const SizedBox(height: 4),
                 ...details.entries.map((e) => _buildSpecRow(e.key.toUpperCase(), e.value.toString())),
               ],
               const SizedBox(height: 10),
-              const Divider(color: Color(0xFF1E293B)),
+              const Divider(color: Color(0xFFBBF7D0)),
               const SizedBox(height: 6),
-              const Text('Customer Note / Instructions:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+              const Text('Customer Note / Instructions:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
               const SizedBox(height: 4),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFFBBF7D0),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -2165,23 +2420,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   style: TextStyle(
                     fontSize: 11,
                     fontStyle: note.isNotEmpty ? FontStyle.normal : FontStyle.italic,
-                    color: note.isNotEmpty ? const Color(0xFFFDE68A) : const Color(0xFF64748B),
+                    color: note.isNotEmpty ? const Color(0xFFFDE68A) : const Color(0xFF4B7A5E),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Attached File:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+              const Text('Attached File:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFFBBF7D0),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFF334155)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.file_present_rounded, color: Color(0xFF60A5FA), size: 24),
+                    const Icon(Icons.file_present_rounded, color: Color(0xFF86EFAC), size: 24),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -2196,7 +2451,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         icon: const Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
                         label: const Text('Open', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
+                          backgroundColor: const Color(0xFF22C55E),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           minimumSize: Size.zero,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -2213,11 +2468,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
+                backgroundColor: const Color(0xFFBBF7D0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              child: const Text('Close', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ),
         ],
@@ -2231,7 +2486,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
           Flexible(
             child: Text(
               value,
@@ -2289,10 +2544,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2305,7 +2560,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 20),
+              icon: const Icon(Icons.close_rounded, color: Color(0xFF4B7A5E), size: 20),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () => Navigator.pop(ctx),
@@ -2315,9 +2570,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         content: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF070A14),
+            color: const Color(0xFFF8FFF9),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF1E293B)),
+            border: Border.all(color: const Color(0xFFBBF7D0)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2326,13 +2581,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               const Center(
                 child: Text(
                   'KEZ C-EM ZEK PRINT SHOP',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white, letterSpacing: 1.1),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF14532D), letterSpacing: 1.1),
                 ),
               ),
               const Center(
-                child: Text('Official Production Job Ticket', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                child: Text('Official Production Job Ticket', style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
               ),
-              const Divider(color: Color(0xFF1E293B), height: 16),
+              const Divider(color: Color(0xFFBBF7D0), height: 16),
               _buildSlipLine('JOB TICKET #:', refId),
               _buildSlipLine('CLIENT:', customer),
               _buildSlipLine('SERVICE:', service),
@@ -2340,12 +2595,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _buildSlipLine('TOTAL:', '₱$total'),
               _buildSlipLine('PAYMENT:', payment),
               _buildSlipLine('STATUS:', status),
-              const Divider(color: Color(0xFF1E293B), height: 16),
+              const Divider(color: Color(0xFFBBF7D0), height: 16),
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
                   DateTime.now().toString().substring(0, 19),
-                  style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontFamily: 'monospace'),
+                  style: const TextStyle(fontSize: 9, color: Color(0xFF4B7A5E), fontFamily: 'monospace'),
                 ),
               ),
             ],
@@ -2361,7 +2616,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.print_rounded, size: 14, color: Colors.white),
-                  label: const Text('Print Ticket', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  label: const Text('Print Ticket', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -2376,11 +2631,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               const SizedBox(width: 8),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E293B),
+                  backgroundColor: const Color(0xFFBBF7D0),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('Close', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
@@ -2395,13 +2650,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8), fontFamily: 'monospace')),
+          Text(label, style: const TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E), fontFamily: 'monospace')),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'monospace'),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF14532D), fontFamily: 'monospace'),
             ),
           ),
         ],
@@ -2410,16 +2665,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // ── MODAL 4: REJECT ORDER REASON ───────────────────────────────────────────
-  void _showRejectOrderModal(String orderId, String refId) {
+  void _showRejectOrderModal(String orderId, String refId, Map<String, dynamic> orderData) {
     final reasonController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
@@ -2437,16 +2692,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             TextField(
               controller: reasonController,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 12),
               decoration: InputDecoration(
                 hintText: 'Reason (e.g., Low file resolution, unreadable text)...',
-                hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                 filled: true,
-                fillColor: const Color(0xFF070A14),
+                fillColor: const Color(0xFFF8FFF9),
                 contentPadding: const EdgeInsets.all(12),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                  borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -2474,6 +2729,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       return;
                     }
                     Navigator.pop(ctx);
+                    await _restoreOrderStockIfNecessary(orderId, orderData);
                     await _ordersRef.doc(orderId).update({
                       'status': 'Rejected',
                       'rejectionReason': reason,
@@ -2484,17 +2740,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       SnackBar(content: Text('Order $refId marked as Rejected.'), backgroundColor: const Color(0xFFF43F5E)),
                     );
                   },
-                  child: const Text('Confirm Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text('Confirm Reject', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E293B),
+                  backgroundColor: const Color(0xFFBBF7D0),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
@@ -2525,16 +2781,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFF0D1224), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF1E293B))),
+          decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFBBF7D0))),
           child: Row(
             children: [
-              const CircleAvatar(radius: 24, backgroundColor: Color(0xFF1E293B), child: Icon(Icons.admin_panel_settings, color: Color(0xFF818CF8))),
+              const CircleAvatar(radius: 24, backgroundColor: Color(0xFFBBF7D0), child: Icon(Icons.admin_panel_settings, color: Color(0xFF15803D))),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Administrator Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                  Text(widget.userEmail, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  Text(widget.userEmail, style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
                 ],
               ),
             ],
@@ -2542,11 +2798,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         ),
         const SizedBox(height: 12),
         ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFF1E293B))),
-          tileColor: const Color(0xFF0D1224),
-          leading: const Icon(Icons.gavel_rounded, color: Color(0xFF818CF8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFBBF7D0))),
+          tileColor: const Color(0xFFFFFFFF),
+          leading: const Icon(Icons.gavel_rounded, color: Color(0xFF15803D)),
           title: const Text("Terms and Conditions", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B)),
+          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF4B7A5E)),
           onTap: () => _showTermsAndConditionsDialog(context),
         ),
       ],
@@ -2580,14 +2836,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   Text(
                     '${snapshot.error}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
                     onPressed: () => setState(() => _customerTrackerRefreshKey = UniqueKey()),
                     icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
-                    label: const Text('Retry Connection', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: const Text('Retry Connection', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -2596,7 +2852,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         }
 
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
         }
 
         final allDocs = snapshot.data!.docs;
@@ -2649,8 +2905,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             : widget.userEmail;
 
         return RefreshIndicator(
-          color: const Color(0xFF4F46E5),
-          backgroundColor: const Color(0xFF0F172A),
+          color: const Color(0xFF16A34A),
+          backgroundColor: const Color(0xFFF0FDF4),
           onRefresh: () async {
             setState(() => _customerTrackerRefreshKey = UniqueKey());
             await Future.delayed(const Duration(milliseconds: 500));
@@ -2719,9 +2975,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D1224),
+                  color: const Color(0xFFFFFFFF),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF1E293B)),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2734,7 +2990,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           height: 8,
                           margin: const EdgeInsets.only(top: 5, right: 8),
                           decoration: const BoxDecoration(
-                            color: Color(0xFF38BDF8),
+                            color: Color(0xFF15803D),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -2747,14 +3003,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 style: TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 12.5,
-                                  color: Colors.white,
+                                  color: Color(0xFF14532D),
                                   letterSpacing: 0.6,
                                 ),
                               ),
                               SizedBox(height: 3),
                               Text(
                                 "Track your printing orders and view real-time production updates step-by-step.",
-                                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                                style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                               ),
                             ],
                           ),
@@ -2771,16 +3027,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             height: 36,
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF070A14),
+                              color: const Color(0xFFF8FFF9),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF1E293B)),
+                              border: Border.all(color: const Color(0xFFBBF7D0)),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 value: _customerCategoryFilter,
-                                dropdownColor: const Color(0xFF0F172A),
+                                dropdownColor: const Color(0xFFF0FDF4),
                                 isExpanded: true,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF94A3B8)),
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF4B7A5E)),
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
                                 items: [
                                   'All Services & Store Items',
@@ -2808,8 +3064,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.white,
-                              side: const BorderSide(color: Color(0xFF1E293B)),
-                              backgroundColor: const Color(0xFF070A14),
+                              side: const BorderSide(color: Color(0xFFBBF7D0)),
+                              backgroundColor: const Color(0xFFF8FFF9),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               padding: const EdgeInsets.symmetric(horizontal: 10),
                             ),
@@ -2823,7 +3079,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF38BDF8)),
+                            icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF15803D)),
                             label: const Text("Refresh", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                         ),
@@ -2856,15 +3112,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         onSelected: (val) => setState(() => _customerFilter = filter),
                         selectedColor: const Color(0xFF2563EB),
                         labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                          color: isSelected ? Colors.white : const Color(0xFF4B7A5E),
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
-                        backgroundColor: const Color(0xFF0D1224),
+                        backgroundColor: const Color(0xFFFFFFFF),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                           side: BorderSide(
-                            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+                            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFBBF7D0),
                           ),
                         ),
                       ),
@@ -2880,9 +3136,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   padding: const EdgeInsets.all(32),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Column(
                     children: [
@@ -2902,7 +3158,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       const SizedBox(height: 4),
                       const Text(
                         "Tap 'Place Print Order' or visit the Store to begin.",
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                        style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11),
                       ),
                     ],
                   ),
@@ -2916,15 +3172,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                        icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF14532D), size: 20),
                         onPressed: _customerOrdersCurrentPage > 1
                             ? () => setState(() => _customerOrdersCurrentPage--)
                             : null,
@@ -2934,7 +3190,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                        icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF14532D), size: 20),
                         onPressed: _customerOrdersCurrentPage < custTotalPages
                             ? () => setState(() => _customerOrdersCurrentPage++)
                             : null,
@@ -2960,9 +3216,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: Row(
         children: [
@@ -2972,13 +3228,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             height: 44,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF818CF8), Color(0xFFC084FC)],
+                colors: [Color(0xFF15803D), Color(0xFFC084FC)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.print_rounded, color: Colors.white, size: 22),
+            child: const Icon(Icons.print_rounded, color: Color(0xFF14532D), size: 22),
           ),
           const SizedBox(width: 10),
 
@@ -2994,7 +3250,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 14,
-                    color: Colors.white,
+                    color: Color(0xFF14532D),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -3011,7 +3267,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     const SizedBox(width: 4),
                     const Text(
                       "Customer Portal",
-                      style: TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                      style: TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E), fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -3023,9 +3279,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFF070A14),
+              color: const Color(0xFFF8FFF9),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
             ),
             child: Column(
               children: [
@@ -3043,13 +3299,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFF070A14),
+              color: const Color(0xFFF8FFF9),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
             ),
             child: Column(
               children: [
-                const Text("MY ORDERS", style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+                const Text("MY ORDERS", style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
                 Text(
                   "$totalOrders",
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white),
@@ -3074,23 +3330,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF2563EB) : const Color(0xFF0D1224),
+          color: isActive ? const Color(0xFF2563EB) : const Color(0xFFFFFFFF),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isActive ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+            color: isActive ? const Color(0xFF2563EB) : const Color(0xFFBBF7D0),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: isActive ? Colors.white : const Color(0xFF94A3B8)),
+            Icon(icon, size: 13, color: isActive ? Colors.white : const Color(0xFF4B7A5E)),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isActive ? Colors.white : const Color(0xFF94A3B8),
+                color: isActive ? Colors.white : const Color(0xFF4B7A5E),
               ),
             ),
           ],
@@ -3130,10 +3386,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isRejected ? const Color(0xFFF43F5E).withOpacity(0.4) : const Color(0xFF1E293B),
+          color: isRejected ? const Color(0xFFF43F5E).withOpacity(0.4) : const Color(0xFFBBF7D0),
           width: 1.2,
         ),
         boxShadow: [
@@ -3159,7 +3415,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.w900,
                   fontSize: 12.5,
-                  color: Colors.white,
+                  color: Color(0xFF14532D),
                 ),
               ),
               const SizedBox(width: 8),
@@ -3168,7 +3424,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFFBBF7D0),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
@@ -3177,7 +3433,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     Icon(
                       isStoreItem ? Icons.shopping_bag_outlined : Icons.print_outlined,
                       size: 11,
-                      color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF818CF8),
+                      color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF15803D),
                     ),
                     const SizedBox(width: 3),
                     Text(
@@ -3185,7 +3441,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       style: TextStyle(
                         fontSize: 9.5,
                         fontWeight: FontWeight.bold,
-                        color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF818CF8),
+                        color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF15803D),
                       ),
                     ),
                   ],
@@ -3204,7 +3460,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: payment.toLowerCase().contains('gcash')
-                          ? const Color(0xFF3B82F6).withOpacity(0.4)
+                          ? const Color(0xFF22C55E).withOpacity(0.4)
                           : const Color(0xFF10B981).withOpacity(0.4),
                       width: 0.8,
                     ),
@@ -3215,7 +3471,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
                       color: payment.toLowerCase().contains('gcash')
-                          ? const Color(0xFF60A5FA)
+                          ? const Color(0xFF86EFAC)
                           : const Color(0xFF34D399),
                     ),
                   ),
@@ -3225,7 +3481,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
               // Cancel / Delete Order button with confirmation dialog
               IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFF4B7A5E)),
                 splashRadius: 16,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -3239,11 +3495,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           // Date & Time row
           Row(
             children: [
-              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF4B7A5E)),
               const SizedBox(width: 4),
               Text(
                 dateTimeStr,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E), fontWeight: FontWeight.w500),
               ),
               const Spacer(),
               // Price Display
@@ -3252,7 +3508,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 style: const TextStyle(
                   fontWeight: FontWeight.w900,
                   fontSize: 14.5,
-                  color: Colors.white,
+                  color: Color(0xFF14532D),
                   letterSpacing: -0.3,
                 ),
               ),
@@ -3273,26 +3529,26 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
-                        color: Colors.white,
+                        color: Color(0xFF14532D),
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       _formatOrderSpecs(data, quantity),
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                     ),
                     if (fileName.isNotEmpty && fileName != 'Walang napiling file') ...[
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.attach_file_rounded, size: 11, color: Color(0xFF818CF8)),
+                          const Icon(Icons.attach_file_rounded, size: 11, color: Color(0xFF15803D)),
                           const SizedBox(width: 2),
                           Expanded(
                             child: Text(
                               fileName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF818CF8)),
+                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF15803D)),
                             ),
                           ),
                         ],
@@ -3303,9 +3559,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B).withOpacity(0.5),
+                          color: const Color(0xFFBBF7D0).withOpacity(0.5),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF334155), width: 0.8),
+                          border: Border.all(color: const Color(0xFFFDE68A), width: 1.0),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3315,7 +3571,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             Expanded(
                               child: Text(
                                 "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
-                                style: const TextStyle(fontSize: 10.5, color: Color(0xFFFDE68A), fontStyle: FontStyle.italic),
+                                style: const TextStyle(fontSize: 10.5, color: Color(0xFF92400E), fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ],
@@ -3413,9 +3669,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF070A14),
+        color: const Color(0xFFF8FFF9),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -3432,7 +3688,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 right: stepWidth / 2,
                 child: Container(
                   height: 2.5,
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFFBBF7D0),
                 ),
               ),
 
@@ -3469,9 +3725,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             shape: BoxShape.circle,
                             color: isCurrent
                                 ? const Color(0xFF2563EB)
-                                : (isDone ? const Color(0xFF1D4ED8) : const Color(0xFF0F172A)),
+                                : (isDone ? const Color(0xFF1D4ED8) : const Color(0xFFF0FDF4)),
                             border: Border.all(
-                              color: isDone ? const Color(0xFF3B82F6) : const Color(0xFF334155),
+                              color: isDone ? const Color(0xFF22C55E) : const Color(0xFF334155),
                               width: isCurrent ? 2.5 : 1.5,
                             ),
                             boxShadow: isCurrent
@@ -3486,7 +3742,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           child: Icon(
                             isDone && !isCurrent ? Icons.check_rounded : (stages[index]['icon'] as IconData),
                             size: 14,
-                            color: isDone ? Colors.white : const Color(0xFF64748B),
+                            color: isDone ? Colors.white : const Color(0xFF4B7A5E),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -3498,7 +3754,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           style: TextStyle(
                             fontSize: 9.5,
                             fontWeight: isDone ? FontWeight.w800 : FontWeight.w500,
-                            color: isDone ? Colors.white : const Color(0xFF64748B),
+                            color: isDone ? Colors.white : const Color(0xFF4B7A5E),
                           ),
                         ),
                       ],
@@ -3572,31 +3828,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
             Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
             SizedBox(width: 8),
-            Text("Cancel Order", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text("Cancel Order", style: TextStyle(color: Color(0xFF14532D), fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           "Are you sure you want to cancel or delete order $refId?\nThis action cannot be undone.",
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+          style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Keep Order", style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text("Keep Order", style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Yes, Cancel Order", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text("Yes, Cancel Order", style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -3631,23 +3887,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFF4F46E5).withOpacity(0.15), shape: BoxShape.circle),
-            child: const Icon(Icons.person, color: Color(0xFF818CF8), size: 48),
+            decoration: BoxDecoration(color: const Color(0xFF16A34A).withOpacity(0.15), shape: BoxShape.circle),
+            child: const Icon(Icons.person, color: Color(0xFF15803D), size: 48),
           ),
           const SizedBox(height: 12),
           Text(widget.userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => _showTermsAndConditionsDialog(context),
-            icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFF818CF8)),
-            label: const Text("Terms & Conditions", style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold, fontSize: 12)),
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF1E293B))),
+            icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFF15803D)),
+            label: const Text("Terms & Conditions", style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.bold, fontSize: 12)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0))),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _showLogoutConfirmationDialog(context),
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
-            child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Log Out', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -3669,25 +3925,25 @@ class _FuturisticSpherePainter extends CustomPainter {
     final radiusY = size.height * 0.38;
 
     final paintGlow = Paint()
-      ..color = const Color(0xFF3B82F6).withOpacity(0.25)
+      ..color = const Color(0xFF22C55E).withOpacity(0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
     final paintStroke = Paint()
-      ..color = const Color(0xFF4F46E5).withOpacity(0.65)
+      ..color = const Color(0xFF16A34A).withOpacity(0.65)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     final paintHighlight = Paint()
-      ..color = const Color(0xFF60A5FA).withOpacity(0.8)
+      ..color = const Color(0xFF86EFAC).withOpacity(0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
 
     final auraPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFF4338CA).withOpacity(0.20),
+          const Color(0xFF15803D).withOpacity(0.20),
           const Color(0xFF1D4ED8).withOpacity(0.08),
           Colors.transparent,
         ],
@@ -3750,7 +4006,7 @@ class _DonutChartPainter extends CustomPainter {
     final colors = {
       'Completed': const Color(0xFFF59E0B),
       'Order Submitted': const Color(0xFF8B5CF6),
-      'Printing': const Color(0xFF3B82F6),
+      'Printing': const Color(0xFF22C55E),
       'Rejected': const Color(0xFFF43F5E),
       'Ready for Pickup': const Color(0xFF10B981),
     };
@@ -3763,7 +4019,7 @@ class _DonutChartPainter extends CustomPainter {
     statusCounts.forEach((key, cnt) {
       if (cnt > 0) {
         final sweepAngle = (cnt / total) * 2 * math.pi;
-        paint.color = colors[key] ?? const Color(0xFF64748B);
+        paint.color = colors[key] ?? const Color(0xFF4B7A5E);
 
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
@@ -3787,10 +4043,10 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFF3B82F6);
-    final bgPaint = Paint()..color = const Color(0xFF0F172A);
+    final paint = Paint()..color = const Color(0xFF22C55E);
+    final bgPaint = Paint()..color = const Color(0xFFF0FDF4);
     final gridPaint = Paint()
-      ..color = const Color(0xFF1E293B)
+      ..color = const Color(0xFFBBF7D0)
       ..strokeWidth = 1;
 
     for (int i = 0; i <= 4; i++) {
@@ -3851,7 +4107,7 @@ class _PieChartPainter extends CustomPainter {
     final storeSweep = (storeRevenue / total) * 2 * math.pi;
 
     final paintPrint = Paint()
-      ..color = const Color(0xFF38BDF8)
+      ..color = const Color(0xFF15803D)
       ..style = PaintingStyle.fill;
 
     final paintStore = Paint()

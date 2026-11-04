@@ -133,7 +133,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
             void showImageSourceSelector() {
               showModalBottomSheet(
                 context: context,
-                backgroundColor: const Color(0xFF0F172A),
+                backgroundColor: const Color(0xFFF0FDF4),
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
@@ -153,8 +153,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 26,
-                                backgroundColor: Color(0xFF1E293B),
-                                child: Icon(Icons.photo_library_rounded, color: Color(0xFF818CF8)),
+                                backgroundColor: Color(0xFFBBF7D0),
+                                child: Icon(Icons.photo_library_rounded, color: Color(0xFF15803D)),
                               ),
                               SizedBox(height: 8),
                               Text('Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -171,8 +171,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 26,
-                                backgroundColor: Color(0xFF1E293B),
-                                child: Icon(Icons.camera_alt_rounded, color: Color(0xFF38BDF8)),
+                                backgroundColor: Color(0xFFBBF7D0),
+                                child: Icon(Icons.camera_alt_rounded, color: Color(0xFF15803D)),
                               ),
                               SizedBox(height: 8),
                               Text('Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -190,9 +190,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
                 decoration: const BoxDecoration(
-                  color: Color(0xFF0F172A),
+                  color: Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border(top: BorderSide(color: Color(0xFF1E293B))),
+                  border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
                 ),
                 padding: const EdgeInsets.all(20.0),
                 child: SingleChildScrollView(
@@ -207,10 +207,10 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           children: [
                             Text(
                               isEditing ? 'Edit Product Details' : 'Add New Inventory Product',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                              icon: const Icon(Icons.close_rounded, color: Color(0xFF4B7A5E)),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -227,9 +227,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   width: 110,
                                   height: 110,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D1224),
+                                    color: const Color(0xFFFFFFFF),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFF1E293B), width: 1.5),
+                                    border: Border.all(color: const Color(0xFFBBF7D0), width: 1.5),
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(16),
@@ -244,13 +244,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                       errorBuilder: (context, error, stackTrace) => const Icon(
                                         Icons.add_photo_alternate_rounded,
                                         size: 40,
-                                        color: Color(0xFF64748B),
+                                        color: Color(0xFF4B7A5E),
                                       ),
                                     )
                                         : const Icon(
                                       Icons.add_photo_alternate_rounded,
                                       size: 40,
-                                      color: Color(0xFF64748B),
+                                      color: Color(0xFF4B7A5E),
                                     )),
                                   ),
                                 ),
@@ -260,10 +260,10 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.all(6),
                                     decoration: const BoxDecoration(
-                                      color: Color(0xFF4F46E5),
+                                      color: Color(0xFF16A34A),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                                    child: const Icon(Icons.camera_alt_rounded, size: 14, color: Color(0xFF0F172A)),
                                   ),
                                 ),
                               ],
@@ -272,7 +272,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         ),
                         const SizedBox(height: 6),
                         const Center(
-                          child: Text('Tap to upload product photo', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                          child: Text('Tap to upload product photo', style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
                         ),
                         const SizedBox(height: 16),
 
@@ -281,15 +281,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: nameController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                           decoration: InputDecoration(
                             hintText: 'e.g. Glossy Sticker Pack',
-                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
                             filled: true,
-                            fillColor: const Color(0xFF0D1224),
+                            fillColor: const Color(0xFFFFFFFF),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A))),
                           ),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a product name' : null,
                         ),
@@ -299,15 +299,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         const Text('Product Category', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
                         const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
-                          dropdownColor: const Color(0xFF0D1224),
+                          dropdownColor: const Color(0xFFFFFFFF),
                           value: selectedCat,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: const Color(0xFF0D1224),
+                            fillColor: const Color(0xFFFFFFFF),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A))),
                           ),
                           items: _categories
                               .where((c) => c != 'All')
@@ -331,15 +331,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   TextFormField(
                                     controller: priceController,
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                                     decoration: InputDecoration(
                                       hintText: '0.00',
-                                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
                                       filled: true,
-                                      fillColor: const Color(0xFF0D1224),
+                                      fillColor: const Color(0xFFFFFFFF),
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A))),
                                     ),
                                     validator: (v) {
                                       if (v == null || v.trim().isEmpty) return 'Enter price';
@@ -360,15 +360,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   TextFormField(
                                     controller: stockController,
                                     keyboardType: TextInputType.number,
-                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                                     decoration: InputDecoration(
                                       hintText: '0',
-                                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
                                       filled: true,
-                                      fillColor: const Color(0xFF0D1224),
+                                      fillColor: const Color(0xFFFFFFFF),
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A))),
                                     ),
                                     validator: (v) {
                                       if (v == null || v.trim().isEmpty) return 'Enter stock';
@@ -396,25 +396,25 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   final confirm = await showDialog<bool>(
                                     context: context,
                                     builder: (c) => AlertDialog(
-                                      backgroundColor: const Color(0xFF0F172A),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
+                                      backgroundColor: const Color(0xFFF0FDF4),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
                                       title: Row(
                                         children: const [
-                                          Icon(Icons.edit_note_rounded, color: Color(0xFF4F46E5)),
+                                          Icon(Icons.edit_note_rounded, color: Color(0xFF16A34A)),
                                           SizedBox(width: 8),
                                           Text('Confirm Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                                         ],
                                       ),
-                                      content: const Text('Are you sure you want to save the changes made to this product?', style: TextStyle(color: Color(0xFF94A3B8))),
+                                      content: const Text('Are you sure you want to save the changes made to this product?', style: TextStyle(color: Color(0xFF4B7A5E))),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(c, false),
-                                          child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                          child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E))),
                                         ),
                                         ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
                                           onPressed: () => Navigator.pop(c, true),
-                                          child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          child: const Text('Save Changes', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
                                         ),
                                       ],
                                     ),
@@ -454,13 +454,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4F46E5),
+                              backgroundColor: const Color(0xFF16A34A),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               elevation: 0,
                             ),
                             child: Text(
                               isEditing ? 'Save Changes' : 'Add Product',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                           ),
                         ),
@@ -487,18 +487,18 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         : _products.where((p) => p.category == _selectedCategory).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF070A14),
+      backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(
-        title: const Text('Inventory & Products', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: const Color(0xFF070A14),
+        title: const Text('Inventory & Products', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: const Color(0xFFF8FFF9),
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFF1E293B)),
+          child: Divider(height: 1, color: Color(0xFFBBF7D0)),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_box_rounded, color: Colors.white),
+            icon: const Icon(Icons.add_box_rounded, color: Color(0xFF0F172A)),
             onPressed: () => _showEditProductModal(context),
           ),
         ],
@@ -508,7 +508,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           // Category Filter Tabs
           Container(
             height: 54,
-            color: const Color(0xFF0B0E1B),
+            color: Colors.white,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -521,14 +521,14 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   child: ChoiceChip(
                     label: Text(cat),
                     selected: isSelected,
-                    selectedColor: const Color(0xFF4F46E5),
-                    backgroundColor: const Color(0xFF0D1224),
+                    selectedColor: const Color(0xFF16A34A),
+                    backgroundColor: const Color(0xFFFFFFFF),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFF1E293B)),
+                      side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFBBF7D0)),
                     ),
                     labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                      color: isSelected ? Colors.white : const Color(0xFF4B7A5E),
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -547,7 +547,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           Expanded(
             child: filteredProducts.isEmpty
                 ? const Center(
-              child: Text('No products available in this category.', style: TextStyle(color: Color(0xFF94A3B8))),
+              child: Text('No products available in this category.', style: TextStyle(color: Color(0xFF4B7A5E))),
             )
                 : ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -558,9 +558,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Row(
                     children: [
@@ -569,9 +569,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         width: 64,
                         height: 64,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF1E293B)),
+                          border: Border.all(color: const Color(0xFFBBF7D0)),
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
@@ -582,7 +582,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                               : Image.network(
                             product.imageUrl ?? '',
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported_rounded, color: Color(0xFF64748B)),
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported_rounded, color: Color(0xFF4B7A5E)),
                           ),
                         ),
                       ),
@@ -595,17 +595,17 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           children: [
                             Text(
                               product.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '${product.category} • Stock: ${product.stock}',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '₱${product.price.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF38BDF8)),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF15803D)),
                             ),
                           ],
                         ),
@@ -613,7 +613,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
                       // Action Buttons (Edit & Delete)
                       IconButton(
-                        icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF818CF8), size: 24),
+                        icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF15803D), size: 24),
                         onPressed: () => _showEditProductModal(context, product: product),
                       ),
                       IconButton(
@@ -622,8 +622,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (c) => AlertDialog(
-                              backgroundColor: const Color(0xFF0F172A),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF1E293B))),
+                              backgroundColor: const Color(0xFFF0FDF4),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
                               title: Row(
                                 children: const [
                                   Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
@@ -631,16 +631,16 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   Text('Confirm Delete', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                                 ],
                               ),
-                              content: Text('Are you sure you want to delete "${product.name}"? This action cannot be undone.', style: const TextStyle(color: Color(0xFF94A3B8))),
+                              content: Text('Are you sure you want to delete "${product.name}"? This action cannot be undone.', style: const TextStyle(color: Color(0xFF4B7A5E))),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(c, false),
-                                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E))),
                                 ),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
                                   onPressed: () => Navigator.pop(c, true),
-                                  child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  child: const Text('Delete', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),

@@ -195,6 +195,25 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   }
 
   Future<void> _submitOrder() async {
+    // Restrict Admin from placing orders
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userEmail.trim().toLowerCase())
+          .get();
+      final role = userDoc.data()?['role']?.toString().toLowerCase();
+      if (role == 'admin') {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Bawal mag-order ang Admin account. Ang customer lamang ang maaaring mag-order."),
+            backgroundColor: Color(0xFFF43F5E),
+          ),
+        );
+        return;
+      }
+    } catch (_) {}
+
     final noteText = _noteController.text.trim();
     if (noteText.length > _maxNoteLength) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -323,10 +342,10 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: const Color(0xFFF0FDF4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color(0xFF1E293B)),
+            side: const BorderSide(color: Color(0xFFBBF7D0)),
           ),
           title: Row(
             children: const [
@@ -339,14 +358,14 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tracking Ref: $customOrderRef', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF818CF8))),
+              Text('Tracking Ref: $customOrderRef', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF15803D))),
               const SizedBox(height: 6),
-              const Text('Your order has been queued for shop approval. You will receive real-time notifications on production status.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+              const Text('Your order has been queued for shop approval. You will receive real-time notifications on production status.', style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
             ],
           ),
           actions: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
               onPressed: () {
                 Navigator.pop(ctx);
                 Navigator.pop(context);
@@ -369,17 +388,17 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF070A14),
+      backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF070A14),
+        backgroundColor: const Color(0xFFF8FFF9),
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFF1E293B)),
+          child: Divider(height: 1, color: Color(0xFFBBF7D0)),
         ),
-        title: const Text('Place Print Order', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text('Place Print Order', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 16)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF14532D)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -393,13 +412,13 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Column(
                 children: [
-                  const Icon(Icons.upload_file_rounded, size: 40, color: Color(0xFF818CF8)),
+                  const Icon(Icons.upload_file_rounded, size: 40, color: Color(0xFF15803D)),
                   const SizedBox(height: 8),
                   if (_selectedFileObj != null) ...[
                     Row(
@@ -408,7 +427,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                         Flexible(
                           child: Text(
                             _selectedFileName,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -425,12 +444,12 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                       style: const TextStyle(fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
                     ),
                   ] else ...[
-                    Text(_selectedFileName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white), textAlign: TextAlign.center),
+                    Text(_selectedFileName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)), textAlign: TextAlign.center),
                   ],
                   const SizedBox(height: 6),
                   const Text(
                     'Allowed: PDF, PNG, JPG, JPEG, DOC, DOCX (Max 10MB per file, up to 5 files / 25MB total)',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -439,7 +458,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     icon: const Icon(Icons.folder_open_rounded, size: 16, color: Colors.white),
                     label: Text(_selectedFileObj != null ? 'Change File' : 'Choose File', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFF16A34A),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
@@ -453,29 +472,29 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Printing Service Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+                  const Text('Printing Service Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    dropdownColor: const Color(0xFF0F172A),
+                    dropdownColor: const Color(0xFFF0FDF4),
                     initialValue: _selectedService,
                     isExpanded: true,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: const Color(0xFF0F172A),
+                      fillColor: const Color(0xFFF0FDF4),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF16A34A))),
                     ),
                     items: _serviceOptions
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12, color: Colors.white), overflow: TextOverflow.ellipsis)))
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis)))
                         .toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _selectedService = val);
@@ -498,9 +517,9 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5).withValues(alpha: 0.15) : const Color(0xFF0D1224),
+                        color: _paymentMethod == 'GCash Online' ? const Color(0xFF16A34A).withValues(alpha: 0.15) : const Color(0xFFFFFFFF),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _paymentMethod == 'GCash Online' ? const Color(0xFF4F46E5) : const Color(0xFF1E293B), width: 1.5),
+                        border: Border.all(color: _paymentMethod == 'GCash Online' ? const Color(0xFF16A34A) : const Color(0xFFBBF7D0), width: 1.5),
                       ),
                       child: Row(
                         children: [
@@ -509,7 +528,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                             value: 'GCash Online',
                             // ignore: deprecated_member_use
                             groupValue: _paymentMethod,
-                            activeColor: const Color(0xFF818CF8),
+                            activeColor: const Color(0xFF15803D),
                             // ignore: deprecated_member_use
                             onChanged: (val) => setState(() => _paymentMethod = val!),
                           ),
@@ -517,8 +536,8 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('GCash Online', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                                Text('Pay instantly', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                                Text('GCash Online', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                Text('Pay instantly', style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
                               ],
                             ),
                           ),
@@ -534,9 +553,9 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5).withValues(alpha: 0.15) : const Color(0xFF0D1224),
+                        color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF16A34A).withValues(alpha: 0.15) : const Color(0xFFFFFFFF),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF4F46E5) : const Color(0xFF1E293B), width: 1.5),
+                        border: Border.all(color: _paymentMethod == 'Cash on Pickup' ? const Color(0xFF16A34A) : const Color(0xFFBBF7D0), width: 1.5),
                       ),
                       child: Row(
                         children: [
@@ -545,7 +564,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                             value: 'Cash on Pickup',
                             // ignore: deprecated_member_use
                             groupValue: _paymentMethod,
-                            activeColor: const Color(0xFF818CF8),
+                            activeColor: const Color(0xFF15803D),
                             // ignore: deprecated_member_use
                             onChanged: (val) => setState(() => _paymentMethod = val!),
                           ),
@@ -553,8 +572,8 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Cash on Pickup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                                Text('Pay at counter', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                                Text('Cash on Pickup', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A))),
+                                Text('Pay at counter', style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
                               ],
                             ),
                           ),
@@ -572,9 +591,9 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,7 +603,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     children: [
                       const Text(
                         'Order Note (Optional)',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E)),
                       ),
                       Text(
                         '${_noteController.text.length}/$_maxNoteLength',
@@ -593,7 +612,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                           fontWeight: FontWeight.bold,
                           color: _noteController.text.length > _maxNoteLength
                               ? const Color(0xFFF43F5E)
-                              : const Color(0xFF64748B),
+                              : const Color(0xFF4B7A5E),
                         ),
                       ),
                     ],
@@ -603,22 +622,22 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     controller: _noteController,
                     maxLines: 4,
                     maxLength: _maxNoteLength,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                     onChanged: (_) => setState(() {}),
                     buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
                     decoration: InputDecoration(
                       hintText: 'Write any special instructions for your order...\n(e.g., orientation, paper preference, urgent timing)',
-                      hintStyle: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.4),
+                      hintStyle: const TextStyle(fontSize: 11.5, color: Color(0xFF4B7A5E), height: 1.4),
                       filled: true,
-                      fillColor: const Color(0xFF0F172A),
+                      fillColor: const Color(0xFFF0FDF4),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                        borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF4F46E5)),
+                        borderSide: const BorderSide(color: Color(0xFF16A34A)),
                       ),
                     ),
                   ),
@@ -630,35 +649,35 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('TOTAL SUMMARY', style: TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  const Text('TOTAL SUMMARY', style: TextStyle(color: Color(0xFF15803D), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                   const SizedBox(height: 8),
-                  const Text('Estimated Total:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                  const Text('Estimated Total:', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
                   const SizedBox(height: 2),
                   Text(
                     '₱${_calculatedTotal.toStringAsFixed(2)}',
                     style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 28),
                   ),
-                  const Divider(color: Color(0xFF1E293B), height: 24),
+                  const Divider(color: Color(0xFFBBF7D0), height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Payment:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                      Text(_paymentMethod, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                      const Text('Payment:', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11)),
+                      Text(_paymentMethod, style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 11)),
                     ],
                   ),
                   const SizedBox(height: 4),
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Estimated Pickup:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                      Text('Tomorrow 4:00 PM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                      Text('Estimated Pickup:', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11)),
+                      Text('Tomorrow 4:00 PM', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 11)),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -667,11 +686,11 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     child: ElevatedButton.icon(
                       onPressed: _isSubmitting ? null : _submitOrder,
                       icon: _isSubmitting
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF14532D), strokeWidth: 2))
                           : const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
                       label: Text(_isSubmitting ? 'Uploading & Submitting...' : 'Confirm & Submit Order →', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F46E5),
+                        backgroundColor: const Color(0xFF16A34A),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
@@ -847,19 +866,19 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
+          style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFF0F172A),
+            fillColor: const Color(0xFFF0FDF4),
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF16A34A))),
           ),
         ),
       ],
@@ -870,22 +889,22 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          dropdownColor: const Color(0xFF0F172A),
+          dropdownColor: const Color(0xFFF0FDF4),
           initialValue: items.contains(value) ? value : items.first,
           isExpanded: true,
-          style: const TextStyle(color: Colors.white, fontSize: 11),
+          style: const TextStyle(color: Color(0xFF14532D), fontSize: 11),
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFF0F172A),
+            fillColor: const Color(0xFFF0FDF4),
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E293B))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF16A34A))),
           ),
           items: items
-              .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 10, color: Colors.white), overflow: TextOverflow.ellipsis)))
+              .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 10, color: Color(0xFF0F172A)), overflow: TextOverflow.ellipsis)))
               .toList(),
           onChanged: onChanged,
         ),
@@ -894,6 +913,6 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   }
 
   Widget _buildSectionHeader(String title) {
-    return Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF818CF8), letterSpacing: 1.1));
+    return Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF15803D), letterSpacing: 1.1));
   }
 }

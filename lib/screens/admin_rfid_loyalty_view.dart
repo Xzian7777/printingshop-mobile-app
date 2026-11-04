@@ -82,7 +82,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Simulation recorded: +20 Pts to $cardUid'),
-          backgroundColor: const Color(0xFF4F46E5),
+          backgroundColor: const Color(0xFF16A34A),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -197,9 +197,9 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Column(
                     children: [
@@ -208,10 +208,10 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                              color: const Color(0xFF15803D).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.credit_card_rounded, color: Color(0xFF38BDF8), size: 24),
+                            child: const Icon(Icons.credit_card_rounded, color: Color(0xFF15803D), size: 24),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -223,7 +223,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                                     const Flexible(
                                       child: Text(
                                         'RFID Loyalty & Tap-to-Pay',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F172A)),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -240,7 +240,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                const Text('Manage customer RFID card points, simulate taps, and rewards', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
+                                const Text('Manage customer RFID card points, simulate taps, and rewards', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5)),
                               ],
                             ),
                           ),
@@ -252,14 +252,14 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                         child: ElevatedButton.icon(
                           onPressed: _isSimulating ? null : () => _simulateTap(),
                           icon: _isSimulating
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.satellite_alt_rounded, color: Colors.white, size: 16),
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Color(0xFF14532D), strokeWidth: 2))
+                              : const Icon(Icons.satellite_alt_rounded, color: Color(0xFF14532D), size: 16),
                           label: Text(
                             _isSimulating ? 'Processing Tap...' : 'Simulate Counter Card Tap (+20 Pts)',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4F46E5),
+                            backgroundColor: const Color(0xFF16A34A),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
@@ -273,7 +273,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                 // 3 Stats Cards Row
                 Row(
                   children: [
-                    Expanded(child: _buildMetricCard('ACTIVE CARDS', '$totalCards', 'Member cards', Icons.credit_card_rounded, const Color(0xFF38BDF8))),
+                    Expanded(child: _buildMetricCard('ACTIVE CARDS', '$totalCards', 'Member cards', Icons.credit_card_rounded, const Color(0xFF15803D))),
                     const SizedBox(width: 8),
                     Expanded(child: _buildMetricCard('TOTAL POINTS', '$totalPoints PTS', 'Accumulated rewards', Icons.star_rounded, const Color(0xFFF59E0B))),
                     const SizedBox(width: 8),
@@ -285,17 +285,17 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                 // Search Bar
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 12.5),
                     decoration: const InputDecoration(
                       hintText: 'Search Card UID or Customer...',
-                      hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                      hintStyle: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
+                      prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF4B7A5E), size: 18),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(vertical: 11),
                     ),
@@ -306,9 +306,9 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                 // Table Container
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D1224),
+                    color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF1E293B)),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,21 +320,21 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                           children: [
                             const Text(
                               'CUSTOMER CARD REGISTRY',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF94A3B8), letterSpacing: 0.5),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4B7A5E), letterSpacing: 0.5),
                             ),
                             Text(
                               '${filteredCards.length} Cards',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF64748B)),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4B7A5E)),
                             ),
                           ],
                         ),
                       ),
-                      const Divider(height: 1, color: Color(0xFF1E293B)),
+                      const Divider(height: 1, color: Color(0xFFBBF7D0)),
                       if (pagedCards.isEmpty)
                         const Padding(
                           padding: EdgeInsets.all(32),
                           child: Center(
-                            child: Text('No RFID cards match your search.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                            child: Text('No RFID cards match your search.', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
                           ),
                         )
                       else
@@ -355,17 +355,17 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                                       children: [
                                         Row(
                                           children: [
-                                            const Icon(Icons.credit_card, size: 13, color: Color(0xFF818CF8)),
+                                            const Icon(Icons.credit_card, size: 13, color: Color(0xFF15803D)),
                                             const SizedBox(width: 4),
                                             Text(
                                               card['cardUid'].toString(),
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF818CF8), fontFamily: 'monospace'),
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Color(0xFF15803D), fontFamily: 'monospace'),
                                             ),
                                           ],
                                         ),
                                         const SizedBox(height: 2),
-                                        Text(card['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.white)),
-                                        Text(card['email'].toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                                        Text(card['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF0F172A))),
+                                        Text(card['email'].toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
                                       ],
                                     ),
                                   ),
@@ -383,7 +383,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                                   ),
                                   const SizedBox(width: 8),
                                   IconButton(
-                                    icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF818CF8), size: 20),
+                                    icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF15803D), size: 20),
                                     tooltip: '+20 Pts',
                                     onPressed: () => _simulateTap(card['cardUid'].toString(), card['name'].toString()),
                                   ),
@@ -393,22 +393,22 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                           },
                         ),
                       // Pagination Bottom Controls
-                      const Divider(height: 1, color: Color(0xFF1E293B)),
+                      const Divider(height: 1, color: Color(0xFFBBF7D0)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                              icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF14532D), size: 20),
                               onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
                             ),
                             Text(
                               'Page $_currentPage of $totalPages (${filteredCards.length} cards)',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                              icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF14532D), size: 20),
                               onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
                             ),
                           ],
@@ -429,9 +429,9 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D1224),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,7 +440,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
-                child: Text(title, style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5), overflow: TextOverflow.ellipsis),
+                child: Text(title, style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E), letterSpacing: 0.5), overflow: TextOverflow.ellipsis),
               ),
               Icon(icon, size: 14, color: color),
             ],
@@ -448,7 +448,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
           const SizedBox(height: 6),
           Text(val, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 8.5, color: Color(0xFF475569)), overflow: TextOverflow.ellipsis),
+          Text(subtitle, style: const TextStyle(fontSize: 8.5, color: Color(0xFF86EFAC)), overflow: TextOverflow.ellipsis),
         ],
       ),
     );

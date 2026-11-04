@@ -41,16 +41,16 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
-            Icon(Icons.person_add_rounded, color: Color(0xFF4F46E5), size: 20),
+            Icon(Icons.person_add_rounded, color: Color(0xFF16A34A), size: 20),
             SizedBox(width: 8),
-            Text('Add New Customer', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            Text('Add New Customer', style: TextStyle(color: Color(0xFF14532D), fontSize: 15, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -58,37 +58,37 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
           children: [
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               decoration: InputDecoration(
                 labelText: 'Full Name',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF070A14),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                fillColor: const Color(0xFFF8FFF9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: emailCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               decoration: InputDecoration(
                 labelText: 'Email Address',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF070A14),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                fillColor: const Color(0xFFF8FFF9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: phoneCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               decoration: InputDecoration(
                 labelText: 'Phone Number',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF070A14),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                fillColor: const Color(0xFFF8FFF9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
               ),
             ),
           ],
@@ -96,10 +96,10 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
             onPressed: () async {
               final name = nameCtrl.text.trim();
               final email = emailCtrl.text.trim().toLowerCase();
@@ -128,7 +128,7 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                 );
               }
             },
-            child: const Text('Add User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Add User', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -143,16 +143,16 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
-            Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8), size: 22),
+            Icon(Icons.edit_note_rounded, color: Color(0xFF15803D), size: 22),
             SizedBox(width: 8),
-            Text('Edit Customer Profile', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            Text('Edit Customer Profile', style: TextStyle(color: Color(0xFF14532D), fontSize: 15, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -163,13 +163,13 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF070A14),
+                color: const Color(0xFFF8FFF9),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.badge_outlined, size: 16, color: Color(0xFF818CF8)),
+                  const Icon(Icons.badge_outlined, size: 16, color: Color(0xFF15803D)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -177,11 +177,11 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                       children: [
                         Text(
                           user['custId'].toString(),
-                          style: const TextStyle(color: Color(0xFF818CF8), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Color(0xFF15803D), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                         Text(
                           user['email'].toString(),
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                          style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -193,28 +193,28 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
             const SizedBox(height: 14),
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               decoration: InputDecoration(
                 labelText: 'Full Name',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF070A14),
+                fillColor: const Color(0xFFF8FFF9),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: phoneCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
                 labelText: 'Phone Number',
-                labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF070A14),
+                fillColor: const Color(0xFFF8FFF9),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1E293B))),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
               ),
             ),
           ],
@@ -222,10 +222,10 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF15803D)),
             onPressed: () async {
               final newName = nameCtrl.text.trim();
               final newPhone = phoneCtrl.text.trim();
@@ -260,7 +260,7 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                 );
               }
             },
-            child: const Text('Save Changes', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+            child: const Text('Save Changes', style: TextStyle(color: Color(0xFFF0FDF4), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -271,24 +271,24 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF0FDF4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF1E293B)),
+          side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
         title: Row(
           children: const [
             Icon(Icons.archive_outlined, color: Color(0xFFF59E0B), size: 20),
             SizedBox(width: 8),
-            Text('Archive Account', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            Text('Archive Account', style: TextStyle(color: Color(0xFF14532D), fontSize: 15, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'Are you sure you want to archive customer "$userName"?\n\nThis safely deactivates and hides the user from the active Registered System Users list without deleting their account, order history, or loyalty records.',
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.4),
+          style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12, height: 1.4),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8)))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E)))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF59E0B)),
             onPressed: () async {
@@ -319,7 +319,7 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                 );
               }
             },
-            child: const Text('Archive', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Archive', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -333,7 +333,7 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
-            child: Text('Error loading users: ${snapshot.error}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+            child: Text('Error loading users: ${snapshot.error}', style: const TextStyle(color: Color(0xFF14532D), fontSize: 12)),
           );
         }
 
@@ -397,19 +397,19 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withValues(alpha: 0.15),
+                      color: const Color(0xFFDCFCE7),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.people_alt_rounded, color: Color(0xFF818CF8), size: 24),
+                    child: const Icon(Icons.people_alt_rounded, color: Color(0xFF15803D), size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -426,7 +426,7 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF4F46E5).withValues(alpha: 0.2),
+                                color: const Color(0xFF16A34A).withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text('${users.length} Accounts', style: const TextStyle(color: Color(0xFFA5B4FC), fontSize: 9.5, fontWeight: FontWeight.bold)),
@@ -434,16 +434,16 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        const Text('Manage user accounts, edit details, or archive profiles', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5)),
+                        const Text('Manage user accounts, edit details, or archive profiles', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5)),
                       ],
                     ),
                   ),
                   ElevatedButton.icon(
                     onPressed: _showAddUserDialog,
-                    icon: const Icon(Icons.person_add_rounded, color: Colors.white, size: 14),
-                    label: const Text('Add User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    icon: const Icon(Icons.person_add_rounded, color: Color(0xFF14532D), size: 14),
+                    label: const Text('Add User', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 11)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFF16A34A),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -456,17 +456,17 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
             // Search Bar
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                style: const TextStyle(color: Color(0xFF14532D), fontSize: 12.5),
                 decoration: const InputDecoration(
                   hintText: 'Search Name, Email, or User ID...',
-                  hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                  prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                  hintStyle: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
+                  prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF4B7A5E), size: 18),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 11),
                 ),
@@ -477,9 +477,9 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
             // Users Table Container
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF0D1224),
+                color: const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E293B)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,17 +489,17 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('REGISTERED SYSTEM USERS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
-                        Text('${filteredUsers.length} Users', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF64748B))),
+                        const Text('REGISTERED SYSTEM USERS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4B7A5E), letterSpacing: 0.5)),
+                        Text('${filteredUsers.length} Users', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4B7A5E))),
                       ],
                     ),
                   ),
-                  const Divider(height: 1, color: Color(0xFF1E293B)),
+                  const Divider(height: 1, color: Color(0xFFBBF7D0)),
                   if (pagedUsers.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(32),
                       child: Center(
-                        child: Text('No registered users found.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                        child: Text('No registered users found.', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
                       ),
                     )
                   else
@@ -517,10 +517,10 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                             children: [
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: const Color(0xFF1E293B),
+                                backgroundColor: const Color(0xFFBBF7D0),
                                 child: Text(
                                   (u['name'].toString().isNotEmpty ? u['name'].toString()[0] : '?').toUpperCase(),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF818CF8), fontSize: 12),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534), fontSize: 13),
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -535,7 +535,7 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                                         Flexible(
                                           child: Text(
                                             u['name'].toString(),
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white),
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A)),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -544,12 +544,12 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF1E293B),
+                                            color: const Color(0xFFBBF7D0),
                                             borderRadius: BorderRadius.circular(6),
                                           ),
                                           child: Text(
                                             u['custId'].toString(),
-                                            style: const TextStyle(fontSize: 8.5, color: Color(0xFF94A3B8), fontFamily: 'monospace'),
+                                            style: const TextStyle(fontSize: 8.5, color: Color(0xFF4B7A5E), fontFamily: 'monospace'),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -559,14 +559,14 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                                     const SizedBox(height: 2),
                                     Text(
                                       u['email'].toString(),
-                                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E)),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
                                       '📞 ${u['phone']} • Joined: ${u['dateJoined']}',
-                                      style: const TextStyle(fontSize: 9.5, color: Color(0xFF475569)),
+                                      style: const TextStyle(fontSize: 9.5, color: Color(0xFF15803D)),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -585,16 +585,16 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF38BDF8).withValues(alpha: 0.12),
+                                        color: const Color(0xFF15803D).withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                                        border: Border.all(color: const Color(0xFF15803D).withValues(alpha: 0.3)),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: const [
-                                          Icon(Icons.edit_outlined, color: Color(0xFF38BDF8), size: 13),
+                                          Icon(Icons.edit_outlined, color: Color(0xFF15803D), size: 13),
                                           SizedBox(width: 3),
-                                          Text('Edit', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                          Text('Edit', style: TextStyle(color: Color(0xFF15803D), fontSize: 10.5, fontWeight: FontWeight.bold)),
                                         ],
                                       ),
                                     ),
@@ -629,22 +629,22 @@ class _AdminRegisteredUsersViewState extends State<AdminRegisteredUsersView> {
                       },
                     ),
                   // Pagination Controls
-                  const Divider(height: 1, color: Color(0xFF1E293B)),
+                  const Divider(height: 1, color: Color(0xFFBBF7D0)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                          icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF14532D), size: 20),
                           onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
                         ),
                         Text(
                           'Page $_currentPage of $totalPages (${filteredUsers.length} users)',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                          icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF14532D), size: 20),
                           onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
                         ),
                       ],
