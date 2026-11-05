@@ -1136,7 +1136,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   ),
                   ElevatedButton(
                     onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminProductsScreen()));
+                      setState(() => _currentNavIndex = 1);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF16A34A),

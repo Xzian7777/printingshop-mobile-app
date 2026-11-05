@@ -371,31 +371,64 @@ class _StoreScreenState extends State<StoreScreen> {
               );
 
               if (confirm == true) {
-                await _db.collection('products').doc(docId).update({
-                  'archived': true,
-                  'archivedAt': FieldValue.serverTimestamp(),
-                });
                 try {
-                  await _db
-                      .collection('artifacts')
-                      .doc('printcraft-pro')
-                      .collection('public')
-                      .doc('data')
-                      .collection('store_products')
-                      .doc(docId)
-                      .update({
+                  final productPayload = Map<String, dynamic>.from(data);
+                  productPayload['id'] = docId;
+                  productPayload['name'] = nameController.text.trim().isNotEmpty ? nameController.text.trim() : (data['name'] ?? 'Product');
+                  productPayload['price'] = double.tryParse(priceController.text) ?? (data['price'] ?? 0);
+                  productPayload['stock'] = int.tryParse(stockController.text) ?? (data['stock'] ?? 0);
+                  productPayload['archived'] = true;
+
+                  // 1. Write to central archives collection (used by Web & Mobile)
+                  final archiveDocId = "store_product_$docId";
+                  await _db.collection('archives').doc(archiveDocId).set({
+                    'id': archiveDocId,
+                    'originalId': docId,
+                    'itemType': 'store_product',
+                    'data': productPayload,
+                    'source': 'mobile_admin',
+                    'archivedAt': DateTime.now().toIso8601String(),
+                  }, SetOptions(merge: true));
+
+                  // 2. Mark archived in products collection
+                  await _db.collection('products').doc(docId).set({
                     'archived': true,
                     'archivedAt': FieldValue.serverTimestamp(),
-                  });
-                } catch (_) {}
-                if (!mounted) return;
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Nai-archive ang produkto! Puwede mo itong i-restore sa Archive icon sa itaas."),
-                    backgroundColor: Color(0xFF15803D),
-                  ),
-                );
+                  }, SetOptions(merge: true));
+
+                  // 3. Mark archived in public store_products collection
+                  try {
+                    await _db
+                        .collection('artifacts')
+                        .doc('printcraft-pro')
+                        .collection('public')
+                        .doc('data')
+                        .collection('store_products')
+                        .doc(docId)
+                        .set({
+                      'archived': true,
+                      'archivedAt': FieldValue.serverTimestamp(),
+                    }, SetOptions(merge: true));
+                  } catch (_) {}
+
+                  if (!mounted) return;
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Nai-archive ang produkto! Naka-sync na rin ito sa Web Archive."),
+                      backgroundColor: Color(0xFF15803D),
+                    ),
+                  );
+                } catch (err) {
+                  debugPrint("Archive error: $err");
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Error sa pag-archive: $err"),
+                      backgroundColor: const Color(0xFFF43F5E),
+                    ),
+                  );
+                }
               }
             },
           ),
