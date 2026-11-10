@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/admin_repository.dart';
 
 class ArchiveItem {
   final String id;
@@ -24,7 +25,8 @@ class ArchiveItem {
 }
 
 class AdminArchiveScreen extends StatefulWidget {
-  const AdminArchiveScreen({super.key});
+  final bool embedded;
+  const AdminArchiveScreen({super.key, this.embedded = false});
 
   @override
   State<AdminArchiveScreen> createState() => _AdminArchiveScreenState();
@@ -32,7 +34,8 @@ class AdminArchiveScreen extends StatefulWidget {
 
 class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  String _selectedCategory = 'All'; // 'All', 'Users', 'Printing Services', 'In-Store Supplies', 'Sample Works'
+  String _selectedCategory =
+      'All'; // 'All', 'Users', 'Printing Services', 'In-Store Supplies', 'Sample Works'
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   bool _isRefreshing = false;
@@ -67,13 +70,14 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
           ],
         ),
         content: Text(
-          "I-restore ang '${item.title}' pabalik sa aktibong listahan?",
+          "Restore '${item.title}' to the active list?",
           style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -90,40 +94,14 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
     if (confirm != true) return;
 
     try {
-      final restorePayload = Map<String, dynamic>.from(item.rawData);
-      restorePayload['archived'] = false;
-
-      if (item.type == 'product') {
-        await _db.collection('products').doc(item.id).set(restorePayload, SetOptions(merge: true));
-        try {
-          await _db
-              .collection('artifacts')
-              .doc('printcraft-pro')
-              .collection('public')
-              .doc('data')
-              .collection('store_products')
-              .doc(item.id)
-              .set(restorePayload, SetOptions(merge: true));
-        } catch (_) {}
-      } else if (item.type == 'user') {
-        await _db.collection('users').doc(item.id).set(restorePayload, SetOptions(merge: true));
-      } else if (item.type == 'service') {
-        await _db.collection('services').doc(item.id).set(restorePayload, SetOptions(merge: true));
-      } else if (item.type == 'sample') {
-        await _db.collection('sample_works').doc(item.id).set(restorePayload, SetOptions(merge: true));
-      }
-
-      // Delete from central archives collection if present
-      if (item.archiveDocId.isNotEmpty) {
-        try {
-          await _db.collection('archives').doc(item.archiveDocId).delete();
-        } catch (_) {}
-      }
+      await AdminRepository().finishArchive(
+          item.type, item.id, item.archiveDocId, item.rawData,
+          restore: true);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Naibalik na ang '${item.title}'!"),
+          content: Text("'${item.title}' restored successfully."),
           backgroundColor: const Color(0xFF16A34A),
         ),
       );
@@ -162,13 +140,14 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
           ],
         ),
         content: Text(
-          "Sigurado ka bang buburahin nang permanente ang '${item.title}'? Hindi na ito mababawi kailanman.",
+          "Permanently delete '${item.title}'? This action cannot be undone.",
           style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -185,32 +164,9 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
     if (confirm != true) return;
 
     try {
-      if (item.type == 'product') {
-        await _db.collection('products').doc(item.id).delete();
-        try {
-          await _db
-              .collection('artifacts')
-              .doc('printcraft-pro')
-              .collection('public')
-              .doc('data')
-              .collection('store_products')
-              .doc(item.id)
-              .delete();
-        } catch (_) {}
-      } else if (item.type == 'user') {
-        await _db.collection('users').doc(item.id).delete();
-      } else if (item.type == 'service') {
-        await _db.collection('services').doc(item.id).delete();
-      } else if (item.type == 'sample') {
-        await _db.collection('sample_works').doc(item.id).delete();
-      }
-
-      // Delete from central archives collection as well
-      if (item.archiveDocId.isNotEmpty) {
-        try {
-          await _db.collection('archives').doc(item.archiveDocId).delete();
-        } catch (_) {}
-      }
+      await AdminRepository().finishArchive(
+          item.type, item.id, item.archiveDocId, item.rawData,
+          restore: false);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -240,7 +196,8 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
           color: isSelected ? const Color(0xFF047857) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF047857) : const Color(0xFFE2E8F0),
+            color:
+                isSelected ? const Color(0xFF047857) : const Color(0xFFE2E8F0),
             width: 1.2,
           ),
           boxShadow: isSelected
@@ -272,10 +229,14 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF15803D), size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: !widget.embedded,
+        leading: widget.embedded
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    color: Color(0xFF15803D), size: 18),
+                onPressed: () => Navigator.pop(context),
+              ),
         title: const Text(
           "System Archives",
           style: TextStyle(
@@ -302,45 +263,78 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                     stream: _db.collection('services').snapshots(),
                     builder: (context, servicesSnap) {
                       return StreamBuilder<QuerySnapshot>(
-                        stream: _db.collection('sample_works').snapshots(),
+                        stream: _db.collection('sample_products').snapshots(),
                         builder: (context, samplesSnap) {
+                          final snapshots = [
+                            archivesSnap,
+                            productsSnap,
+                            usersSnap,
+                            servicesSnap,
+                            samplesSnap
+                          ];
+                          if (snapshots.any((s) => s.hasError))
+                            return const Center(
+                                child: Text(
+                                    'Unable to load archives. Check your connection and admin access.',
+                                    style: TextStyle(color: Colors.red)));
+                          if (snapshots.any((s) => !s.hasData))
+                            return const Center(
+                                child: CircularProgressIndicator());
                           final Map<String, ArchiveItem> itemMap = {};
 
                           // 1. Central archives collection (created from website or unified backend)
                           for (final doc in archivesSnap.data?.docs ?? []) {
                             final data = doc.data() as Map<String, dynamic>;
-                            final innerData = (data['data'] is Map<String, dynamic>)
-                                ? data['data'] as Map<String, dynamic>
-                                : <String, dynamic>{};
-                            final origId = (data['originalId'] ?? doc.id).toString();
-                            final itemType = (data['itemType'] ?? 'store_product').toString();
+                            final innerData =
+                                (data['data'] is Map<String, dynamic>)
+                                    ? data['data'] as Map<String, dynamic>
+                                    : <String, dynamic>{};
+                            final origId =
+                                (data['originalId'] ?? doc.id).toString();
+                            final itemType =
+                                (data['itemType'] ?? 'store_product')
+                                    .toString();
 
                             String categoryName = 'In-Store Supplies';
                             String type = 'product';
-                            String title = innerData['name'] ?? innerData['title'] ?? innerData['email'] ?? 'Item';
+                            String title = innerData['fullName'] ??
+                                innerData['full_name'] ??
+                                innerData['name'] ??
+                                innerData['title'] ??
+                                innerData['email'] ??
+                                'Item';
                             String subtitle = '';
                             String? imageUrl = innerData['imageUrl'];
 
                             if (itemType == 'user') {
                               categoryName = 'Users';
                               type = 'user';
-                              subtitle = "Email: ${innerData['email'] ?? 'N/A'} • Role: ${innerData['role'] ?? 'Customer'}";
+                              subtitle =
+                                  "Email: ${innerData['email'] ?? 'N/A'} • Role: ${innerData['role'] ?? 'Customer'}";
                             } else if (itemType == 'service') {
                               categoryName = 'Printing Services';
                               type = 'service';
-                              final price = (innerData['price'] ?? 0).toDouble();
-                              subtitle = "Category: ${innerData['category'] ?? 'Printing'} • Rate: ₱${price.toStringAsFixed(2)}";
-                            } else if (itemType == 'sample_product' || itemType == 'sample') {
+                              final price = double.tryParse(
+                                      '${innerData['basePrice'] ?? innerData['price'] ?? 0}') ??
+                                  0.0;
+                              subtitle =
+                                  "Category: ${innerData['category'] ?? 'Printing'} • Rate: ₱${price.toStringAsFixed(2)}";
+                            } else if (itemType == 'sample_product' ||
+                                itemType == 'sample') {
                               categoryName = 'Sample Works';
                               type = 'sample';
-                              subtitle = "Category: ${innerData['category'] ?? 'Portfolio'}";
+                              subtitle =
+                                  "Category: ${innerData['category'] ?? 'Portfolio'}";
                             } else {
                               // store_product or product
                               categoryName = 'In-Store Supplies';
                               type = 'product';
                               final stock = (innerData['stock'] ?? 0);
-                              final price = (innerData['price'] ?? 0).toDouble();
-                              subtitle = "Category: ${innerData['category'] ?? 'General'} • Stock: $stock pcs • ₱${price.toStringAsFixed(2)}";
+                              final price = double.tryParse(
+                                      '${innerData['basePrice'] ?? innerData['price'] ?? 0}') ??
+                                  0.0;
+                              subtitle =
+                                  "Category: ${innerData['category'] ?? 'General'} • Stock: $stock pcs • ₱${price.toStringAsFixed(2)}";
                             }
 
                             itemMap["${type}_$origId"] = ArchiveItem(
@@ -362,8 +356,13 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                               itemMap["user_${doc.id}"] = ArchiveItem(
                                 id: doc.id,
                                 archiveDocId: "user_${doc.id}",
-                                title: data['name'] ?? data['email'] ?? 'User',
-                                subtitle: "Email: ${data['email'] ?? 'N/A'} • Role: ${data['role'] ?? 'Customer'}",
+                                title: data['fullName'] ??
+                                    data['full_name'] ??
+                                    data['name'] ??
+                                    data['email'] ??
+                                    'User',
+                                subtitle:
+                                    "Email: ${data['email'] ?? 'N/A'} • Role: ${data['role'] ?? 'Customer'}",
                                 type: 'user',
                                 categoryName: 'Users',
                                 rawData: data,
@@ -375,12 +374,15 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                             final data = doc.data() as Map<String, dynamic>;
                             if (data['archived'] == true) {
                               final stock = (data['stock'] ?? 0);
-                              final price = (data['price'] ?? 0).toDouble();
+                              final price = double.tryParse(
+                                      '${data['basePrice'] ?? data['price'] ?? 0}') ??
+                                  0.0;
                               itemMap["product_${doc.id}"] = ArchiveItem(
                                 id: doc.id,
                                 archiveDocId: "store_product_${doc.id}",
                                 title: data['name'] ?? 'Product',
-                                subtitle: "Category: ${data['category'] ?? 'General'} • Stock: $stock pcs • ₱${price.toStringAsFixed(2)}",
+                                subtitle:
+                                    "Category: ${data['category'] ?? 'General'} • Stock: $stock pcs • ₱${price.toStringAsFixed(2)}",
                                 type: 'product',
                                 categoryName: 'In-Store Supplies',
                                 imageUrl: data['imageUrl'],
@@ -395,8 +397,10 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                               itemMap["service_${doc.id}"] = ArchiveItem(
                                 id: doc.id,
                                 archiveDocId: "service_${doc.id}",
-                                title: data['name'] ?? data['title'] ?? 'Service',
-                                subtitle: "Category: ${data['category'] ?? 'Printing'} • Rate: ₱${(data['price'] ?? 0).toDouble().toStringAsFixed(2)}",
+                                title:
+                                    data['name'] ?? data['title'] ?? 'Service',
+                                subtitle:
+                                    "Category: ${data['category'] ?? 'Printing'} • Rate: ₱${(double.tryParse('${data['basePrice'] ?? data['price'] ?? 0}') ?? 0).toStringAsFixed(2)}",
                                 type: 'service',
                                 categoryName: 'Printing Services',
                                 imageUrl: data['imageUrl'],
@@ -411,8 +415,11 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                               itemMap["sample_${doc.id}"] = ArchiveItem(
                                 id: doc.id,
                                 archiveDocId: "sample_product_${doc.id}",
-                                title: data['name'] ?? data['title'] ?? 'Sample Work',
-                                subtitle: "Category: ${data['category'] ?? 'Portfolio'}",
+                                title: data['name'] ??
+                                    data['title'] ??
+                                    'Sample Work',
+                                subtitle:
+                                    "Category: ${data['category'] ?? 'Portfolio'}",
                                 type: 'sample',
                                 categoryName: 'Sample Works',
                                 imageUrl: data['imageUrl'],
@@ -422,10 +429,17 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                           }
 
                           final allItems = itemMap.values.toList();
-                          final userItems = allItems.where((i) => i.type == 'user').toList();
-                          final serviceItems = allItems.where((i) => i.type == 'service').toList();
-                          final productItems = allItems.where((i) => i.type == 'product').toList();
-                          final sampleItems = allItems.where((i) => i.type == 'sample').toList();
+                          final userItems =
+                              allItems.where((i) => i.type == 'user').toList();
+                          final serviceItems = allItems
+                              .where((i) => i.type == 'service')
+                              .toList();
+                          final productItems = allItems
+                              .where((i) => i.type == 'product')
+                              .toList();
+                          final sampleItems = allItems
+                              .where((i) => i.type == 'sample')
+                              .toList();
 
                           // Filter according to selected category and search query
                           List<ArchiveItem> displayedItems = [];
@@ -452,7 +466,8 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                           final totalArchivedCount = allItems.length;
 
                           return SingleChildScrollView(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -462,17 +477,20 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    border: Border.all(
+                                        color: const Color(0xFFE2E8F0)),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.02),
+                                        color: Colors.black
+                                            .withValues(alpha: 0.02),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       // Green Box Icon
                                       Container(
@@ -480,7 +498,8 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                         height: 44,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFE6F4EA),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                         ),
                                         child: const Icon(
                                           Icons.inventory_2_rounded,
@@ -493,12 +512,14 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                       // Title + Subtitle
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Wrap(
                                               spacing: 8,
                                               runSpacing: 4,
-                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
                                               children: [
                                                 const Text(
                                                   "System Archives",
@@ -509,17 +530,24 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                                   ),
                                                 ),
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2.5),
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFFD1FAE5),
-                                                    borderRadius: BorderRadius.circular(12),
+                                                    color:
+                                                        const Color(0xFFD1FAE5),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
                                                   ),
                                                   child: Text(
                                                     "$totalArchivedCount Archived Items",
                                                     style: const TextStyle(
                                                       color: Color(0xFF047857),
                                                       fontSize: 10.5,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                 ),
@@ -545,25 +573,42 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                           setState(() {
                                             _isRefreshing = true;
                                           });
-                                          Future.delayed(const Duration(milliseconds: 400), () {
-                                            if (mounted) setState(() => _isRefreshing = false);
+                                          Future.delayed(
+                                              const Duration(milliseconds: 400),
+                                              () {
+                                            if (mounted)
+                                              setState(
+                                                  () => _isRefreshing = false);
                                           });
                                         },
                                         icon: _isRefreshing
                                             ? const SizedBox(
                                                 width: 14,
                                                 height: 14,
-                                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF334155)),
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color:
+                                                            Color(0xFF334155)),
                                               )
-                                            : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF334155)),
+                                            : const Icon(Icons.refresh_rounded,
+                                                size: 16,
+                                                color: Color(0xFF334155)),
                                         label: const Text(
                                           "Refresh",
-                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF334155)),
                                         ),
                                         style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: Color(0xFFCBD5E1)),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          side: const BorderSide(
+                                              color: Color(0xFFCBD5E1)),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 6),
                                         ),
                                       ),
                                     ],
@@ -577,7 +622,8 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    border: Border.all(
+                                        color: const Color(0xFFE2E8F0)),
                                   ),
                                   child: Column(
                                     children: [
@@ -586,15 +632,26 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                         scrollDirection: Axis.horizontal,
                                         child: Row(
                                           children: [
-                                            _buildFilterChip("All Items", totalArchivedCount, "All"),
+                                            _buildFilterChip("All Items",
+                                                totalArchivedCount, "All"),
                                             const SizedBox(width: 8),
-                                            _buildFilterChip("Users", userItems.length, "Users"),
+                                            _buildFilterChip("Users",
+                                                userItems.length, "Users"),
                                             const SizedBox(width: 8),
-                                            _buildFilterChip("Printing Services", serviceItems.length, "Printing Services"),
+                                            _buildFilterChip(
+                                                "Printing Services",
+                                                serviceItems.length,
+                                                "Printing Services"),
                                             const SizedBox(width: 8),
-                                            _buildFilterChip("In-Store Supplies", productItems.length, "In-Store Supplies"),
+                                            _buildFilterChip(
+                                                "In-Store Supplies",
+                                                productItems.length,
+                                                "In-Store Supplies"),
                                             const SizedBox(width: 8),
-                                            _buildFilterChip("Sample Works", sampleItems.length, "Sample Works"),
+                                            _buildFilterChip(
+                                                "Sample Works",
+                                                sampleItems.length,
+                                                "Sample Works"),
                                           ],
                                         ),
                                       ),
@@ -603,21 +660,34 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                       // Search Field
                                       TextField(
                                         controller: _searchController,
-                                        onChanged: (val) => setState(() => _searchQuery = val),
-                                        style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
+                                        onChanged: (val) =>
+                                            setState(() => _searchQuery = val),
+                                        style: const TextStyle(
+                                            fontSize: 13,
+                                            color: Color(0xFF0F172A)),
                                         decoration: InputDecoration(
                                           hintText: "Search archived items...",
-                                          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                                          prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
-                                          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                          hintStyle: const TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF94A3B8)),
+                                          prefixIcon: const Icon(Icons.search,
+                                              size: 18,
+                                              color: Color(0xFF94A3B8)),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  vertical: 8, horizontal: 12),
                                           isDense: true,
                                           enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: const BorderSide(
+                                                color: Color(0xFFE2E8F0)),
                                           ),
                                           focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                            borderSide: const BorderSide(color: Color(0xFF047857)),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: const BorderSide(
+                                                color: Color(0xFF047857)),
                                           ),
                                           filled: true,
                                           fillColor: const Color(0xFFF8FAFC),
@@ -631,24 +701,30 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                 // Main Content Area / Empty Box
                                 Container(
                                   width: double.infinity,
-                                  constraints: const BoxConstraints(minHeight: 280),
-                                  padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+                                  constraints:
+                                      const BoxConstraints(minHeight: 280),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 36, horizontal: 16),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    border: Border.all(
+                                        color: const Color(0xFFE2E8F0)),
                                   ),
                                   child: displayedItems.isEmpty
                                       ? Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
                                           children: [
                                             Container(
                                               width: 52,
                                               height: 52,
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFEFF6FF),
-                                                borderRadius: BorderRadius.circular(14),
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
                                               ),
                                               child: const Icon(
                                                 Icons.all_inbox_rounded,
@@ -678,9 +754,13 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                         )
                                       : ListView.separated(
                                           shrinkWrap: true,
-                                          physics: const NeverScrollableScrollPhysics(),
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
                                           itemCount: displayedItems.length,
-                                          separatorBuilder: (_, __) => const Divider(height: 20, color: Color(0xFFF1F5F9)),
+                                          separatorBuilder: (_, __) =>
+                                              const Divider(
+                                                  height: 20,
+                                                  color: Color(0xFFF1F5F9)),
                                           itemBuilder: (ctx, idx) {
                                             final item = displayedItems[idx];
                                             return Row(
@@ -690,28 +770,45 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                                   width: 44,
                                                   height: 44,
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFFE2E8F0),
-                                                    borderRadius: BorderRadius.circular(10),
+                                                    color:
+                                                        const Color(0xFFE2E8F0),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
                                                   ),
                                                   clipBehavior: Clip.antiAlias,
-                                                  child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                                                  child: item.imageUrl !=
+                                                              null &&
+                                                          item.imageUrl!
+                                                              .isNotEmpty
                                                       ? Image.network(
                                                           item.imageUrl!,
                                                           fit: BoxFit.cover,
-                                                          errorBuilder: (_, __, ___) => const Icon(
-                                                            Icons.inventory_2_outlined,
-                                                            color: Color(0xFF64748B),
+                                                          errorBuilder:
+                                                              (_, __, ___) =>
+                                                                  const Icon(
+                                                            Icons
+                                                                .inventory_2_outlined,
+                                                            color: Color(
+                                                                0xFF64748B),
                                                           ),
                                                         )
                                                       : Icon(
                                                           item.type == 'user'
-                                                              ? Icons.person_outline_rounded
-                                                              : item.type == 'service'
-                                                                  ? Icons.print_outlined
-                                                                  : item.type == 'sample'
-                                                                      ? Icons.image_outlined
-                                                                      : Icons.shopping_bag_outlined,
-                                                          color: const Color(0xFF64748B),
+                                                              ? Icons
+                                                                  .person_outline_rounded
+                                                              : item.type ==
+                                                                      'service'
+                                                                  ? Icons
+                                                                      .print_outlined
+                                                                  : item.type ==
+                                                                          'sample'
+                                                                      ? Icons
+                                                                          .image_outlined
+                                                                      : Icons
+                                                                          .shopping_bag_outlined,
+                                                          color: const Color(
+                                                              0xFF64748B),
                                                           size: 22,
                                                         ),
                                                 ),
@@ -720,34 +817,57 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                                 // Details
                                                 Expanded(
                                                   child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Row(
                                                         children: [
                                                           Expanded(
                                                             child: Text(
                                                               item.title,
-                                                              style: const TextStyle(
+                                                              style:
+                                                                  const TextStyle(
                                                                 fontSize: 13.5,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: Color(0xFF0F172A),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Color(
+                                                                    0xFF0F172A),
                                                               ),
                                                               maxLines: 1,
-                                                              overflow: TextOverflow.ellipsis,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
                                                             ),
                                                           ),
                                                           Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                            decoration: BoxDecoration(
-                                                              color: const Color(0xFFF1F5F9),
-                                                              borderRadius: BorderRadius.circular(6),
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical:
+                                                                        2),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFF1F5F9),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          6),
                                                             ),
                                                             child: Text(
                                                               item.categoryName,
-                                                              style: const TextStyle(
+                                                              style:
+                                                                  const TextStyle(
                                                                 fontSize: 9.5,
-                                                                fontWeight: FontWeight.w600,
-                                                                color: Color(0xFF475569),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Color(
+                                                                    0xFF475569),
                                                               ),
                                                             ),
                                                           ),
@@ -758,10 +878,12 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
                                                         item.subtitle,
                                                         style: const TextStyle(
                                                           fontSize: 11,
-                                                          color: Color(0xFF64748B),
+                                                          color:
+                                                              Color(0xFF64748B),
                                                         ),
                                                         maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
                                                       ),
                                                     ],
                                                   ),
@@ -769,17 +891,32 @@ class _AdminArchiveScreenState extends State<AdminArchiveScreen> {
 
                                                 // Actions
                                                 Row(
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: [
                                                     IconButton(
-                                                      icon: const Icon(Icons.restore_from_trash_rounded, color: Color(0xFF047857), size: 20),
+                                                      icon: const Icon(
+                                                          Icons
+                                                              .restore_from_trash_rounded,
+                                                          color:
+                                                              Color(0xFF047857),
+                                                          size: 20),
                                                       tooltip: "Restore",
-                                                      onPressed: () => _restoreItem(item),
+                                                      onPressed: () =>
+                                                          _restoreItem(item),
                                                     ),
                                                     IconButton(
-                                                      icon: const Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4444), size: 20),
-                                                      tooltip: "Permanent Delete",
-                                                      onPressed: () => _permanentlyDeleteItem(item),
+                                                      icon: const Icon(
+                                                          Icons
+                                                              .delete_forever_rounded,
+                                                          color:
+                                                              Color(0xFFEF4444),
+                                                          size: 20),
+                                                      tooltip:
+                                                          "Permanent Delete",
+                                                      onPressed: () =>
+                                                          _permanentlyDeleteItem(
+                                                              item),
                                                     ),
                                                   ],
                                                 ),

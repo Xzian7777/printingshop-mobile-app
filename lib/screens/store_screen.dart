@@ -1,3 +1,20 @@
+import '../services/loyalty_api.dart';
+import '../services/app_notifications.dart';
+import '../services/store_price.dart';
+import '../services/order_number_input_formatter.dart';
+import '../widgets/store_checkout_sheet.dart';
+import '../widgets/store_product_card.dart';
+import '../services/order_validation.dart';
+import '../theme/dashboard_theme.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/order_workflow.dart' show inventoryPlan;
+import '../services/order_reference.dart';
+import 'admin_catalog_view.dart' show sharedImage;
+import '../services/profile_directory.dart';
+import '../services/admin_repository.dart';
+import '../services/supabase_storage_service.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
@@ -18,6 +35,8 @@ class StoreScreen extends StatefulWidget {
 }
 
 class _StoreScreenState extends State<StoreScreen> {
+  String? _loyaltyKey;
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   String _selectedCategory = 'all';
@@ -25,13 +44,12 @@ class _StoreScreenState extends State<StoreScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   final Map<String, int> _cart = {};
-  List<QueryDocumentSnapshot> _allDocs = [];
+  late final Stream<List<ProfileRecord>> _productsStream = watchProducts();
+  List<ProfileRecord> _allDocs = [];
 
   // --- PAGINATION STATE ---
   int _currentPage = 1;
   final int _itemsPerPage = 6;
-
-  String _selectedPaymentMethod = 'GCash';
 
   @override
   void dispose() {
@@ -41,106 +59,171 @@ class _StoreScreenState extends State<StoreScreen> {
 
   int get _cartTotalItems => _cart.values.fold(0, (acc, qty) => acc + qty);
 
-
   // --- PLACE ORDER TO FIRESTORE ---
-  Future<void> _checkoutCart(BuildContext bottomSheetCtx, List<MapEntry<String, int>> cartEntries, double total) async {
+  Future<void> _checkoutCart(
+      BuildContext bottomSheetCtx,
+      List<MapEntry<String, int>> cartEntries,
+      double total,
+      StorePaymentDetails payment) async {
     if (widget.isAdmin) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Bawal mag-order ang Admin account. Para lamang ito sa mga customer."),
+          content: Text(
+              "Only customer accounts can place orders. Please use POS for counter sales."),
           backgroundColor: Color(0xFFF43F5E),
         ),
       );
       Navigator.pop(bottomSheetCtx);
       return;
     }
-    try {
-      // 1. Verify items and live stock before placing order
-      final itemsToOrder = <Map<String, dynamic>>[];
-      for (final entry in cartEntries) {
-        final prodDoc = _allDocs.firstWhere(
-          (d) => d.id == entry.key,
-          orElse: () => throw Exception("Product ${entry.key} not found"),
-        );
-        final data = prodDoc.data() as Map<String, dynamic>;
-        final currentStock = (data['stock'] as num?)?.toInt() ?? 0;
-        final name = (data['name'] ?? 'Product').toString();
-        final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+    final paymentIssue =
+        OrderValidation.validatePayment(payment.method, payment.reference);
+    if (paymentIssue != null) throw StateError(paymentIssue);
+    inventoryPlan({
+      'items': cartEntries.map((e) => {'id': e.key, 'qty': e.value}).toList()
+    }, {
+      for (final doc in _allDocs) doc.id: doc.data()
+    });
+    // 1. Verify items and live stock before placing order
+    final itemsToOrder = <Map<String, dynamic>>[];
+    for (final entry in cartEntries) {
+      final prodDoc = _allDocs.firstWhere(
+        (d) => d.id == entry.key,
+        orElse: () => throw Exception("Product ${entry.key} not found"),
+      );
+      final data = prodDoc.data();
+      final currentStock = (data['stock'] as num?)?.toInt() ?? 0;
+      final name = (data['name'] ?? 'Product').toString();
+      final price = storePrice(data['price']);
+      if (price == null)
+        throw StateError('The price for $name must be updated by the shop.');
 
-        if (currentStock < entry.value) {
-          throw Exception("Insufficient stock for '$name'. Available: $currentStock, Ordered: ${entry.value}");
-        }
-
-        itemsToOrder.add({
-          'id': entry.key,
-          'productId': entry.key,
-          'name': name,
-          'qty': entry.value,
-          'price': price,
-        });
+      if (currentStock < entry.value) {
+        throw Exception(
+            "Insufficient stock for '$name'. Available: $currentStock, Ordered: ${entry.value}");
       }
 
-      final now = DateTime.now();
-      final orderId = "PRNT-${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}${now.microsecond.toString().padLeft(6, '0').substring(0, 2)}";
-      final emailClean = widget.userEmail.trim();
-      final customerName = emailClean.contains('@') ? emailClean.split('@')[0] : emailClean;
-      final itemDescriptions = itemsToOrder.map((i) => "${i['name']} (${i['qty']}x)").join(', ');
-      final totalCopies = itemsToOrder.fold<int>(0, (acc, i) => acc + (i['qty'] as int));
-
-      final orderPayload = {
-        'id': orderId,
-        'customerId': 'CUST-101',
-        'customer': customerName,
-        'email': emailClean.contains('@') ? emailClean : '$emailClean@gmail.com',
-        'service': 'In-Store: $itemDescriptions',
-        'items': itemsToOrder,
-        'pages': 1,
-        'copies': totalCopies,
-        'quantity': totalCopies,
-        'paperSize': 'Store Supply',
-        'colorMode': 'N/A',
-        'sides': 'N/A',
-        'total': total,
-        'file': 'Store_Receipt.pdf',
-        'payment': _selectedPaymentMethod,
-        'status': 'Order Submitted',
-        'stockDeducted': false,
-        'createdAt': now.toIso8601String(),
-        'orderDate': "${_formatMonthDayYear(now)} • ${_formatHourMinute(now)}",
-      };
-
-      // Write to shared orders collection: artifacts/printcraft-pro/public/data/orders
-      await _db
-          .collection('artifacts')
-          .doc('printcraft-pro')
-          .collection('public')
-          .doc('data')
-          .collection('orders')
-          .doc(orderId)
-          .set(orderPayload);
-
-      if (!mounted) return;
-      setState(() => _cart.clear());
-      Navigator.pop(bottomSheetCtx);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Order #$orderId successfully placed! Pending admin approval."),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Checkout error: ${e.toString().replaceAll('Exception: ', '')}"),
-          backgroundColor: const Color(0xFFF43F5E),
-        ),
-      );
+      itemsToOrder.add({
+        'id': entry.key,
+        'productId': entry.key,
+        'name': name,
+        'qty': entry.value,
+        'price': price,
+      });
     }
+
+    final now = DateTime.now();
+    var orderId = generateOrderReference();
+    final emailClean = widget.userEmail.trim();
+    final customerName =
+        emailClean.contains('@') ? emailClean.split('@')[0] : emailClean;
+    final itemDescriptions =
+        itemsToOrder.map((i) => "${i['name']} (${i['qty']}x)").join(', ');
+    final totalCopies =
+        itemsToOrder.fold<int>(0, (acc, i) => acc + (i['qty'] as int));
+    final currentTotal = itemsToOrder.fold<double>(0,
+        (sum, item) => sum + (item['price'] as double) * (item['qty'] as int));
+    if (!currentTotal.isFinite || currentTotal <= 0 || currentTotal > 5000000) {
+      throw StateError(
+          'The order total must be greater than zero and at most 5,000,000.');
+    }
+    if ((currentTotal - total).abs() > 0.01) {
+      throw StateError(
+          'Store prices changed. Reopen your cart to review the current total.');
+    }
+
+    final orderPayload = {
+      'id': orderId,
+      'submissionId': _db.collection('orders').doc().id,
+      'customerId': FirebaseAuth.instance.currentUser?.uid ?? emailClean,
+      'customer': customerName,
+      'email': emailClean.contains('@') ? emailClean : '$emailClean@gmail.com',
+      'service': 'In-Store: $itemDescriptions',
+      'items': itemsToOrder,
+      'pages': 1,
+      'copies': totalCopies,
+      'quantity': totalCopies,
+      'paperSize': 'Store Supply',
+      'colorMode': 'N/A',
+      'sides': 'N/A',
+      'total': total,
+      'file': 'Store_Receipt.pdf',
+      'payment': payment.method,
+      'gcashRef': payment.reference,
+      'gcashReceiptUrl': payment.receipt == null
+          ? ''
+          : await SupabaseStorageService.uploadFile(
+              file: payment.receipt!,
+              originalFilename: payment.receiptName,
+              orderId: orderId),
+      'merchantAccountNumber': payment.merchantAccount,
+      'status': 'Order Submitted',
+      'stockDeducted': false,
+      'createdAt': now.toIso8601String(),
+      'orderDate': "${_formatMonthDayYear(now)} • ${_formatHourMinute(now)}",
+    };
+
+    // Write to shared orders collection: artifacts/printcraft-pro/public/data/orders
+    final orderRef = _db
+        .collection('artifacts')
+        .doc('printcraft-pro')
+        .collection('public')
+        .doc('data')
+        .collection('orders')
+        .doc(orderId);
+    if (payment.pointsUsed > 0) {
+      _loyaltyKey ??= LoyaltyApi.submissionId();
+      final saved = await LoyaltyApi.submitOrder({...orderPayload, 'submissionId': _loyaltyKey, 'pointsUsed': payment.pointsUsed, 'expectedDiscount': payment.pointsDiscount});
+      orderId = saved['orderId'];
+      _loyaltyKey = null;
+    } else {
+    await _db.runTransaction((transaction) async {
+      if (payment.method == 'GCash') {
+        final merchant = await transaction
+            .get(_db.collection('settings').doc('gcash_config'));
+        if (merchant.data()?['isActive'] == false ||
+            merchant.data()?['accountNumber'] != payment.merchantAccount) {
+          throw StateError(
+              'GCash details changed. Review the current merchant account before ordering.');
+        }
+      }
+      final existing = await transaction.get(orderRef);
+      if (existing.exists) {
+        throw StateError(
+            'Order reference already exists. Please retry to generate a new reference.');
+      }
+      transaction.set(orderRef, orderPayload);
+      addNewOrderNotification(transaction, _db, orderRef.id, orderPayload);
+    });
+    }
+
+    if (!mounted) return;
+    setState(() => _cart.clear());
+    Navigator.pop(bottomSheetCtx);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            "Order #$orderId successfully placed! Pending admin approval."),
+        backgroundColor: const Color(0xFF10B981),
+      ),
+    );
   }
 
   String _formatMonthDayYear(DateTime dt) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return "${months[dt.month - 1]} ${dt.day}, ${dt.year}";
   }
 
@@ -152,10 +235,74 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   // --- ADMIN FUNCTION: Add New Product ---
+  Future<bool> _saveProduct(String id, Map<String, dynamic> data,
+      {bool create = false}) async {
+    try {
+      await AdminRepository().saveProduct(id, data, create: create);
+      return true;
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      return false;
+    }
+  }
+
+  Widget _productDetailsFields(
+          TextEditingController image, TextEditingController description,
+          {TextEditingController? category}) =>
+      Column(children: [
+        if (category != null)
+          TextField(
+              controller: category,
+              maxLength: 50,
+              style: const TextStyle(color: Color(0xFF14532D)),
+              decoration: const InputDecoration(
+                  labelText: 'Category',
+                  labelStyle: TextStyle(color: Color(0xFF4B7A5E)))),
+        TextField(
+            controller: image,
+            maxLength: 2000,
+            style: const TextStyle(color: Color(0xFF14532D)),
+            decoration: const InputDecoration(
+                labelText: 'Image URL',
+                labelStyle: TextStyle(color: Color(0xFF4B7A5E)))),
+        TextButton.icon(
+            icon: const Icon(Icons.upload),
+            label: const Text('Upload product image'),
+            onPressed: () async {
+              try {
+                final selected = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['png', 'jpg', 'jpeg']);
+                if (selected == null || selected.files.single.path == null)
+                  return;
+                final f = selected.files.single;
+                final url = await SupabaseStorageService.uploadFile(
+                    file: File(f.path!), originalFilename: f.name);
+                if (mounted) image.text = url;
+              } catch (e) {
+                if (mounted)
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            }),
+        TextField(
+            controller: description,
+            maxLength: 1000,
+            maxLines: 3,
+            style: const TextStyle(color: Color(0xFF14532D)),
+            decoration: const InputDecoration(
+                labelText: 'Description',
+                labelStyle: TextStyle(color: Color(0xFF4B7A5E)))),
+      ]);
+
   void _showAddProductDialog() {
     final nameController = TextEditingController();
     final priceController = TextEditingController();
     final stockController = TextEditingController();
+    final imageController = TextEditingController();
+    final descriptionController = TextEditingController();
     String category = 'notebooks';
 
     showDialog(
@@ -170,7 +317,11 @@ class _StoreScreenState extends State<StoreScreen> {
           children: const [
             Icon(Icons.add_box_rounded, color: Color(0xFF15803D)),
             SizedBox(width: 8),
-            Text("Add Store Item", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
+            Text("Add Store Item",
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF14532D))),
           ],
         ),
         content: SingleChildScrollView(
@@ -190,7 +341,12 @@ class _StoreScreenState extends State<StoreScreen> {
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
-                keyboardType: TextInputType.number,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  OrderNumberInputFormatter(
+                      maximum: 5000000, allowDecimals: true)
+                ],
                 style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                 decoration: const InputDecoration(
                   labelText: "Price (₱)",
@@ -217,15 +373,19 @@ class _StoreScreenState extends State<StoreScreen> {
                   return DropdownButtonFormField<String>(
                     dropdownColor: const Color(0xFFF0FDF4),
                     initialValue: category,
-                    style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                    style:
+                        const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                     decoration: const InputDecoration(
                       labelText: "Category",
                       labelStyle: TextStyle(color: Color(0xFF4B7A5E)),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'notebooks', child: Text('Notebooks & Paper')),
-                      DropdownMenuItem(value: 'pens', child: Text('Pens & Writing')),
-                      DropdownMenuItem(value: 'art', child: Text('Art & Office Supplies')),
+                      DropdownMenuItem(
+                          value: 'notebooks', child: Text('Notebooks & Paper')),
+                      DropdownMenuItem(
+                          value: 'pens', child: Text('Pens & Writing')),
+                      DropdownMenuItem(
+                          value: 'art', child: Text('Art & Office Supplies')),
                     ],
                     onChanged: (val) {
                       if (val != null) setDialogState(() => category = val);
@@ -233,29 +393,55 @@ class _StoreScreenState extends State<StoreScreen> {
                   );
                 },
               ),
+              _productDetailsFields(imageController, descriptionController),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white),
             onPressed: () async {
               final name = nameController.text.trim();
-              final price = double.tryParse(priceController.text) ?? 0.0;
-              final stock = int.tryParse(stockController.text) ?? 0;
+              final price = double.tryParse(priceController.text);
+              final stock = int.tryParse(stockController.text);
+              if (name.isEmpty ||
+                  price == null ||
+                  !price.isFinite ||
+                  price < 0 ||
+                  price > 5000000 ||
+                  stock == null ||
+                  stock < 0 ||
+                  stock > 100000) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Provide a product name, valid price, and stock from 0 to 100,000.')));
+                return;
+              }
 
-              if (name.isNotEmpty) {
-                await _db.collection('products').add({
-                  'name': name,
-                  'price': price,
-                  'stock': stock,
-                  'category': category,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
+              if (name.isNotEmpty &&
+                  price.isFinite &&
+                  price >= 0 &&
+                  stock >= 0) {
+                final id = _db.collection('products').doc().id;
+                if (!await _saveProduct(
+                    id,
+                    {
+                      'name': name,
+                      'price': price,
+                      'stock': stock,
+                      'category': category,
+                      'imageUrl': imageController.text.trim(),
+                      'desc': descriptionController.text.trim(),
+                      'createdAt': FieldValue.serverTimestamp(),
+                    },
+                    create: true)) return;
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -275,9 +461,16 @@ class _StoreScreenState extends State<StoreScreen> {
 
   // --- ADMIN FUNCTION: Edit / Restock Product ---
   void _showEditProductDialog(String docId, Map<String, dynamic> data) {
+    final imageController = TextEditingController(text: data['imageUrl'] ?? '');
+    final descriptionController =
+        TextEditingController(text: data['desc'] ?? '');
+    final categoryController =
+        TextEditingController(text: data['category'] ?? '');
     final nameController = TextEditingController(text: data['name'] ?? '');
-    final priceController = TextEditingController(text: (data['price'] ?? 0).toString());
-    final stockController = TextEditingController(text: (data['stock'] ?? 0).toString());
+    final priceController = TextEditingController(
+        text: storePrice(data['price'])?.toStringAsFixed(2) ?? '');
+    final stockController =
+        TextEditingController(text: (data['stock'] ?? 0).toString());
 
     showDialog(
       context: context,
@@ -287,7 +480,11 @@ class _StoreScreenState extends State<StoreScreen> {
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
-        title: const Text("Edit Inventory Stock", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
+        title: const Text("Edit Inventory Stock",
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF14532D))),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -295,22 +492,35 @@ class _StoreScreenState extends State<StoreScreen> {
               TextField(
                 controller: nameController,
                 style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
-                decoration: const InputDecoration(labelText: "Product Name", labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
+                decoration: const InputDecoration(
+                    labelText: "Product Name",
+                    labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
-                keyboardType: TextInputType.number,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  OrderNumberInputFormatter(
+                      maximum: 5000000, allowDecimals: true)
+                ],
                 style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
-                decoration: const InputDecoration(labelText: "Price (₱)", labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
+                decoration: const InputDecoration(
+                    labelText: "Price (₱)",
+                    labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: stockController,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
-                decoration: const InputDecoration(labelText: "Current Stock Level", labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
+                decoration: const InputDecoration(
+                    labelText: "Current Stock Level",
+                    labelStyle: TextStyle(color: Color(0xFF4B7A5E))),
               ),
+              _productDetailsFields(imageController, descriptionController,
+                  category: categoryController),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -320,18 +530,26 @@ class _StoreScreenState extends State<StoreScreen> {
                       int current = int.tryParse(stockController.text) ?? 0;
                       stockController.text = (current + 10).toString();
                     },
-                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF15803D)),
-                    label: const Text("+10 Stock", style: TextStyle(color: Color(0xFF15803D), fontSize: 11)),
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0))),
+                    icon: const Icon(Icons.add,
+                        size: 14, color: Color(0xFF15803D)),
+                    label: const Text("+10 Stock",
+                        style:
+                            TextStyle(color: Color(0xFF15803D), fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                   OutlinedButton.icon(
                     onPressed: () {
                       int current = int.tryParse(stockController.text) ?? 0;
                       stockController.text = (current + 50).toString();
                     },
-                    icon: const Icon(Icons.add, size: 14, color: Color(0xFF15803D)),
-                    label: const Text("+50 Stock", style: TextStyle(color: Color(0xFF15803D), fontSize: 11)),
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0))),
+                    icon: const Icon(Icons.add,
+                        size: 14, color: Color(0xFF15803D)),
+                    label: const Text("+50 Stock",
+                        style:
+                            TextStyle(color: Color(0xFF15803D), fontSize: 11)),
+                    style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                 ],
               ),
@@ -343,28 +561,50 @@ class _StoreScreenState extends State<StoreScreen> {
             icon: const Icon(Icons.archive_outlined, color: Color(0xFFD97706)),
             tooltip: "Archive Product",
             onPressed: () async {
+              if (nameController.text.trim().isEmpty ||
+                  double.tryParse(priceController.text) == null ||
+                  int.tryParse(stockController.text) == null) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Provide a name, numeric price and whole-number stock.')));
+                return;
+              }
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
                   backgroundColor: const Color(0xFFF0FDF4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFFBBF7D0))),
                   title: Row(
                     children: const [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
+                      Icon(Icons.warning_amber_rounded,
+                          color: Color(0xFFF43F5E)),
                       SizedBox(width: 8),
-                      Text("Archive Product", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
+                      Text("Archive Product",
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF14532D))),
                     ],
                   ),
-                  content: const Text("Ilipat ang produktong ito sa Archive? Maaari mo pa itong i-restore anumang oras.", style: TextStyle(color: Color(0xFF4B7A5E))),
+                  content: const Text(
+                      "Move this product to the archive? You can restore it at any time.",
+                      style: TextStyle(color: Color(0xFF4B7A5E))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
-                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
+                      child: const Text("Cancel",
+                          style: TextStyle(color: Color(0xFF4B7A5E))),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD97706)),
                       onPressed: () => Navigator.pop(c, true),
-                      child: const Text("Archive", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text("Archive",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -372,50 +612,14 @@ class _StoreScreenState extends State<StoreScreen> {
 
               if (confirm == true) {
                 try {
-                  final productPayload = Map<String, dynamic>.from(data);
-                  productPayload['id'] = docId;
-                  productPayload['name'] = nameController.text.trim().isNotEmpty ? nameController.text.trim() : (data['name'] ?? 'Product');
-                  productPayload['price'] = double.tryParse(priceController.text) ?? (data['price'] ?? 0);
-                  productPayload['stock'] = int.tryParse(stockController.text) ?? (data['stock'] ?? 0);
-                  productPayload['archived'] = true;
-
-                  // 1. Write to central archives collection (used by Web & Mobile)
-                  final archiveDocId = "store_product_$docId";
-                  await _db.collection('archives').doc(archiveDocId).set({
-                    'id': archiveDocId,
-                    'originalId': docId,
-                    'itemType': 'store_product',
-                    'data': productPayload,
-                    'source': 'mobile_admin',
-                    'archivedAt': DateTime.now().toIso8601String(),
-                  }, SetOptions(merge: true));
-
-                  // 2. Mark archived in products collection
-                  await _db.collection('products').doc(docId).set({
-                    'archived': true,
-                    'archivedAt': FieldValue.serverTimestamp(),
-                  }, SetOptions(merge: true));
-
-                  // 3. Mark archived in public store_products collection
-                  try {
-                    await _db
-                        .collection('artifacts')
-                        .doc('printcraft-pro')
-                        .collection('public')
-                        .doc('data')
-                        .collection('store_products')
-                        .doc(docId)
-                        .set({
-                      'archived': true,
-                      'archivedAt': FieldValue.serverTimestamp(),
-                    }, SetOptions(merge: true));
-                  } catch (_) {}
+                  await AdminRepository().archive('store_product', docId, data);
 
                   if (!mounted) return;
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text("Nai-archive ang produkto! Naka-sync na rin ito sa Web Archive."),
+                      content: Text(
+                          "Product archived successfully and synced with the website."),
                       backgroundColor: Color(0xFF15803D),
                     ),
                   );
@@ -424,7 +628,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Error sa pag-archive: $err"),
+                      content: Text("Unable to archive the product. $err"),
                       backgroundColor: const Color(0xFFF43F5E),
                     ),
                   );
@@ -434,42 +638,64 @@ class _StoreScreenState extends State<StoreScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
+            child: const Text("Cancel",
+                style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
                   backgroundColor: const Color(0xFFF0FDF4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
-                  title: const Text("Confirm Stock Update", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF14532D))),
-                  content: Text("Save new stock level (${stockController.text}) for '${nameController.text}'?", style: const TextStyle(color: Color(0xFF4B7A5E))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFFBBF7D0))),
+                  title: const Text("Confirm Stock Update",
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF14532D))),
+                  content: Text(
+                      "Save new stock level (${stockController.text}) for '${nameController.text}'?",
+                      style: const TextStyle(color: Color(0xFF4B7A5E))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
-                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF4B7A5E))),
+                      child: const Text("Cancel",
+                          style: TextStyle(color: Color(0xFF4B7A5E))),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF16A34A)),
                       onPressed: () => Navigator.pop(c, true),
-                      child: const Text("Confirm & Save", style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+                      child: const Text("Confirm & Save",
+                          style: TextStyle(
+                              color: Color(0xFF14532D),
+                              fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
               );
 
               if (confirm == true) {
-                await _db.collection('products').doc(docId).update({
+                if (!await _saveProduct(docId, {
                   'name': nameController.text.trim(),
                   'price': double.tryParse(priceController.text) ?? 0.0,
                   'stock': int.tryParse(stockController.text) ?? 0,
-                });
+                  'expectedStock': data['stock'],
+                  'imageUrl': imageController.text.trim(),
+                  'desc': descriptionController.text.trim(),
+                  'category': categoryController.text.trim(),
+                })) return;
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Product updated successfully!"), backgroundColor: Color(0xFF10B981)),
+                  const SnackBar(
+                      content: Text("Product updated successfully!"),
+                      backgroundColor: Color(0xFF10B981)),
                 );
               }
             },
@@ -487,505 +713,305 @@ class _StoreScreenState extends State<StoreScreen> {
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(
         padding: MediaQuery.of(context).padding.copyWith(
-          bottom: MediaQuery.of(context).padding.bottom + extraBottom,
-        ),
+              bottom: MediaQuery.of(context).padding.bottom + extraBottom,
+            ),
         viewPadding: MediaQuery.of(context).viewPadding.copyWith(
-          bottom: MediaQuery.of(context).viewPadding.bottom + extraBottom,
-        ),
+              bottom: MediaQuery.of(context).viewPadding.bottom + extraBottom,
+            ),
       ),
       child: Scaffold(
-      backgroundColor: const Color(0xFFF8FFF9),
-      body: Column(
-        children: [
-          // Search & Category Bar
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  onChanged: (val) => setState(() {
-                    _searchQuery = val;
-                    _currentPage = 1;
-                  }),
-                  style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: widget.isAdmin ? "Search inventory database..." : "Search store items...",
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-                    prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF4B7A5E)),
-                    contentPadding: EdgeInsets.zero,
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A))),
-                    filled: true,
-                    fillColor: const Color(0xFFFFFFFF),
+        backgroundColor: const Color(0xFFF8FFF9),
+        body: Column(
+          children: [
+            // Search & Category Bar
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _searchController,
+                    onChanged: (val) => setState(() {
+                      _searchQuery = val;
+                      _currentPage = 1;
+                    }),
+                    style:
+                        const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: widget.isAdmin
+                          ? "Search inventory database..."
+                          : "Search store items...",
+                      hintStyle: const TextStyle(
+                          fontSize: 12, color: Color(0xFF4B7A5E)),
+                      prefixIcon: const Icon(Icons.search,
+                          size: 20, color: Color(0xFF4B7A5E)),
+                      contentPadding: EdgeInsets.zero,
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFBBF7D0))),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF16A34A))),
+                      filled: true,
+                      fillColor: const Color(0xFFFFFFFF),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildCategoryChip('all', 'All Supplies'),
+                              _buildCategoryChip('notebooks', 'Notebooks'),
+                              _buildCategoryChip('pens', 'Pens & Writing'),
+                              _buildCategoryChip('art', 'Art Supplies'),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (!widget.isAdmin)
+                        Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
                           children: [
-                            _buildCategoryChip('all', 'All Supplies'),
-                            _buildCategoryChip('notebooks', 'Notebooks'),
-                            _buildCategoryChip('pens', 'Pens & Writing'),
-                            _buildCategoryChip('art', 'Art Supplies'),
+                            IconButton(
+                              icon: const Icon(Icons.shopping_cart_outlined,
+                                  size: 20, color: Color(0xFF15803D)),
+                              tooltip: 'Shopping Cart',
+                              onPressed: () => _showCartBottomSheet(_allDocs),
+                            ),
+                            if (_cartTotalItems > 0)
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3.5),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF16A34A),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                      minWidth: 16, minHeight: 16),
+                                  child: Text(
+                                    '$_cartTotalItems',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Color(0xFF14532D),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Product Grid & Pagination
+            Expanded(
+              child: StreamBuilder<List<ProfileRecord>>(
+                stream: _productsStream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.error_outline_rounded,
+                                size: 40, color: Color(0xFFF43F5E)),
+                            SizedBox(height: 8),
+                            Text('Unable to connect to the inventory database.',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Color(0xFF0F172A))),
+                            Text('Please check your internet connection.',
+                                style: TextStyle(
+                                    fontSize: 11, color: Color(0xFF4B7A5E))),
                           ],
                         ),
                       ),
-                    ),
-                    if (!widget.isAdmin)
-                      Stack(
-                        alignment: Alignment.center,
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.shopping_cart_outlined, size: 20, color: Color(0xFF15803D)),
-                            tooltip: 'Shopping Cart',
-                            onPressed: () => _showCartBottomSheet(_allDocs),
-                          ),
-                          if (_cartTotalItems > 0)
-                            Positioned(
-                              top: 6,
-                              right: 6,
-                              child: Container(
-                                padding: const EdgeInsets.all(3.5),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF16A34A),
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                                child: Text(
-                                  '$_cartTotalItems',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Color(0xFF14532D),
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+                    );
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF16A34A)));
+                  }
 
-          // Product Grid & Pagination
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _db.collection('products').snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
+                  final docs = snapshot.data ?? [];
+                  _allDocs = docs;
+
+                  final filteredDocs = docs.where((doc) {
+                    final data = doc.data();
+                    // Filter out archived products
+                    if (data['archived'] == true) return false;
+
+                    final name = (data['name'] ?? '').toString().toLowerCase();
+                    final category =
+                        (data['category'] ?? '').toString().toLowerCase();
+
+                    final matchesSearch =
+                        name.contains(_searchQuery.toLowerCase());
+                    final matchesCategory = _selectedCategory == 'all' ||
+                        category == _selectedCategory;
+
+                    return matchesSearch && matchesCategory;
+                  }).toList();
+
+                  if (filteredDocs.isEmpty) {
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFF43F5E)),
-                          SizedBox(height: 8),
-                          Text('Nabigo sa pagkonekta sa inventory database.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-                          Text('Pakisuri ang iyong koneksyon sa internet.', style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+                        children: [
+                          const Icon(Icons.inventory_2_outlined,
+                              size: 48, color: Color(0xFF334155)),
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.isAdmin
+                                ? "No items in inventory. Tap '+' to add."
+                                : "No items available in store.",
+                            style: const TextStyle(color: Color(0xFF4B7A5E)),
+                          ),
                         ],
                       ),
-                    ),
-                  );
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
-                }
+                    );
+                  }
 
-                final docs = snapshot.data?.docs ?? [];
-                _allDocs = docs;
+                  int totalPages = (filteredDocs.length / _itemsPerPage).ceil();
+                  if (totalPages < 1) totalPages = 1;
+                  if (_currentPage > totalPages) _currentPage = totalPages;
+                  if (_currentPage < 1) _currentPage = 1;
 
-                final filteredDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  // Filter out archived products
-                  if (data['archived'] == true) return false;
+                  int startIndex = (_currentPage - 1) * _itemsPerPage;
+                  int endIndex =
+                      math.min(startIndex + _itemsPerPage, filteredDocs.length);
+                  final pagedDocs = filteredDocs.sublist(startIndex, endIndex);
 
-                  final name = (data['name'] ?? '').toString().toLowerCase();
-                  final category = (data['category'] ?? '').toString().toLowerCase();
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisExtent: widget.isAdmin ? 330 : 250,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                          ),
+                          itemCount: pagedDocs.length,
+                          itemBuilder: (ctx, idx) {
+                            final doc = pagedDocs[idx];
+                            final data = doc.data();
+                            final prodId = doc.id;
+                            final name = data['name'] ?? 'Product';
+                            final price =
+                                storePrice(data['price']) ?? double.nan;
+                            final stock = (data['stock'] ?? 0) as int;
 
-                  final matchesSearch = name.contains(_searchQuery.toLowerCase());
-                  final matchesCategory = _selectedCategory == 'all' || category == _selectedCategory;
+                            final imageUrl = data['imageUrl'] ?? '';
 
-                  return matchesSearch && matchesCategory;
-                }).toList();
-
-                if (filteredDocs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.inventory_2_outlined, size: 48, color: Color(0xFF334155)),
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.isAdmin ? "No items in inventory. Tap '+' to add." : "No items available in store.",
-                          style: const TextStyle(color: Color(0xFF4B7A5E)),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                int totalPages = (filteredDocs.length / _itemsPerPage).ceil();
-                if (totalPages < 1) totalPages = 1;
-                if (_currentPage > totalPages) _currentPage = totalPages;
-                if (_currentPage < 1) _currentPage = 1;
-
-                int startIndex = (_currentPage - 1) * _itemsPerPage;
-                int endIndex = math.min(startIndex + _itemsPerPage, filteredDocs.length);
-                final pagedDocs = filteredDocs.sublist(startIndex, endIndex);
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.67,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                        itemCount: pagedDocs.length,
-                        itemBuilder: (ctx, idx) {
-                          final doc = pagedDocs[idx];
-                          final data = doc.data() as Map<String, dynamic>;
-                          final prodId = doc.id;
-                          final name = data['name'] ?? 'Product';
-                          final price = (data['price'] ?? 0).toDouble();
-                          final stock = (data['stock'] ?? 0) as int;
-
-                          final isLowStock = stock > 0 && stock <= 12;
-                          final isOutOfStock = stock <= 0;
-                          final imageUrl = data['imageUrl'] ?? '';
-
-                          return GestureDetector(
-                            onTap: () {
+                            void openDetails() {
                               if (widget.isAdmin) {
                                 _showEditProductDialog(prodId, data);
                               } else {
-                                ProductDetailScreen.showOverviewDialog(
-                                  context,
-                                  productId: prodId,
-                                  productData: data,
-                                  onAddToCart: (qty) {
-                                    setState(() {
-                                      _cart[prodId] = (_cart[prodId] ?? 0) + qty;
+                                ProductDetailScreen.showOverviewDialog(context,
+                                    productId: prodId,
+                                    productData: data,
+                                    cartQuantity: _cart[prodId] ?? 0,
+                                    onAddToCart: (qty) => setState(() =>
+                                        _cart[prodId] =
+                                            (_cart[prodId] ?? 0) + qty),
+                                    onBuyNow: (qty) {
+                                      setState(() => _cart[prodId] = qty);
+                                      _showCartBottomSheet(_allDocs);
                                     });
-                                  },
-                                  onBuyNow: (qty) {
-                                    setState(() {
-                                      _cart[prodId] = (_cart[prodId] ?? 0) + qty;
-                                    });
-                                    _showCartBottomSheet(_allDocs);
-                                  },
-                                );
                               }
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isLowStock && widget.isAdmin
-                                      ? Colors.orangeAccent
-                                      : const Color(0xFFBBF7D0),
-                                  width: 1.2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              padding: const EdgeInsets.all(10.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Product Image & Stock Badge
-                                  Expanded(
-                                    child: Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFBBF7D0),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: Stack(
-                                        children: [
-                                          Positioned.fill(
-                                            child: imageUrl.toString().isNotEmpty
-                                                ? Image.network(
-                                                    imageUrl,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (_, __, ___) => const Center(
-                                                      child: Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF86EFAC)),
-                                                    ),
-                                                  )
-                                                : const Center(
-                                                    child: Icon(Icons.menu_book_rounded, size: 36, color: Color(0xFF86EFAC)),
-                                                  ),
-                                          ),
-                                          // Stock Badge Top Right (matching screenshot)
-                                          Positioned(
-                                            top: 6,
-                                            right: 6,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                                              decoration: BoxDecoration(
-                                                color: isOutOfStock
-                                                    ? const Color(0xFFEF4444)
-                                                    : (isLowStock ? const Color(0xFFFEF3C7) : const Color(0xFFD1FAE5)),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    isOutOfStock
-                                                        ? Icons.cancel_outlined
-                                                        : (isLowStock ? Icons.warning_amber_rounded : Icons.check_circle_outline),
-                                                    size: 10,
-                                                    color: isOutOfStock
-                                                        ? Colors.white
-                                                        : (isLowStock ? const Color(0xFFD97706) : const Color(0xFF059669)),
-                                                  ),
-                                                  const SizedBox(width: 3),
-                                                  Text(
-                                                    isOutOfStock
-                                                        ? "Out of Stock"
-                                                        : (isLowStock ? "Low Stock" : "In Stock"),
-                                                    style: TextStyle(
-                                                      color: isOutOfStock
-                                                          ? Colors.white
-                                                          : (isLowStock ? const Color(0xFFB45309) : const Color(0xFF047857)),
-                                                      fontSize: 9,
-                                                      fontWeight: FontWeight.w800,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
+                            }
 
-                                  // Product Name
-                                  Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, color: Color(0xFF0F172A)),
-                                  ),
-                                  const SizedBox(height: 4),
+                            return StoreProductCard(
+                              name: '$name',
+                              price: price,
+                              stock: stock,
+                              admin: widget.isAdmin,
+                              image: imageUrl.toString().isNotEmpty
+                                  ? sharedImage(imageUrl.toString(),
+                                      fit: BoxFit.cover)
+                                  : const Center(
+                                      child: Icon(Icons.inventory_2_outlined,
+                                          size: 36,
+                                          color: DashboardTheme.muted)),
+                              onOpen: openDetails,
+                            );
+                          },
+                        ),
+                      ),
 
-                                  // Available Stock Line (matching screenshot: Available Stock:   10 pcs)
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        "Available Stock:",
-                                        style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E)),
-                                      ),
-                                      Text(
-                                        "$stock pcs",
-                                        style: TextStyle(
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.bold,
-                                          color: isLowStock ? const Color(0xFFF59E0B) : const Color(0xFF4B7A5E),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 3),
-
-                                  // Price Line (matching screenshot: Price:    ₱19.00)
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        "Price:",
-                                        style: TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E)),
-                                      ),
-                                      Text(
-                                        price > 999999999
-                                            ? "₱999,999.00"
-                                            : "₱${price.toStringAsFixed(2)}",
-                                        style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF14532D), fontSize: 13),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // CONTROLS BASED ON ROLE
-                                  if (widget.isAdmin) ...[
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 32,
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF16A34A),
-                                          foregroundColor: Colors.white,
-                                          padding: EdgeInsets.zero,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                        ),
-                                        onPressed: () => _showEditProductDialog(prodId, data),
-                                        icon: const Icon(Icons.edit_note_rounded, size: 16),
-                                        label: const Text("Edit / Restock", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ),
-                                  ] else ...[
-                                    Row(
-                                      children: [
-                                        // Add to Cart button (dark container, white text, cart icon)
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 30,
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF090D1A),
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                padding: EdgeInsets.zero,
-                                                side: const BorderSide(color: Color(0xFF334155), width: 0.8),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                              ),
-                                              onPressed: stock > 0
-                                                  ? () {
-                                                      setState(() {
-                                                        _cart[prodId] = (_cart[prodId] ?? 0) + 1;
-                                                      });
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text("Added $name to Cart!"),
-                                                          backgroundColor: const Color(0xFF10B981),
-                                                          duration: const Duration(seconds: 1),
-                                                        ),
-                                                      );
-                                                    }
-                                                  : null,
-                                              icon: const Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.white),
-                                              label: const Text(
-                                                "Add to Cart",
-                                                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-
-                                        // Buy Now button (Blue pill with lightning bolt icon)
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 30,
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF2563EB),
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                padding: EdgeInsets.zero,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                              ),
-                                              onPressed: stock > 0
-                                                  ? () {
-                                                      ProductDetailScreen.showOverviewDialog(
-                                                        context,
-                                                        productId: prodId,
-                                                        productData: data,
-                                                        onAddToCart: (qty) {
-                                                          setState(() {
-                                                            _cart[prodId] = (_cart[prodId] ?? 0) + qty;
-                                                          });
-                                                        },
-                                                        onBuyNow: (qty) {
-                                                          setState(() {
-                                                            _cart[prodId] = (_cart[prodId] ?? 0) + qty;
-                                                          });
-                                                          _showCartBottomSheet(_allDocs);
-                                                        },
-                                                      );
-                                                    }
-                                                  : null,
-                                              icon: const Icon(Icons.flash_on_rounded, size: 12, color: Colors.white),
-                                              label: const Text(
-                                                "Buy Now",
-                                                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              ),
+                      // PAGINATION CONTROL BOTTOM BAR
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFFFFF),
+                          border:
+                              Border(top: BorderSide(color: Color(0xFFBBF7D0))),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.chevron_left_rounded,
+                                  color: Color(0xFF15803D)),
+                              onPressed: _currentPage > 1
+                                  ? () => setState(() => _currentPage--)
+                                  : null,
                             ),
-                          );
-                        },
+                            Text(
+                              "Page $_currentPage of $totalPages (${filteredDocs.length} items)",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                  color: Color(0xFF0F172A)),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.chevron_right_rounded,
+                                  color: Color(0xFF15803D)),
+                              onPressed: _currentPage < totalPages
+                                  ? () => setState(() => _currentPage++)
+                                  : null,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-
-                    // PAGINATION CONTROL BOTTOM BAR
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFFFFF),
-                        border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF15803D)),
-                            onPressed: _currentPage > 1
-                                ? () => setState(() => _currentPage--)
-                                : null,
-                          ),
-                          Text(
-                            "Page $_currentPage of $totalPages (${filteredDocs.length} items)",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0F172A)),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF15803D)),
-                            onPressed: _currentPage < totalPages
-                                ? () => setState(() => _currentPage++)
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      ),
-
-      floatingActionButton: widget.isAdmin
-          ? FloatingActionButton.extended(
-              backgroundColor: const Color(0xFF16A34A),
-              foregroundColor: Colors.white,
-              onPressed: _showAddProductDialog,
-              icon: const Icon(Icons.add),
-              label: const Text("Add New Product"),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+          ],
+        ),
+        floatingActionButton: widget.isAdmin
+            ? FloatingActionButton.extended(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white,
+                onPressed: _showAddProductDialog,
+                icon: const Icon(Icons.add),
+                label: const Text("Add New Product"),
+              )
+            : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
     );
   }
@@ -995,13 +1021,17 @@ class _StoreScreenState extends State<StoreScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 6.0),
       child: ChoiceChip(
-        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFF4B7A5E))),
+        label: Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                color: isSelected ? Colors.white : const Color(0xFF4B7A5E))),
         selected: isSelected,
         selectedColor: const Color(0xFF16A34A),
         backgroundColor: const Color(0xFFFFFFFF),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFBBF7D0)),
+          side: BorderSide(
+              color: isSelected ? Colors.transparent : const Color(0xFFBBF7D0)),
         ),
         onSelected: (selected) {
           if (selected) {
@@ -1015,248 +1045,29 @@ class _StoreScreenState extends State<StoreScreen> {
     );
   }
 
-  void _showCartBottomSheet(List<QueryDocumentSnapshot> docs) {
-    // Build a lookup map from productId -> productData
-    final Map<String, Map<String, dynamic>> productMap = {
-      for (final d in docs) d.id: d.data() as Map<String, dynamic>,
-    };
-
+  void _showCartBottomSheet(List<ProfileRecord> docs) {
+    final products = {for (final doc in docs) doc.id: doc.data()};
+    final merchant = _db
+        .collection('settings')
+        .doc('gcash_config')
+        .snapshots()
+        .map((snapshot) => snapshot.data() ?? <String, dynamic>{});
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setBottomSheetState) {
-          // Compute totals inside builder so they update with quantity changes
-          double total = 0;
-          for (final entry in _cart.entries) {
-            final data = productMap[entry.key];
-            if (data != null) {
-              total += (data['price'] ?? 0) * entry.value;
-            }
-          }
-
-          final cartEntries = _cart.entries
-              .where((e) => e.value > 0 && productMap.containsKey(e.key))
-              .toList();
-
-          return Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.85,
-            ),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header ───────────────────────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("Your Cart",
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white)),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Color(0xFF4B7A5E)),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const Divider(color: Color(0xFFBBF7D0)),
-
-                // ── Cart Items ────────────────────────────────────────────
-                if (cartEntries.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text("Your cart is empty.",
-                          style: TextStyle(color: Color(0xFF4B7A5E))),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: cartEntries.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(color: Color(0xFFBBF7D0), height: 1),
-                      itemBuilder: (_, i) {
-                        final prodId = cartEntries[i].key;
-                        final qty = cartEntries[i].value;
-                        final data = productMap[prodId]!;
-                        final name = data['name'] ?? 'Product';
-                        final price = (data['price'] ?? 0).toDouble();
-                        final stock = data['stock'] ?? 0;
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            children: [
-                              // Product name + unit price
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(name,
-                                        style: const TextStyle(
-                                            color: Color(0xFF14532D),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13)),
-                                    const SizedBox(height: 2),
-                                    Text("₱${price.toStringAsFixed(2)} each",
-                                        style: const TextStyle(
-                                            color: Color(0xFF4B7A5E),
-                                            fontSize: 11)),
-                                  ],
-                                ),
-                              ),
-                              // Quantity controls
-                              Row(
-                                children: [
-                                  InkWell(
-                                    onTap: qty > 1
-                                        ? () {
-                                            setBottomSheetState(() =>
-                                                _cart[prodId] = qty - 1);
-                                            setState(() {});
-                                          }
-                                        : null,
-                                    child: const Icon(Icons.remove_circle_outline,
-                                        color: Color(0xFF15803D), size: 20),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    child: Text("$qty",
-                                        style: const TextStyle(
-                                            color: Color(0xFF14532D),
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                  InkWell(
-                                    onTap: qty < stock
-                                        ? () {
-                                            setBottomSheetState(() =>
-                                                _cart[prodId] = qty + 1);
-                                            setState(() {});
-                                          }
-                                        : null,
-                                    child: const Icon(Icons.add_circle_outline,
-                                        color: Color(0xFF15803D), size: 20),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 8),
-                              // Line total
-                              SizedBox(
-                                width: 72,
-                                child: Text(
-                                  "₱${(price * qty).toStringAsFixed(2)}",
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                      color: Color(0xFF15803D),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13),
-                                ),
-                              ),
-                              // Remove item
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    color: Color(0xFFEF4444), size: 18),
-                                onPressed: () {
-                                  setBottomSheetState(() => _cart.remove(prodId));
-                                  setState(() {});
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                const Divider(color: Color(0xFFBBF7D0)),
-
-                // ── Payment Method ────────────────────────────────────────
-                const Text("Payment Method",
-                    style: TextStyle(
-                        color: Color(0xFF14532D),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: ['GCash', 'Paymaya', 'Cash on pickup']
-                      .map((method) {
-                    final selected = _selectedPaymentMethod == method;
-                    return ChoiceChip(
-                      label: Text(method,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: selected
-                                  ? Colors.white
-                                  : const Color(0xFF4B7A5E))),
-                      selected: selected,
-                      selectedColor: const Color(0xFF16A34A),
-                      backgroundColor: const Color(0xFFBBF7D0),
-                      onSelected: (_) {
-                        setBottomSheetState(
-                            () => _selectedPaymentMethod = method);
-                        setState(() {});
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Order Total ───────────────────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("Order Total",
-                        style: TextStyle(
-                            color: Color(0xFF14532D),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15)),
-                    Text("₱${total.toStringAsFixed(2)}",
-                        style: const TextStyle(
-                            color: Color(0xFF15803D),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // ── Checkout Button ───────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cartEntries.isEmpty
-                          ? const Color(0xFFBBF7D0)
-                          : const Color(0xFF16A34A),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: cartEntries.isEmpty
-                        ? null
-                        : () => _checkoutCart(ctx, cartEntries, total),
-                    child: const Text("Checkout Order",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+      builder: (_) => Theme(
+          data: DashboardTheme.light,
+          child: StoreCheckoutSheet(
+            cart: _cart,
+            products: products,
+            merchantSettings: merchant,
+            onCartChanged: (cart) => setState(() {
+              _cart.clear();
+              _cart.addAll(cart);
+            }),
+            onCheckout: _checkoutCart,
+          )),
     );
   }
 }

@@ -1,4 +1,8 @@
+import 'auth_service.dart';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../screens/dashboard_screen.dart';
+import 'notification_destination.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -23,15 +27,20 @@ class FcmService {
   FcmService._internal();
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   GlobalKey<NavigatorState>? _navigatorKey;
   String? _currentUserEmail;
   bool _isInitialized = false;
+  bool _navigationReady = false;
+  String _currentRole = 'customer';
+  Map<String, dynamic>? _pendingData;
 
   static const String _channelId = 'kcz_chat_channel';
-  static const String _channelName = 'KCZ Printing Shop Chat';
-  static const String _channelDesc = 'Notifications for chat messages from KCZ Printing Shop admin.';
+  static const String _channelName = 'KCZ Printing Shop Updates';
+  static const String _channelDesc =
+      'Order updates and messages from KCZ Printing Shop.';
 
   /// Initialize FCM, local notification plugin, permissions, and event listeners
   Future<void> initialize(GlobalKey<NavigatorState> navKey) async {
@@ -43,8 +52,10 @@ class FcmService {
     await requestPermission();
 
     // 2. Setup Android notification channel & local notifications
-    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(android: androidInit);
+    const AndroidInitializationSettings androidInit =
+        AndroidInitializationSettings('ic_notification');
+    const InitializationSettings initSettings =
+        InitializationSettings(android: androidInit);
 
     await _localNotifications.initialize(
       settings: initSettings,
@@ -69,7 +80,9 @@ class FcmService {
       enableVibration: true,
     );
 
-    final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin =
+        _localNotifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(channel);
     }
@@ -89,10 +102,23 @@ class FcmService {
     // 5. Terminated state message (when app was opened from terminated state via notification)
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      debugPrint("FCM app opened from terminated state: ${initialMessage.data}");
+      debugPrint(
+          "FCM app opened from terminated state: ${initialMessage.data}");
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleNotificationClick(initialMessage.data);
       });
+    }
+
+    final localLaunch =
+        await _localNotifications.getNotificationAppLaunchDetails();
+    final payload = localLaunch?.notificationResponse?.payload;
+    if (localLaunch?.didNotificationLaunchApp == true && payload != null) {
+      try {
+        _handleNotificationClick(
+            Map<String, dynamic>.from(jsonDecode(payload) as Map));
+      } catch (e) {
+        debugPrint('Invalid notification launch payload: $e');
+      }
     }
 
     // 6. Listen to token refresh
@@ -124,12 +150,26 @@ class FcmService {
   /// Register current customer's FCM token in Firestore and associate with customer ID
   Future<void> registerUserToken(String userEmail) async {
     if (userEmail.isEmpty) return;
-    _currentUserEmail = userEmail;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null ||
+        user.email?.toLowerCase() != userEmail.trim().toLowerCase()) {
+      return;
+    }
+    await AuthService.readyProfile(user);
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+    _currentUserEmail = userEmail.trim().toLowerCase();
+    _currentRole = 'customer';
 
     try {
+      final profile = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+      _currentRole =
+          (profile.data()?['role'] ?? 'customer').toString().toLowerCase();
       final token = await _messaging.getToken();
       if (token != null) {
-        debugPrint("FCM token retrieved: $token for $userEmail");
         await _saveTokenToFirestore(userEmail, token);
       }
     } catch (e) {
@@ -141,18 +181,29 @@ class FcmService {
   Future<void> _saveTokenToFirestore(String email, String token) async {
     try {
       final cleanEmail = email.trim().toLowerCase();
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null ||
+          user.email?.toLowerCase() != cleanEmail ||
+          _currentUserEmail != cleanEmail || !AuthService.isReady(user.uid)) {
+        return;
+      }
       final nowIso = DateTime.now().toIso8601String();
 
       // Primary token document matching web backend lookup: fcm_tokens/{token_doc_id}
       final tokenDocId = token.length > 40
-          ? token.substring(token.length - 40).replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')
+          ? token
+              .substring(token.length - 40)
+              .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')
           : token.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
 
-      final fcmTokenRef = FirebaseFirestore.instance.collection('fcm_tokens').doc(tokenDocId);
+      final fcmTokenRef =
+          FirebaseFirestore.instance.collection('fcm_tokens').doc(tokenDocId);
       await fcmTokenRef.set({
         'token': token,
         'email': cleanEmail,
-        'role': 'customer',
+        'role': _currentRole,
+        'uid': user.uid,
+        'platform': 'android',
         'device': 'Android Mobile App',
         'updatedAt': nowIso,
         'createdAt': nowIso,
@@ -160,7 +211,8 @@ class FcmService {
       }, SetOptions(merge: true));
 
       // Also save in artifacts/printcraft-pro/public/data/notification_tokens for fallback
-      final customerId = cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
+      final customerId =
+          cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
       final legacyTokenRef = FirebaseFirestore.instance
           .collection('artifacts')
           .doc('printcraft-pro')
@@ -177,7 +229,8 @@ class FcmService {
         'platform': 'android',
       }, SetOptions(merge: true)).catchError((_) {});
 
-      debugPrint("Successfully registered FCM token in Firestore for $cleanEmail");
+      debugPrint(
+          "Successfully registered FCM token in Firestore for $cleanEmail");
     } catch (e) {
       debugPrint("Error saving FCM token to Firestore: $e");
     }
@@ -185,17 +238,27 @@ class FcmService {
 
   /// Remove user token on sign-out to prevent notifications going to wrong user
   Future<void> removeUserToken(String userEmail) async {
+    _currentUserEmail = null;
+    _navigationReady = false;
+    _pendingData = null;
     try {
       final token = await _messaging.getToken();
       if (token != null) {
         final tokenDocId = token.length > 40
-            ? token.substring(token.length - 40).replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')
+            ? token
+                .substring(token.length - 40)
+                .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')
             : token.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-        await FirebaseFirestore.instance.collection('fcm_tokens').doc(tokenDocId).delete().catchError((_) {});
+        await FirebaseFirestore.instance
+            .collection('fcm_tokens')
+            .doc(tokenDocId)
+            .delete()
+            .catchError((_) {});
       }
 
       final cleanEmail = userEmail.trim().toLowerCase();
-      final customerId = cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
+      final customerId =
+          cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
 
       await FirebaseFirestore.instance
           .collection('artifacts')
@@ -207,7 +270,8 @@ class FcmService {
           .delete()
           .catchError((_) {});
 
-      _currentUserEmail = null;
+      await _localNotifications.cancelAll();
+      await _messaging.deleteToken();
       debugPrint("Successfully deleted FCM token for $cleanEmail");
     } catch (e) {
       debugPrint("Error removing FCM token from Firestore: $e");
@@ -216,26 +280,34 @@ class FcmService {
 
   /// Show a Heads-Up local notification when a message arrives while app is in foreground
   Future<void> _showLocalNotification(RemoteMessage message) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final recipient = message.data['recipient_email']?.toString().toLowerCase();
+    if (recipient != null && recipient != user.email?.toLowerCase()) return;
     final notification = message.notification;
     final data = message.data;
 
-    final title = notification?.title ?? data['title'] ?? 'New Message from Support';
-    final body = notification?.body ?? data['body'] ?? 'You have received a new chat message.';
+    final title = notification?.title ?? data['title'] ?? 'KCZ Printing Shop';
+    final body = notification?.body ?? data['body'] ?? 'You have a new update.';
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       _channelId,
       _channelName,
       channelDescription: _channelDesc,
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
-      icon: '@mipmap/ic_launcher',
+      icon: 'ic_notification',
+      tag: data['event_id']?.toString(),
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+    final NotificationDetails platformDetails =
+        NotificationDetails(android: androidDetails);
 
     await _localNotifications.show(
-      id: message.hashCode,
+      id: (data['event_id'] ?? message.messageId ?? message.hashCode).hashCode &
+          0x7fffffff,
       title: title,
       body: body,
       notificationDetails: platformDetails,
@@ -243,25 +315,36 @@ class FcmService {
     );
   }
 
-  /// Navigate directly to CustomerChatScreen on notification tap
-  void _handleNotificationClick(Map<String, dynamic> data) {
-    debugPrint("Handling notification click with data: $data");
+  /// Called after the authenticated dashboard is mounted, including cold starts.
+  void activateNavigation() {
+    _navigationReady = true;
+    final pending = _pendingData;
+    if (pending != null) _handleNotificationClick(pending);
+  }
 
+  void _handleNotificationClick(Map<String, dynamic> data) {
     final nav = _navigatorKey?.currentState;
-    if (nav == null) {
-      debugPrint("NavigatorState not available yet.");
+    final user = FirebaseAuth.instance.currentUser;
+    if (!_navigationReady || nav == null || user == null || user.email == null || !AuthService.isReady(user.uid)) {
+      _pendingData = data;
       return;
     }
-
-    final senderEmail = data['sender_email']?.toString() ?? data['senderEmail']?.toString();
-    final userEmail = _currentUserEmail ?? senderEmail ?? 'Customer';
-
-    nav.push(
-      MaterialPageRoute(
-        builder: (context) => CustomerChatScreen(
-          userEmail: userEmail,
-        ),
-      ),
-    );
+    _pendingData = null;
+    final email = user.email!;
+    final recipient = data['recipient_email']?.toString().toLowerCase();
+    if (recipient != null && recipient != email.toLowerCase()) return;
+    final destination = notificationDestination(data);
+    final isAdmin = _currentRole == 'admin' || _currentRole == 'staff';
+    nav.push(MaterialPageRoute(builder: (context) {
+      if (destination == 'chat' && !isAdmin) {
+        return CustomerChatScreen(userEmail: email);
+      }
+      return DashboardScreen(
+        userEmail: email,
+        isAdmin: isAdmin,
+        initialNavIndex: isAdmin ? 2 : 3,
+        initialAdminTab: destination == 'chat' ? 1 : 0,
+      );
+    }));
   }
 }

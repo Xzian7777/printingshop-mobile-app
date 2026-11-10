@@ -1,0 +1,243 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function ownsOrder(data) {
+      return isAuthenticated() && (
+        data.get('customerId', '') == request.auth.uid ||
+        data.get('uid', '') == request.auth.uid ||
+        (request.auth.token.get('email', '') != '' &&
+          data.get('email', data.get('customerEmail', '')).lower() == request.auth.token.email.lower())
+      );
+    }
+
+    function pendingOrder(data) {
+      return data.get('status', 'Order Submitted') in ['Order Submitted', 'For Approval'] &&
+        data.get('approvedAt', null) == null && data.get('stockDeducted', false) == false &&
+        data.get('source', '') != 'POS';
+    }
+
+    function initialPoints() {
+      return request.resource.data.get('points', 0) == 0 &&
+        request.resource.data.get('loyaltyPoints', 0) == 0 &&
+        (!request.resource.data.keys().hasAny(['loyaltyUid']) || isAdmin());
+    }
+
+    function profilePointsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['points', 'loyaltyPoints', 'loyaltyUid']);
+    }
+
+    function ordinaryOrderCreate() {
+      return pendingOrder(request.resource.data) &&
+        !request.resource.data.keys().hasAny(['loyaltyUid', 'loyaltyEpoch', 'pointsUsed', 'pointsDiscount',
+          'pointsEarned', 'pointsState', 'rewardId', 'rewardSnapshot', 'redemptionType',
+          'paymentStatus', 'completedAt', 'subtotal', 'customerUid']);
+    }
+
+    function customerCancellation() {
+      return ownsOrder(resource.data) && pendingOrder(resource.data) && resource.data.get('pointsUsed', 0) == 0 &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'cancelledAt', 'cancelledBy', 'cancelledByEmail', 'cancellationReason'
+        ]) && request.resource.data.status == 'Cancelled' &&
+        request.resource.data.cancelledAt == request.time &&
+        request.resource.data.cancelledBy == request.auth.uid &&
+        request.resource.data.cancelledByEmail == request.auth.token.get('email', '') &&
+        request.resource.data.cancellationReason is string &&
+        request.resource.data.cancellationReason.size() <= 500;
+    }
+
+    function adminOrderUpdate() {
+      return isAdmin() && resource.data.get('pointsUsed', 0) == 0 &&
+        resource.data.get('source', '') != 'POS' && resource.data.get('status', '') != 'Completed' && request.resource.data.status != 'Completed' &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'loyaltyUid', 'loyaltyEpoch', 'pointsUsed', 'pointsDiscount', 'pointsEarned', 'pointsState',
+          'rewardId', 'rewardSnapshot', 'redemptionType', 'pointValueCents', 'paymentStatus',
+          'completedAt', 'subtotal', 'customerUid'
+        ]) && (resource.data.get('status', '') != 'Cancelled' || request.resource.data.status == 'Cancelled');
+    }
+
+    // Existing OTP verification access retained.
+    match /pending_users/{email} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // Admin profile management also creates mobile/web mirror documents.
+      allow create: if initialPoints() && (isAdmin() ||
+        (isOwner(userId) && request.resource.data.role == 'customer'));
+      allow update: if profilePointsUnchanged() && (isAdmin() ||
+        (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])));
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      allow read: if isAuthenticated();
+      allow create: if initialPoints() && (isAdmin() || isOwner(customerId));
+      allow update: if profilePointsUnchanged() && (isAdmin() || isOwner(customerId));
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if ownsOrder(resource.data) || isAdmin();
+      allow create: if ordinaryOrderCreate() && (isAdmin() || ownsOrder(request.resource.data));
+      allow update: if adminOrderUpdate() || customerCancellation();
+      allow delete: if isAdmin() && resource.data.get('pointsUsed', 0) == 0 && resource.data.get('pointsEarned', 0) == 0;
+    }
+
+    // Sibling artifact policies retain their existing access.
+    match /artifacts/printcraft-pro/public/data/{collection}/{document=**} {
+      allow read, write: if isAuthenticated() && collection != 'orders';
+    }
+
+    match /artifacts/printcraft-pro/public/data/orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow create: if ordinaryOrderCreate() && (isAdmin() || ownsOrder(request.resource.data));
+      allow update: if adminOrderUpdate() || customerCancellation();
+      allow delete: if isAdmin() && resource.data.get('pointsUsed', 0) == 0 && resource.data.get('pointsEarned', 0) == 0 && resource.data.get('source', '') != 'POS';
+    }
+
+    match /pos_sales/{saleId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /loyalty_accounts/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false;
+      match /events/{eventId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
+    }
+
+    match /loyalty_rewards/{rewardId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /loyalty_submissions/{submissionId} {
+      allow read, write: if false;
+    }
+
+    match /settings/loyalty_config {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Shared customer catalog; only admins can manage its contents.
+    match /sample_products/{sampleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Compatibility collection used by older sample archive records.
+    match /sample_works/{sampleId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Customers need the merchant details when placing an order.
+    match /settings/gcash_config {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /archives/{archiveId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /rfid_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Admin order status transactions create shared notification records.
+    match /push_jobs/{jobId} {
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'type', 'orderId', 'status', 'conversationId', 'messageId', 'state', 'createdAt'
+        ]) && request.resource.data.state == 'pending' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.type in ['order_status', 'chat'];
+      // Delivery results and retries are managed only by the Admin SDK.
+      allow read, update, delete: if false;
+    }
+
+    function customerAdminNotification(notificationId) {
+      let data = request.resource.data;
+      let email = request.auth.token.get('email', '').lower();
+      return isAuthenticated() && data.keys().hasOnly([
+          'id', 'userId', 'title', 'message', 'type', 'link', 'status',
+          'createdAt', 'timestamp', 'orderId', 'conversationId', 'messageId'
+        ]) && data.id == notificationId && data.userId == 'ADMIN' &&
+        data.status == 'Unread' && data.createdAt == request.time &&
+        data.title is string && data.title.size() <= 200 &&
+        data.message is string && data.message.size() <= 500 && (
+          (data.type == 'new_order' && data.link == '/admin' &&
+            notificationId == 'order_created_' + data.orderId &&
+            !exists(/databases/$(database)/documents/artifacts/printcraft-pro/public/data/orders/$(data.orderId)) &&
+            ownsOrder(getAfter(/databases/$(database)/documents/artifacts/printcraft-pro/public/data/orders/$(data.orderId)).data) &&
+            pendingOrder(getAfter(/databases/$(database)/documents/artifacts/printcraft-pro/public/data/orders/$(data.orderId)).data)) ||
+          (data.type == 'chat' && notificationId == 'chat_' + data.messageId &&
+            !exists(/databases/$(database)/documents/conversations/$(data.conversationId)/messages/$(data.messageId)) &&
+            data.link == '/admin?tab=liveChat&convId=' + data.conversationId && email != '' &&
+            getAfter(/databases/$(database)/documents/conversations/$(data.conversationId)).data.customerEmail.lower() == email &&
+            getAfter(/databases/$(database)/documents/conversations/$(data.conversationId)/messages/$(data.messageId)).data.senderRole == 'customer' &&
+            getAfter(/databases/$(database)/documents/conversations/$(data.conversationId)/messages/$(data.messageId)).data.senderId.lower() == email)
+        );
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (isAuthenticated() && (
+        resource.data.userId in [request.auth.uid, request.auth.token.get('email', '').lower(), 'ALL'] ||
+        (request.auth.token.get('email', '') != '' &&
+          resource.data.get('recipientEmail', '') == request.auth.token.email.lower())
+      ));
+      allow create: if isAdmin() || customerAdminNotification(notificationId);
+      allow update, delete: if isAdmin();
+    }
+
+    // Shared alerts keep independent read/dismissal state for every account.
+    match /notification_states/{userId}/items/{notificationId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(['read', 'dismissed', 'updatedAt']) &&
+        request.resource.data.read is bool &&
+        request.resource.data.get('dismissed', false) is bool &&
+        request.resource.data.updatedAt == request.time;
+    }
+
+    match /conversations/{convId} {
+      allow read, write: if isAuthenticated();
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    match /fcm_tokens/{tokenId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

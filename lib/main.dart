@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'services/auth_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/fcm_service.dart';
@@ -34,7 +34,9 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     // Initialize FCM notification services with the root navigatorKey
-    FcmService().initialize(navigatorKey);
+    FcmService().initialize(navigatorKey).catchError((Object error) {
+      debugPrint('Notification initialization failed: $error');
+    });
   }
 
   @override
@@ -66,34 +68,8 @@ class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   Future<Map<String, dynamic>> _fetchUserRole(User user) async {
-    // Automatically register/update customer's device FCM push token in Firestore
-    if (user.email != null && user.email!.isNotEmpty) {
-      FcmService().registerUserToken(user.email!);
-    }
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists) {
-        final data = doc.data();
-        final role = data?['role']?.toString().toLowerCase();
-        return {
-          'isAdmin': role == 'admin',
-          'email': user.email ?? data?['email'] ?? 'Customer',
-        };
-      }
-    } catch (e) {
-      debugPrint("AuthGate: error fetching user role (offline or network): $e");
-    }
-
-    // Graceful fallback for offline / missing profile document
-    return {
-      'isAdmin': false,
-      'email': user.email ?? 'Customer',
-    };
+    final profile = await AuthService.readyProfile(user);
+    return {'isAdmin': profile['role'] == 'admin', 'email': profile['email']};
   }
 
   @override
@@ -115,6 +91,16 @@ class AuthGate extends StatelessWidget {
 
         // If no user is logged in, show HomeScreen
         if (user == null) {
+          final message = AuthService.restorationError;
+          AuthService.restorationError = null;
+          if (message != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(message)));
+              }
+            });
+          }
           return const HomeScreen();
         }
 
@@ -131,10 +117,20 @@ class AuthGate extends StatelessWidget {
               );
             }
 
-            final userInfo = roleSnapshot.data ?? {
-              'isAdmin': false,
-              'email': user.email ?? 'Customer',
-            };
+            if (roleSnapshot.hasError) {
+              return Scaffold(
+                  body: Center(
+                      child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(googleSignInError(roleSnapshot.error!)),
+              )));
+            }
+
+            final userInfo = roleSnapshot.data ??
+                {
+                  'isAdmin': false,
+                  'email': user.email ?? 'Customer',
+                };
 
             return DashboardScreen(
               userEmail: userInfo['email'] as String,

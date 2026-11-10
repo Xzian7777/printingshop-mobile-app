@@ -1,3 +1,4 @@
+import '../services/app_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
@@ -144,10 +145,11 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         'read': false,
       };
 
-      await convDoc.collection('messages').doc(msgId).set(msgData);
+      final batch = FirebaseFirestore.instance.batch();
+      batch.set(convDoc.collection('messages').doc(msgId), msgData);
 
       // Update thread metadata for web Admin inbox
-      await convDoc.set({
+      batch.set(convDoc, {
         'id': _convId,
         'customerEmail': _customerEmailClean,
         'customerName': _customerName,
@@ -162,6 +164,11 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         'customerUnread': false,
       }, SetOptions(merge: true));
 
+      batch.set(FirebaseFirestore.instance.collection('notifications').doc('chat_$msgId'),
+        notificationRecord(id: 'chat_$msgId', recipient: 'ADMIN',
+          title: 'New message from $_customerName', message: text.substring(0, text.length > 300 ? 300 : text.length),
+          type: 'chat', messageId: msgId, conversationId: _convId, link: '/admin?tab=liveChat&convId=$_convId'));
+      await batch.commit();
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;

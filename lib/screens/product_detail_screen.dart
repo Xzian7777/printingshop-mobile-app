@@ -1,8 +1,12 @@
+import 'admin_catalog_view.dart' show sharedImage;
 import 'package:flutter/material.dart';
+import '../widgets/customer_order_card.dart' show orderAmount;
+import '../services/store_price.dart';
 
 /// Product Overview Dialog / Screen matching the modern dark desktop/mobile UI design
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
+  final int cartQuantity;
   final Map<String, dynamic> productData;
   final Function(int quantity)? onAddToCart;
   final Function(int quantity)? onBuyNow;
@@ -11,6 +15,7 @@ class ProductDetailScreen extends StatefulWidget {
     super.key,
     required this.productId,
     required this.productData,
+    this.cartQuantity = 0,
     this.onAddToCart,
     this.onBuyNow,
   });
@@ -20,6 +25,7 @@ class ProductDetailScreen extends StatefulWidget {
     BuildContext context, {
     required String productId,
     required Map<String, dynamic> productData,
+    int cartQuantity = 0,
     Function(int quantity)? onAddToCart,
     Function(int quantity)? onBuyNow,
   }) {
@@ -35,6 +41,7 @@ class ProductDetailScreen extends StatefulWidget {
           child: ProductDetailScreen(
             productId: productId,
             productData: productData,
+            cartQuantity: cartQuantity,
             onAddToCart: onAddToCart,
             onBuyNow: onBuyNow,
           ),
@@ -49,17 +56,21 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _quantity = 1;
+  bool _submitting = false;
 
   @override
   Widget build(BuildContext context) {
     final String name = widget.productData['name'] ?? 'Product';
-    final double price = (widget.productData['price'] ?? 0).toDouble();
+    final price = storePrice(widget.productData['price']);
     final int stock = (widget.productData['stock'] ?? 0) as int;
     final String imageUrl = widget.productData['imageUrl'] ?? '';
-    final String category = (widget.productData['category'] ?? 'ART').toString().toUpperCase();
-    final String description = widget.productData['description'] ??
+    final String category =
+        (widget.productData['category'] ?? 'ART').toString().toUpperCase();
+    final String description = widget.productData['desc'] ??
+        widget.productData['description'] ??
         "Quality school & office supplies item. Guaranteed premium materials and ready for immediate store pick-up.";
-    final String shopLocation = widget.productData['location'] ?? "Main Counter (Store Front)";
+    final String shopLocation =
+        widget.productData['location'] ?? "Main Counter (Store Front)";
 
     final bool isOutOfStock = stock <= 0;
     final bool isLowStock = stock > 0 && stock <= 12;
@@ -86,15 +97,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             children: [
               // ── Header Bar ──────────────────────────────────────────
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xFFBBF7D0), width: 1)),
+                  border: Border(
+                      bottom: BorderSide(color: Color(0xFFBBF7D0), width: 1)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.storefront_rounded, size: 18, color: Color(0xFF15803D)),
+                    const Icon(Icons.storefront_rounded,
+                        size: 18, color: Color(0xFF15803D)),
                     const SizedBox(width: 8),
-                    const Text(
+                    const Expanded(
+                        child: Text(
                       "PRODUCT OVERVIEW",
                       style: TextStyle(
                         fontSize: 13,
@@ -102,10 +117,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         letterSpacing: 1.1,
                         color: Color(0xFF14532D),
                       ),
-                    ),
-                    const Spacer(),
+                    )),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 19, color: Color(0xFF4B7A5E)),
+                      icon: const Icon(Icons.close_rounded,
+                          size: 19, color: Color(0xFF4B7A5E)),
                       splashRadius: 18,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -196,18 +211,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFFBBF7D0),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.5)),
+            border: Border.all(
+                color: const Color(0xFF334155).withValues(alpha: 0.5)),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
               Positioned.fill(
                 child: imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildPlaceholderImage(),
-                      )
+                    ? sharedImage(imageUrl, height: 240, fit: BoxFit.cover)
                     : _buildPlaceholderImage(),
               ),
 
@@ -216,11 +228,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 top: 12,
                 left: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: isOutOfStock
                         ? const Color(0xFFEF4444)
-                        : (isLowStock ? const Color(0xFFFEF3C7) : const Color(0xFFD1FAE5)),
+                        : (isLowStock
+                            ? const Color(0xFFFEF3C7)
+                            : const Color(0xFFD1FAE5)),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
@@ -235,11 +250,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Icon(
                         isOutOfStock
                             ? Icons.cancel_outlined
-                            : (isLowStock ? Icons.warning_amber_rounded : Icons.check_circle_outline),
+                            : (isLowStock
+                                ? Icons.warning_amber_rounded
+                                : Icons.check_circle_outline),
                         size: 13,
                         color: isOutOfStock
                             ? Colors.white
-                            : (isLowStock ? const Color(0xFFD97706) : const Color(0xFF059669)),
+                            : (isLowStock
+                                ? const Color(0xFFD97706)
+                                : const Color(0xFF059669)),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -251,7 +270,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           fontWeight: FontWeight.w800,
                           color: isOutOfStock
                               ? Colors.white
-                              : (isLowStock ? const Color(0xFFB45309) : const Color(0xFF047857)),
+                              : (isLowStock
+                                  ? const Color(0xFFB45309)
+                                  : const Color(0xFF047857)),
                         ),
                       ),
                     ],
@@ -264,26 +285,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         const SizedBox(height: 12),
 
         // Trust features underneath photo (100% Authentic & Store Pick-up)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 16,
+          runSpacing: 8,
           children: const [
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.shield_outlined, size: 14, color: Color(0xFF10B981)),
                 SizedBox(width: 4),
                 Text(
                   "100% Authentic",
-                  style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      color: Color(0xFF4B7A5E),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500),
                 ),
               ],
             ),
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.storefront_outlined, size: 14, color: Color(0xFF15803D)),
+                Icon(Icons.storefront_outlined,
+                    size: 14, color: Color(0xFF15803D)),
                 SizedBox(width: 4),
                 Text(
                   "Store Pick-up",
-                  style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      color: Color(0xFF4B7A5E),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -302,7 +333,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           children: const [
             Icon(Icons.menu_book_rounded, size: 54, color: Color(0xFF86EFAC)),
             SizedBox(height: 6),
-            Text("Product Image", style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11)),
+            Text("Product Image",
+                style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11)),
           ],
         ),
       ),
@@ -312,7 +344,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildDetailsSection({
     required String name,
     required String category,
-    required double price,
+    required double? price,
     required int stock,
     required String shopLocation,
     required String description,
@@ -365,7 +397,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           child: Row(
             children: [
               const Text(
-                "PRICE: ",
+                "Unit price ",
                 style: TextStyle(
                   color: Color(0xFF15803D),
                   fontWeight: FontWeight.bold,
@@ -373,15 +405,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   letterSpacing: 0.5,
                 ),
               ),
-              Text(
-                "₱${price.toStringAsFixed(2)}",
-                style: const TextStyle(
-                  color: Color(0xFF22C55E),
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                  letterSpacing: -0.3,
-                ),
-              ),
+              Expanded(
+                  child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        price == null
+                            ? 'Price unavailable'
+                            : orderAmount(price),
+                        style: const TextStyle(
+                          color: Color(0xFF15803D),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          letterSpacing: -0.3,
+                        ),
+                      ))),
             ],
           ),
         ),
@@ -391,15 +429,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Availability:", style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
-            Text(
+            const Text("Availability:",
+                style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
+            Flexible(
+                child: Text(
               isOutOfStock ? "Out of Stock" : "$stock pcs available",
+              textAlign: TextAlign.right,
               style: TextStyle(
-                color: isOutOfStock ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                color: isOutOfStock
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFF10B981),
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),
-            ),
+            )),
           ],
         ),
         const SizedBox(height: 6),
@@ -408,15 +451,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Shop Location:", style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
-            Text(
+            const Text("Shop Location:",
+                style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
+            Flexible(
+                child: Text(
               shopLocation,
+              textAlign: TextAlign.right,
               style: const TextStyle(
                 color: Color(0xFF14532D),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
-            ),
+            )),
           ],
         ),
         const SizedBox(height: 14),
@@ -451,12 +497,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Quantity Selector Row
-        Row(
+        // Quantity selector wraps on smaller phones.
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             const Text(
               "Quantity:",
-              style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 13),
+              style: TextStyle(
+                  color: Color(0xFF14532D),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13),
             ),
             const SizedBox(width: 14),
             Container(
@@ -466,16 +518,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-                    onTap: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                    borderRadius:
+                        const BorderRadius.horizontal(left: Radius.circular(8)),
+                    onTap: _quantity > 1
+                        ? () => setState(
+                            () => _quantity = (_quantity - 1).clamp(1, stock))
+                        : null,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       child: Icon(
                         Icons.remove,
                         size: 15,
-                        color: _quantity > 1 ? const Color(0xFF4B7A5E) : const Color(0xFF334155),
+                        color: _quantity > 1
+                            ? const Color(0xFF4B7A5E)
+                            : const Color(0xFF334155),
                       ),
                     ),
                   ),
@@ -483,7 +543,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     constraints: const BoxConstraints(minWidth: 32),
                     alignment: Alignment.center,
                     child: Text(
-                      '$_quantity',
+                      '${stock > 0 ? _quantity : 0}',
                       style: const TextStyle(
                         color: Color(0xFF14532D),
                         fontWeight: FontWeight.bold,
@@ -492,14 +552,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                   InkWell(
-                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
-                    onTap: _quantity < stock ? () => setState(() => _quantity++) : null,
+                    borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(8)),
+                    onTap: _quantity < stock
+                        ? () => setState(
+                            () => _quantity = (_quantity + 1).clamp(1, stock))
+                        : null,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       child: Icon(
                         Icons.add,
                         size: 15,
-                        color: _quantity < stock ? const Color(0xFF4B7A5E) : const Color(0xFF334155),
+                        color: _quantity < stock
+                            ? const Color(0xFF4B7A5E)
+                            : const Color(0xFF334155),
                       ),
                     ),
                   ),
@@ -512,6 +579,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 11),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFBBF7D0)),
+          ),
+          child: Row(children: [
+            const Text('Total price',
+                style: TextStyle(
+                    color: Color(0xFF14532D),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                  price == null
+                      ? '—'
+                      : orderAmount(price * (stock > 0 ? _quantity : 0)),
+                  key: const ValueKey('productTotalPrice'),
+                  style: const TextStyle(
+                      color: Color(0xFF15803D),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800)),
+            )),
+          ]),
         ),
         const SizedBox(height: 20),
 
@@ -532,12 +630,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                     padding: EdgeInsets.zero,
                   ),
-                  onPressed: stock > 0
+                  onPressed: stock > 0 && price != null
                       ? () {
-                          if (widget.onAddToCart != null) {
-                            widget.onAddToCart!(_quantity);
+                          if (_submitting) return;
+                          if (widget.cartQuantity + _quantity > stock) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(
+                                    'You already have ${widget.cartQuantity} in your cart. Only $stock are available.')));
+                            return;
                           }
+                          _submitting = true;
                           Navigator.of(context).pop();
+                          widget.onAddToCart?.call(_quantity);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text("Added $_quantity $name to Cart!"),
@@ -546,7 +650,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           );
                         }
                       : null,
-                  icon: const Icon(Icons.shopping_cart_outlined, size: 16, color: Color(0xFFF0FDF4)),
+                  icon: const Icon(Icons.shopping_cart_outlined,
+                      size: 16, color: Color(0xFFF0FDF4)),
                   label: const Text(
                     "Add to Cart",
                     style: TextStyle(
@@ -574,21 +679,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                     padding: EdgeInsets.zero,
                   ),
-                  onPressed: stock > 0
+                  onPressed: stock > 0 && price != null
                       ? () {
-                          if (widget.onBuyNow != null) {
-                            widget.onBuyNow!(_quantity);
-                          }
+                          if (_submitting) return;
+                          _submitting = true;
                           Navigator.of(context).pop();
+                          widget.onBuyNow?.call(_quantity);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text("Proceeding to checkout: $_quantity x $name"),
+                              content: Text(
+                                  "Proceeding to checkout: $_quantity x $name"),
                               backgroundColor: const Color(0xFF2563EB),
                             ),
                           );
                         }
                       : null,
-                  icon: const Icon(Icons.flash_on_rounded, size: 16, color: Colors.white),
+                  icon: const Icon(Icons.flash_on_rounded,
+                      size: 16, color: Colors.white),
                   label: const Text(
                     "Buy Now",
                     style: TextStyle(

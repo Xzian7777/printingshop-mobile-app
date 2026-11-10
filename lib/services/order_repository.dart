@@ -1,6 +1,9 @@
+import 'app_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'local_db_service.dart';
+import 'order_reference.dart';
+import 'dart:convert';
 
 class OrderRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,12 +25,15 @@ class OrderRepository {
   // 1. HYBRID FETCH: Maglo-load agad mula sa Local DB, tapos ico-connect sa Cloud
   Future<List<Map<String, dynamic>>> getOrdersHybrid(String userEmail) async {
     // Load agad mula sa Local Database
-    List<Map<String, dynamic>> localData = await _localDb.getLocalOrders(userEmail);
+    List<Map<String, dynamic>> localData =
+        await _localDb.getLocalOrders(userEmail);
 
     // Sync sa Cloud sa Background kapag online
     if (await isOnline()) {
       try {
-        Query query = _ordersRef.orderBy('createdAt', descending: true).limit(20); // PAGINATION LIMIT
+        Query query = _ordersRef
+            .orderBy('createdAt', descending: true)
+            .limit(20); // PAGINATION LIMIT
         if (userEmail.toLowerCase().trim() != 'supernovaelectrodog@gmail.com') {
           query = query.where('email', isEqualTo: userEmail);
         }
@@ -56,7 +62,10 @@ class OrderRepository {
     final unsynced = await _localDb.getUnsyncedOrders();
     for (var order in unsynced) {
       try {
-        await _ordersRef.doc(order['id']).set({
+        final payload = order['payload'] is String
+            ? Map<String, dynamic>.from(jsonDecode(order['payload'] as String))
+            : <String, dynamic>{};
+        final complete = <String, dynamic>{
           'id': order['id'],
           'customer': order['customer'],
           'email': order['email'],
@@ -68,6 +77,41 @@ class OrderRepository {
           'file': order['file'],
           'fileUrl': order['fileUrl'],
           'createdAt': FieldValue.serverTimestamp(),
+          ...payload,
+        };
+        final ref = _ordersRef.doc(order['id']);
+        await _firestore.runTransaction((tx) async {
+          final existing = await tx.get(ref);
+          if (existing.exists) {
+            if (!isSameOrderSubmission(
+                existing.data() as Map<String, dynamic>, complete)) {
+              throw StateError('Order ID conflict.');
+            }
+            return; // A timed-out request may already have created this order.
+          }
+          final serviceId = complete['serviceId']?.toString();
+          if (serviceId != null && serviceId.isNotEmpty) {
+            final service =
+                await tx.get(_firestore.collection('services').doc(serviceId));
+            if (!service.exists ||
+                service.data()?['archived'] == true ||
+                (service.data()?['updatedAt'] ?? '').toString() !=
+                    complete['serviceVersion'])
+              throw StateError(
+                  'Queued service changed; review this order before resubmitting.');
+          }
+          if (complete['payment'] == 'GCash Online' &&
+              complete['merchantAccountNumber'] != null) {
+            final merchant = await tx
+                .get(_firestore.collection('settings').doc('gcash_config'));
+            if (merchant.data()?['isActive'] == false ||
+                merchant.data()?['accountNumber'] !=
+                    complete['merchantAccountNumber'])
+              throw StateError(
+                  'Queued GCash details changed; review payment before resubmitting.');
+          }
+          tx.set(ref, complete);
+          addNewOrderNotification(tx, _firestore, ref.id, complete);
         });
 
         await _localDb.markAsSynced(order['id'], order['fileUrl']);

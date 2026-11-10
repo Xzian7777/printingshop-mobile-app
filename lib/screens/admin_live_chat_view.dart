@@ -1,3 +1,5 @@
+import '../services/app_notifications.dart';
+import '../services/profile_directory.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +9,8 @@ import 'dart:math' as math;
 /// re.sub(r'[^a-zA-Z0-9]', '_', email.strip().lower()) -> f"conv_{safe_email}"
 String getSafeConversationId(String email) {
   if (email.isEmpty) return 'conv_general';
-  final safeEmail = email.trim().toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+  final safeEmail =
+      email.trim().toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
   return 'conv_$safeEmail';
 }
 
@@ -40,7 +43,8 @@ class _CustomerChatEntry {
 // AdminLiveChatView — shows all registered customers with real conversations
 // ---------------------------------------------------------------------------
 class AdminLiveChatView extends StatefulWidget {
-  const AdminLiveChatView({super.key});
+  final String? initialConversationId;
+  const AdminLiveChatView({super.key, this.initialConversationId});
 
   @override
   State<AdminLiveChatView> createState() => _AdminLiveChatViewState();
@@ -51,9 +55,10 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
   final TextEditingController _replyController = TextEditingController();
 
   String _searchQuery = '';
+  bool _initialOpened = false;
 
   // Live streams
-  StreamSubscription<QuerySnapshot>? _usersSub;
+  StreamSubscription<List<ProfileRecord>>? _usersSub;
   StreamSubscription<QuerySnapshot>? _convsSub;
 
   List<Map<String, dynamic>> _users = [];
@@ -72,7 +77,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
     _subscribeUsers();
     _subscribeConversations();
     _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
+      setState(
+          () => _searchQuery = _searchController.text.trim().toLowerCase());
     });
   }
 
@@ -86,19 +92,22 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
   }
 
   void _subscribeUsers() {
-    _usersSub = FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'customer')
-        .snapshots()
-        .listen(
+    _usersSub = watchProfiles().listen(
       (snap) {
         if (!mounted) return;
         setState(() {
-          _users = snap.docs.map((d) {
+          _users = snap
+              .where((d) =>
+                  d.data()['role'] != 'admin' && d.data()['archived'] != true)
+              .map((d) {
             final data = d.data();
             return {
               'uid': d.id,
-              'full_name': (data['full_name'] ?? data['displayName'] ?? '').toString(),
+              'full_name': (data['fullName'] ??
+                      data['full_name'] ??
+                      data['displayName'] ??
+                      '')
+                  .toString(),
               'email': (data['email'] ?? '').toString(),
             };
           }).toList();
@@ -122,7 +131,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
         final map = <String, Map<String, dynamic>>{};
         for (final doc in snap.docs) {
           final data = doc.data() as Map<String, dynamic>;
-          final cEmail = (data['customerEmail'] ?? '').toString().trim().toLowerCase();
+          final cEmail =
+              (data['customerEmail'] ?? '').toString().trim().toLowerCase();
           if (cEmail.isNotEmpty) {
             map[cEmail] = {
               ...data,
@@ -153,15 +163,18 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
       seenEmails.add(email);
 
       final convData = _convsByEmail[email];
-      final convId = convData?['_docId'] as String? ?? getSafeConversationId(email);
+      final convId =
+          convData?['_docId'] as String? ?? getSafeConversationId(email);
 
       final fullName = (u['full_name'] as String).isNotEmpty
           ? u['full_name'] as String
           : (convData?['customerName'] ?? email.split('@').first).toString();
 
       final lastMsg = convData?['lastMessage'] as String?;
-      final lastMsgAt = (convData?['lastMessageAt'] ?? convData?['updatedAt']) as String?;
-      final unreadAdmin = (convData?['unreadCountAdmin'] as num? ?? 0) > 0 || convData?['unread'] == true;
+      final lastMsgAt =
+          (convData?['lastMessageAt'] ?? convData?['updatedAt']) as String?;
+      final unreadAdmin = (convData?['unreadCountAdmin'] as num? ?? 0) > 0 ||
+          convData?['unread'] == true;
       final hasChat = lastMsg != null && lastMsg.isNotEmpty;
 
       entries.add(_CustomerChatEntry(
@@ -180,15 +193,19 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
     _convsByEmail.forEach((cEmail, convData) {
       if (!seenEmails.contains(cEmail)) {
         final lastMsg = convData['lastMessage'] as String?;
-        final lastMsgAt = (convData['lastMessageAt'] ?? convData['updatedAt']) as String?;
-        final unreadAdmin = (convData['unreadCountAdmin'] as num? ?? 0) > 0 || convData['unread'] == true;
+        final lastMsgAt =
+            (convData['lastMessageAt'] ?? convData['updatedAt']) as String?;
+        final unreadAdmin = (convData['unreadCountAdmin'] as num? ?? 0) > 0 ||
+            convData['unread'] == true;
         final hasChat = lastMsg != null && lastMsg.isNotEmpty;
 
         entries.add(_CustomerChatEntry(
           uid: convData['customerId']?.toString() ?? cEmail,
-          fullName: (convData['customerName'] ?? cEmail.split('@').first).toString(),
+          fullName:
+              (convData['customerName'] ?? cEmail.split('@').first).toString(),
           email: cEmail,
-          convId: (convData['_docId'] ?? getSafeConversationId(cEmail)).toString(),
+          convId:
+              (convData['_docId'] ?? getSafeConversationId(cEmail)).toString(),
           lastMessage: lastMsg,
           lastMessageAt: lastMsgAt,
           hasUnread: unreadAdmin,
@@ -214,7 +231,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
       });
 
     final withoutChat = filtered.where((e) => !e.hasChat).toList()
-      ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+      ..sort((a, b) =>
+          a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
 
     return [...withChat, ...withoutChat];
   }
@@ -261,7 +279,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: Container(
             height: MediaQuery.of(ctx).size.height * 0.80,
             decoration: const BoxDecoration(
@@ -275,7 +294,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
                   decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Color(0xFFBBF7D0))),
+                    border:
+                        Border(bottom: BorderSide(color: Color(0xFFBBF7D0))),
                   ),
                   child: Row(
                     children: [
@@ -334,25 +354,33 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                         return Center(
                           child: Text(
                             'Error: ${snap.error}',
-                            style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 12),
+                            style: const TextStyle(
+                                color: Color(0xFFF43F5E), fontSize: 12),
                           ),
                         );
                       }
                       if (!snap.hasData) {
-                        return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
+                        return const Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF16A34A)));
                       }
 
                       final rawDocs = snap.data!.docs;
 
                       // Sort ascending so newest messages are at the bottom of ListView (reverse: true)
-                      final sortedDocs = List<QueryDocumentSnapshot>.from(rawDocs)
-                        ..sort((a, b) {
-                          final da = a.data() as Map<String, dynamic>;
-                          final db = b.data() as Map<String, dynamic>;
-                          final ta = (da['createdAt'] ?? da['timestamp'] ?? '').toString();
-                          final tb = (db['createdAt'] ?? db['timestamp'] ?? '').toString();
-                          return tb.compareTo(ta);
-                        });
+                      final sortedDocs =
+                          List<QueryDocumentSnapshot>.from(rawDocs)
+                            ..sort((a, b) {
+                              final da = a.data() as Map<String, dynamic>;
+                              final db = b.data() as Map<String, dynamic>;
+                              final ta =
+                                  (da['createdAt'] ?? da['timestamp'] ?? '')
+                                      .toString();
+                              final tb =
+                                  (db['createdAt'] ?? db['timestamp'] ?? '')
+                                      .toString();
+                              return tb.compareTo(ta);
+                            });
 
                       if (sortedDocs.isEmpty) {
                         return Center(
@@ -362,7 +390,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                               Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                                  color: const Color(0xFF16A34A)
+                                      .withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -384,7 +413,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                               const SizedBox(height: 6),
                               const Text(
                                 'Send a message below to begin chatting.',
-                                style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11),
+                                style: TextStyle(
+                                    color: Color(0xFF4B7A5E), fontSize: 11),
                                 textAlign: TextAlign.center,
                               ),
                             ],
@@ -394,22 +424,35 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
 
                       return ListView.builder(
                         reverse: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         itemCount: sortedDocs.length,
                         itemBuilder: (context, i) {
-                          final mData = sortedDocs[i].data() as Map<String, dynamic>;
-                          final senderRole = (mData['senderRole'] ?? mData['sender'] ?? 'customer').toString().toLowerCase();
-                          final isAdmin = senderRole == 'admin' || senderRole == 'staff';
-                          final text = (mData['text'] ?? mData['message'] ?? '').toString();
+                          final mData =
+                              sortedDocs[i].data() as Map<String, dynamic>;
+                          final senderRole = (mData['senderRole'] ??
+                                  mData['sender'] ??
+                                  'customer')
+                              .toString()
+                              .toLowerCase();
+                          final isAdmin =
+                              senderRole == 'admin' || senderRole == 'staff';
+                          final text = (mData['text'] ?? mData['message'] ?? '')
+                              .toString();
                           final timeStr = (mData['time'] ?? '').toString();
-                          final senderName = (mData['senderName'] ?? (isAdmin ? 'You (Staff)' : entry.fullName)).toString();
+                          final senderName = (mData['senderName'] ??
+                                  (isAdmin ? 'You (Staff)' : entry.fullName))
+                              .toString();
 
                           return Align(
-                            alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+                            alignment: isAdmin
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 8),
                               constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.72,
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.72,
                               ),
                               child: Column(
                                 crossAxisAlignment: isAdmin
@@ -417,7 +460,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                                     : CrossAxisAlignment.start,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
                                       color: isAdmin
                                           ? const Color(0xFF16A34A)
@@ -425,24 +469,34 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                                       borderRadius: BorderRadius.only(
                                         topLeft: const Radius.circular(16),
                                         topRight: const Radius.circular(16),
-                                        bottomLeft: Radius.circular(isAdmin ? 16 : 4),
-                                        bottomRight: Radius.circular(isAdmin ? 4 : 16),
+                                        bottomLeft:
+                                            Radius.circular(isAdmin ? 16 : 4),
+                                        bottomRight:
+                                            Radius.circular(isAdmin ? 4 : 16),
                                       ),
                                       border: isAdmin
                                           ? null
-                                          : Border.all(color: const Color(0xFF334155), width: 0.8),
+                                          : Border.all(
+                                              color: const Color(0xFF334155),
+                                              width: 0.8),
                                     ),
                                     child: Text(
                                       text,
-                                      style: const TextStyle(color: Color(0xFF14532D), fontSize: 12.5, height: 1.4),
+                                      style: const TextStyle(
+                                          color: Color(0xFF14532D),
+                                          fontSize: 12.5,
+                                          height: 1.4),
                                     ),
                                   ),
                                   if (timeStr.isNotEmpty)
                                     Padding(
-                                      padding: const EdgeInsets.only(top: 3, left: 4, right: 4),
+                                      padding: const EdgeInsets.only(
+                                          top: 3, left: 4, right: 4),
                                       child: Text(
                                         '$senderName • $timeStr',
-                                        style: const TextStyle(fontSize: 9.5, color: Color(0xFF4B7A5E)),
+                                        style: const TextStyle(
+                                            fontSize: 9.5,
+                                            color: Color(0xFF4B7A5E)),
                                       ),
                                     ),
                                 ],
@@ -473,14 +527,17 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                           ),
                           child: TextField(
                             controller: _replyController,
-                            style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
+                            style: const TextStyle(
+                                color: Color(0xFF14532D), fontSize: 13),
                             maxLines: 4,
                             minLines: 1,
                             textCapitalization: TextCapitalization.sentences,
                             decoration: const InputDecoration(
                               hintText: 'Type your reply...',
-                              hintStyle: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              hintStyle: TextStyle(
+                                  fontSize: 12, color: Color(0xFF4B7A5E)),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
                               border: InputBorder.none,
                             ),
                             onSubmitted: (_) => _sendReply(entry),
@@ -498,14 +555,16 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF16A34A).withValues(alpha: 0.3),
+                              color: const Color(0xFF16A34A)
+                                  .withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.send_rounded, color: Color(0xFF14532D), size: 18),
+                          icon: const Icon(Icons.send_rounded,
+                              color: Color(0xFF14532D), size: 18),
                           onPressed: () => _sendReply(entry),
                         ),
                       ),
@@ -534,9 +593,11 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
 
     try {
       final convDoc = _conversationsRef.doc(entry.convId);
-      final msgId = 'msg_${now.millisecondsSinceEpoch}_${math.Random().nextInt(999999).toString().padLeft(6, '0')}';
+      final msgId =
+          'msg_${now.millisecondsSinceEpoch}_${math.Random().nextInt(999999).toString().padLeft(6, '0')}';
 
-      await convDoc.collection('messages').doc(msgId).set({
+      final batch = FirebaseFirestore.instance.batch();
+      batch.set(convDoc.collection('messages').doc(msgId), {
         'id': msgId,
         'conversationId': entry.convId,
         'senderId': 'admin@kczprint.com',
@@ -551,20 +612,38 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
         'read': false,
       });
 
-      await convDoc.set({
-        'id': entry.convId,
-        'customerName': entry.fullName,
-        'customerEmail': entry.email,
-        'lastMessage': txt.length > 120 ? txt.substring(0, 120) : txt,
-        'lastMessageSender': 'admin',
-        'lastMessageSenderName': 'Staff',
-        'lastMessageAt': nowIso,
-        'updatedAt': nowIso,
-        'unreadCountAdmin': 0,
-        'unreadCountCustomer': FieldValue.increment(1),
-        'unread': false,
-        'customerUnread': true,
-      }, SetOptions(merge: true));
+      batch.set(
+          convDoc,
+          {
+            'id': entry.convId,
+            'customerName': entry.fullName,
+            'customerEmail': entry.email,
+            'lastMessage': txt.length > 120 ? txt.substring(0, 120) : txt,
+            'lastMessageSender': 'admin',
+            'lastMessageSenderName': 'Staff',
+            'lastMessageAt': nowIso,
+            'updatedAt': nowIso,
+            'unreadCountAdmin': 0,
+            'unreadCountCustomer': FieldValue.increment(1),
+            'unread': false,
+            'customerUnread': true,
+          },
+          SetOptions(merge: true));
+      batch.set(
+          FirebaseFirestore.instance.collection('push_jobs').doc('chat_$msgId'),
+          {
+            'type': 'chat',
+            'conversationId': entry.convId,
+            'messageId': msgId,
+            'state': 'pending',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+      batch.set(FirebaseFirestore.instance.collection('notifications').doc('chat_$msgId'),
+        notificationRecord(id: 'chat_$msgId', recipient: entry.email.toLowerCase(),
+          email: entry.email, title: 'New reply from KCZ Printing',
+          message: txt.substring(0, txt.length > 300 ? 300 : txt.length),
+          type: 'chat', messageId: msgId, conversationId: entry.convId, link: '/customer?tab=chat'));
+      await batch.commit();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -586,7 +665,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, color: Color(0xFFF43F5E), size: 40),
+              const Icon(Icons.error_outline,
+                  color: Color(0xFFF43F5E), size: 40),
               const SizedBox(height: 12),
               Text(
                 _error!,
@@ -607,7 +687,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF16A34A),
                 ),
-                child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                child:
+                    const Text('Retry', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -617,10 +698,19 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
 
     // ── Loading state ──
     if (!_usersLoaded || !_convsLoaded) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFF16A34A)));
     }
 
     final entries = _buildEntries();
+    if (!_initialOpened && widget.initialConversationId != null) {
+      final matches = entries.where((entry) => entry.convId == widget.initialConversationId);
+      if (matches.isNotEmpty) {
+        _initialOpened = true;
+        final entry = matches.first;
+        WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _openConversation(entry); });
+      }
+    }
 
     return Column(
       children: [
@@ -635,7 +725,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.forum_rounded, color: Color(0xFF15803D), size: 18),
+                  const Icon(Icons.forum_rounded,
+                      color: Color(0xFF15803D), size: 18),
                   const SizedBox(width: 8),
                   const Text(
                     'Live Customer Chat',
@@ -647,11 +738,14 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: const Color(0xFF16A34A).withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4)),
+                      border: Border.all(
+                          color:
+                              const Color(0xFF16A34A).withValues(alpha: 0.4)),
                     ),
                     child: Text(
                       '${entries.length} registered',
@@ -670,11 +764,14 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                 style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search customer name or email...',
-                  hintStyle: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
-                  prefixIcon: const Icon(Icons.search, color: Color(0xFF4B7A5E), size: 18),
+                  hintStyle:
+                      const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12),
+                  prefixIcon: const Icon(Icons.search,
+                      color: Color(0xFF4B7A5E), size: 18),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.close, color: Color(0xFF4B7A5E), size: 16),
+                          icon: const Icon(Icons.close,
+                              color: Color(0xFF4B7A5E), size: 16),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -683,7 +780,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                       : null,
                   filled: true,
                   fillColor: const Color(0xFFF8FFF9),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: Color(0xFFBBF7D0)),
@@ -710,7 +808,9 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        _searchQuery.isNotEmpty ? Icons.search_off : Icons.people_outline,
+                        _searchQuery.isNotEmpty
+                            ? Icons.search_off
+                            : Icons.people_outline,
                         color: const Color(0xFF86EFAC),
                         size: 44,
                       ),
@@ -719,7 +819,8 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                         _searchQuery.isNotEmpty
                             ? 'No customers match "$_searchQuery"'
                             : 'No registered customers found.',
-                        style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 13),
+                        style: const TextStyle(
+                            color: Color(0xFF4B7A5E), fontSize: 13),
                       ),
                     ],
                   ),
@@ -738,9 +839,11 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
 
                     return InkWell(
                       onTap: () => _openConversation(entry),
-                      splashColor: const Color(0xFF16A34A).withValues(alpha: 0.1),
+                      splashColor:
+                          const Color(0xFF16A34A).withValues(alpha: 0.1),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                         child: Row(
                           children: [
                             // ── Avatar ──
@@ -843,12 +946,14 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
                                       ),
                                       if (entry.hasUnread)
                                         Container(
-                                          margin: const EdgeInsets.only(left: 6),
+                                          margin:
+                                              const EdgeInsets.only(left: 6),
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFF43F5E),
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
                                           child: const Text(
                                             'NEW',

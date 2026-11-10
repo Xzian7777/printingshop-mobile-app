@@ -1,3 +1,4 @@
+import '../widgets/google_sign_in_button.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -287,10 +288,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       children: [
         Row(
           children: [
-            Text(
+            Expanded(child: Text(
               label,
               style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFCBD5E1)),
-            ),
+            )),
             if (isRequired)
               const Text(' *', style: TextStyle(color: Color(0xFFF43F5E), fontWeight: FontWeight.bold, fontSize: 13)),
           ],
@@ -375,7 +376,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       strengthValue = 1.0;
     }
 
-    return Scaffold(
+    return PopScope(canPop: !_isLoading, child: Scaffold(
       backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -386,7 +387,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF14532D)),
-          onPressed: () {
+          onPressed: _isLoading ? null : () {
             if (_regStep == 2) {
               setState(() => _regStep = 1);
             } else {
@@ -610,7 +611,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               const Expanded(
                                 child: Text.rich(
                                   TextSpan(
-                                    text: "Sumasang-ayon ako sa ",
+                                    text: "I agree to the ",
                                     style: TextStyle(fontSize: 11.5, color: Color(0xFF4B7A5E), height: 1.3),
                                     children: [
                                       TextSpan(
@@ -618,7 +619,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                                       ),
                                       TextSpan(
-                                        text: " (Ang prints na hindi kukunin sa loob ng 30 araw ay ida-dispose).",
+                                        text: " (Unclaimed prints will be disposed of after 30 days).",
                                       ),
                                     ],
                                   ),
@@ -667,7 +668,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               SizedBox(
                                 height: 48,
                                 child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: _isLoading ? null : () => Navigator.pop(context),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFF4B7A5E),
                                     side: const BorderSide(color: Color(0xFFBBF7D0)),
@@ -679,12 +680,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ],
                           ),
 
+                          GoogleSignInButton(busy: _isLoading, termsAccepted: _agreeToTerms,
+                            onBusyChanged: (value) { if (mounted) setState(() => _isLoading = value); }),
+
                           const SizedBox(height: 18),
 
                           // Already have account
                           Center(
                             child: GestureDetector(
-                              onTap: () {
+                              onTap: _isLoading ? null : () {
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -809,6 +813,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }

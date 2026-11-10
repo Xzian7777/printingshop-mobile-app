@@ -1,3 +1,5 @@
+import '../services/auth_service.dart';
+import '../widgets/google_sign_in_button.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -143,6 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isLoading || AuthService.signingIn) return;
     if (!_loginFormKey.currentState!.validate()) return;
 
     if (!_loginAgreeTerms) {
@@ -488,14 +491,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(canPop: !_isLoading, child: Scaffold(
       backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF14532D)),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
         ),
       ),
       body: Stack(
@@ -634,7 +637,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
-                                  onPressed: () => _showForgotPasswordModal(context),
+                                  onPressed: _isLoading ? null : () => _showForgotPasswordModal(context),
                                   style: TextButton.styleFrom(
                                     padding: EdgeInsets.zero,
                                     minimumSize: const Size(0, 28),
@@ -659,7 +662,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       value: _loginAgreeTerms,
                                       activeColor: const Color(0xFF16A34A),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                      onChanged: (val) => setState(() => _loginAgreeTerms = val ?? false),
+                                      onChanged: _isLoading ? null : (val) => setState(() => _loginAgreeTerms = val ?? false),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -714,6 +717,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
+                              GoogleSignInButton(busy: _isLoading, termsAccepted: _loginAgreeTerms,
+                                onBusyChanged: (value) { if (mounted) setState(() => _isLoading = value); }),
                             ],
                           ),
                         ),
@@ -722,15 +727,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
 
                       // Sign Up Redirect
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           const Text(
                             "Don't have an account? ",
                             style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12.5),
                           ),
                           GestureDetector(
-                            onTap: () {
+                            onTap: _isLoading ? null : () {
                               Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(builder: (context) => const RegisterScreen()),
@@ -755,6 +761,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }

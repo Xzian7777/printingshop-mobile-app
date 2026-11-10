@@ -1,4 +1,18 @@
+import '../services/auth_service.dart';
+import '../services/display_text.dart';
+import 'rewards_screen.dart';
+import '../services/app_notifications.dart';
+import '../services/notification_destination.dart';
+import '../widgets/notification_bell.dart';
+import '../services/order_cancellation.dart';
+import '../widgets/order_cancel_dialog.dart';
+import 'admin_pos_view.dart';
+import '../widgets/customer_order_card.dart';
+import '../widgets/dashboard_controls.dart';
+import '../theme/dashboard_theme.dart';
+import '../services/order_workflow.dart';
 import 'admin_archive_screen.dart';
+import 'admin_catalog_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +21,6 @@ import 'dart:math' as math;
 import 'login_screen.dart';
 import 'store_screen.dart';
 import 'place_order_screen.dart';
-import 'admin_products_screen.dart';
 import 'customer_chat_screen.dart';
 import 'admin_live_chat_view.dart' hide getSafeConversationId;
 import 'admin_rfid_loyalty_view.dart';
@@ -16,26 +29,59 @@ import '../services/order_repository.dart';
 import '../services/fcm_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends StatelessWidget {
   final String userEmail;
   final bool isAdmin;
+  final int? initialNavIndex;
+  final int initialAdminTab;
+  const DashboardScreen(
+      {super.key,
+      required this.userEmail,
+      required this.isAdmin,
+      this.initialNavIndex,
+      this.initialAdminTab = 0});
 
-  const DashboardScreen({
-    super.key,
+  @override
+  Widget build(BuildContext context) => Theme(
+        data: DashboardTheme.light,
+        child: _DashboardContent(
+            userEmail: userEmail,
+            isAdmin: isAdmin,
+            initialNavIndex: initialNavIndex,
+            initialAdminTab: initialAdminTab),
+      );
+}
+
+class _DashboardContent extends StatefulWidget {
+  final String userEmail;
+  final bool isAdmin;
+  final int? initialNavIndex;
+  final int initialAdminTab;
+
+  const _DashboardContent({
     required this.userEmail,
     required this.isAdmin,
+    this.initialNavIndex,
+    this.initialAdminTab = 0,
   });
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<_DashboardContent> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+class _DashboardScreenState extends State<_DashboardContent>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
 
   @override
   void initState() {
     super.initState();
+    _currentNavIndex = widget.initialNavIndex ?? (widget.isAdmin ? 2 : 0);
+    _adminSubTab = widget.initialAdminTab;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await FcmService().registerUserToken(widget.userEmail);
+      if (mounted) FcmService().activateNavigation();
+    });
     OrderRepository().syncOfflineOrders();
 
     _animController = AnimationController(
@@ -45,11 +91,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   int _currentNavIndex = 0;
-  int _adminSubTab = 0; // 0: Orders Management, 1: Live Chat, 2: Analytics, 3: RFID Loyalty, 4: Registered Users
+  int _adminSubTab =
+      0; // 0: Orders Management, 1: Live Chat, 2: Analytics, 3: RFID Loyalty, 4: Registered Users, 5: Samples, 6: Services, 7: GCash, 8: Archive
 
   String _statusFilter = 'All Active';
   String _selectedServiceCategory = 'All Services';
-  String _orderSortOrder = 'Latest to Previous'; // 'Latest to Previous' or 'Previous to Latest'
+  String _orderSortOrder =
+      'Latest to Previous'; // 'Latest to Previous' or 'Previous to Latest'
   bool _isListView = true;
 
   // --- CUSTOMER TRACKER STATE ---
@@ -91,8 +139,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       .doc('data')
       .collection('orders');
 
-
-
   CollectionReference get _rfidLogsRef => FirebaseFirestore.instance
       .collection('artifacts')
       .doc('printcraft-pro')
@@ -122,7 +168,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: const [
             Icon(Icons.gavel_rounded, color: Color(0xFF16A34A)),
             SizedBox(width: 8),
-            Text("Terms & Conditions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            Text("Terms & Conditions",
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A))),
           ],
         ),
         content: SingleChildScrollView(
@@ -130,27 +180,53 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Text("1. Print File Proofing & Responsibility", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("1. Print File Proofing & Responsibility",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Customers are responsible for reviewing uploaded documents, layout sizing, and spelling before submitting print orders.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+              Text(
+                  "Customers are responsible for reviewing uploaded documents, layout sizing, and spelling before submitting print orders.",
+                  style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
-              Text("2. Turnaround Time & Processing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("2. Turnaround Time & Processing",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Standard print jobs take 1-2 business days. Bulk orders (Tarpaulins, Shirts, Booklets) may require additional processing time.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+              Text(
+                  "Standard print jobs take 1-2 business days. Bulk orders (Tarpaulins, Shirts, Booklets) may require additional processing time.",
+                  style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
-              Text("3. Cancellation & Non-Refundable Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("3. Cancellation & Non-Refundable Items",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Once a job moves to 'Printing' status, orders cannot be cancelled or refunded due to customized materials used.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+              Text(
+                  "Orders can be cancelled only before admin approval. Approved orders can no longer be cancelled.",
+                  style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
-              Text("4. Unclaimed Prints & RFID Rewards", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F172A))),
+              Text("4. Unclaimed Prints & RFID Rewards",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: Color(0xFF0F172A))),
               SizedBox(height: 2),
-              Text("Orders ready for pickup must be claimed within 30 days. RFID loyalty points are earned upon successful payment verification.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+              Text(
+                  "Orders ready for pickup must be claimed within 30 days. One loyalty point is earned per paid completed order. Points discounts cover up to 50% of the order subtotal.",
+                  style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
             ],
           ),
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: DashboardTheme.green,
+                foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx),
             child: const Text("I Agree"),
           ),
@@ -173,7 +249,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: [
             Icon(Icons.exit_to_app_rounded, color: Color(0xFF15803D)),
             SizedBox(width: 10),
-            Text('Exit App', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
+            Text('Exit App',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF0F172A))),
           ],
         ),
         content: const Text(
@@ -183,15 +263,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
+            child: const Text('Cancel',
+                style: TextStyle(
+                    color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF16A34A),
+              backgroundColor: DashboardTheme.green,
               elevation: 0,
             ),
-            child: const Text('Exit', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+            child: const Text('Exit',
+                style: TextStyle(
+                    color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -212,21 +296,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: [
             Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
             SizedBox(width: 10),
-            Text('Confirm Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
+            Text('Confirm Logout',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF0F172A))),
           ],
         ),
-        content: const Text('Are you sure you want to log out of your account?', style: TextStyle(fontSize: 13, color: Color(0xFF4B7A5E))),
+        content: const Text('Are you sure you want to log out of your account?',
+            style: TextStyle(fontSize: 13, color: Color(0xFF4B7A5E))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
+            child: const Text('Cancel',
+                style: TextStyle(
+                    color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               try {
                 await FcmService().removeUserToken(widget.userEmail);
-                await FirebaseAuth.instance.signOut();
+                await AuthService.signOut();
               } catch (e) {
                 debugPrint('Logout error: $e');
               }
@@ -234,15 +325,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Navigator.pushAndRemoveUntil(
                 context,
                 PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) => FadeTransition(opacity: animation, child: child),
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      const LoginScreen(),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) =>
+                          FadeTransition(opacity: animation, child: child),
                   transitionDuration: const Duration(milliseconds: 400),
                 ),
                 (route) => false,
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E), elevation: 0),
-            child: const Text('Log Out', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF43F5E), elevation: 0),
+            child: const Text('Log Out',
+                style: TextStyle(
+                    color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -251,30 +348,57 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   String _cleanStr(dynamic val) {
     if (val == null) return '';
-    return val.toString().toLowerCase().replaceAll('-', '').replaceAll('_', '').replaceAll(' ', '').trim();
+    return val
+        .toString()
+        .toLowerCase()
+        .replaceAll('-', '')
+        .replaceAll('_', '')
+        .replaceAll(' ', '')
+        .trim();
   }
 
   String _formatDateTime(dynamic rawDate) {
-    if (rawDate == null) return 'Sep 28, 2026 • 09:47 PM';
-    if (rawDate is Timestamp) {
-      final dt = rawDate.toDate();
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final parsed = rawDate is Timestamp
+        ? rawDate.toDate()
+        : rawDate is DateTime
+            ? rawDate
+            : DateTime.tryParse('$rawDate');
+    if (parsed != null) {
+      final dt = parsed.toLocal();
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       final monthStr = months[dt.month - 1];
       final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
       final minute = dt.minute.toString().padLeft(2, '0');
       final period = dt.hour >= 12 ? 'PM' : 'AM';
       return '$monthStr ${dt.day}, ${dt.year} • ${hour.toString().padLeft(2, '0')}:$minute $period';
     }
-    return rawDate.toString();
+    return rawDate?.toString() ?? 'Date unavailable';
   }
 
   String _getStatusCategory(String rawStatus) {
     final st = rawStatus.toLowerCase().trim();
-    if (st.contains('print')) {
+    if (st == 'cancelled') return 'cancelled';
+    if (st == 'approved') return 'approved';
+    if (st.contains('print') || st.contains('prepar')) {
       return 'printing';
     } else if (st.contains('ready') || st.contains('pickup')) {
       return 'ready';
-    } else if (st.contains('complet') || st.contains('done') || st.contains('finish')) {
+    } else if (st.contains('complet') ||
+        st.contains('done') ||
+        st.contains('finish')) {
       return 'completed';
     } else if (st.contains('reject') || st.contains('cancel')) {
       return 'rejected';
@@ -283,24 +407,39 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     }
   }
 
-  bool _checkServiceCategoryMatch(String serviceName, String categoryFilter, Map<String, dynamic> data) {
+  bool _checkServiceCategoryMatch(
+      String serviceName, String categoryFilter, Map<String, dynamic> data) {
     if (categoryFilter == 'All Services') return true;
     final s = serviceName.toLowerCase();
     final cat = categoryFilter.toLowerCase();
 
-    if (cat.contains('standard') || cat.contains('a4')) return s.contains('standard') || s.contains('a4') || s.contains('document');
-    if (cat.contains('card')) return s.contains('card') || s.contains('business');
+    if (cat.contains('standard') || cat.contains('a4'))
+      return s.contains('standard') ||
+          s.contains('a4') ||
+          s.contains('document');
+    if (cat.contains('card'))
+      return s.contains('card') || s.contains('business');
     if (cat.contains('tarp')) return s.contains('tarp') || s.contains('banner');
-    if (cat.contains('flyer') || cat.contains('leaflet')) return s.contains('flyer') || s.contains('leaflet');
-    if (cat.contains('sticker') || cat.contains('label')) return s.contains('sticker') || s.contains('label');
+    if (cat.contains('flyer') || cat.contains('leaflet'))
+      return s.contains('flyer') || s.contains('leaflet');
+    if (cat.contains('sticker') || cat.contains('label'))
+      return s.contains('sticker') || s.contains('label');
     if (cat.contains('invitat')) return s.contains('invitat');
-    if (cat.contains('shirt')) return s.contains('shirt') || s.contains('dtf') || s.contains('apparel');
-    if (cat.contains('photo') || cat.contains('canvas')) return s.contains('photo') || s.contains('canvas');
-    if (cat.contains('booklet') || cat.contains('menu')) return s.contains('booklet') || s.contains('menu');
+    if (cat.contains('shirt'))
+      return s.contains('shirt') || s.contains('dtf') || s.contains('apparel');
+    if (cat.contains('photo') || cat.contains('canvas'))
+      return s.contains('photo') || s.contains('canvas');
+    if (cat.contains('booklet') || cat.contains('menu'))
+      return s.contains('booklet') || s.contains('menu');
     if (cat.contains('mug')) return s.contains('mug');
-    if (cat.contains('store') || cat.contains('supply') || cat.contains('in-store')) {
+    if (cat.contains('store') ||
+        cat.contains('supply') ||
+        cat.contains('in-store')) {
       final paperSize = (data['paperSize'] ?? '').toString().toLowerCase();
-      return s.contains('store') || s.contains('supply') || s.contains('in-store') || paperSize.contains('store');
+      return s.contains('store') ||
+          s.contains('supply') ||
+          s.contains('in-store') ||
+          paperSize.contains('store');
     }
     return s.contains(cat);
   }
@@ -325,150 +464,198 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         }
       },
       child: Scaffold(
-      backgroundColor: const Color(0xFFF8FFF9),
-      appBar: AppBar(
         backgroundColor: const Color(0xFFF8FFF9),
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFBBF7D0)),
-        ),
-        title: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFBBF7D0)),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF16A34A).withValues(alpha: 0.12),
-                    blurRadius: 6,
-                  ),
-                ],
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFF8FFF9),
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(1),
+            child: Divider(height: 1, color: Color(0xFFBBF7D0)),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(2),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.asset('assets/images/kcz_logo.jpg',
+                      fit: BoxFit.contain),
+                ),
               ),
-              padding: const EdgeInsets.all(2),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.asset('assets/images/kcz_logo.jpg', fit: BoxFit.contain),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isAdmin ? 'KCZ Printing (Admin)' : 'KCZ Printing',
+                      style: const TextStyle(
+                          color: Color(0xFF14532D),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(widget.userEmail,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Color(0xFF4B7A5E), fontSize: 10)),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isAdmin ? 'KCZ Printing (Admin)' : 'KCZ Printing',
-                    style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  Text(widget.userEmail, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 10)),
-                ],
+            ],
+          ),
+          actions: [
+            if (_isAdmin) IconButton(tooltip: 'Rewards Management', icon: const Icon(Icons.redeem, color: DashboardTheme.green),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RewardsScreen(isAdmin: _isAdmin)))),
+            if (FirebaseAuth.instance.currentUser != null)
+              NotificationBell(
+                repository: NotificationRepository(
+                  uid: FirebaseAuth.instance.currentUser!.uid,
+                  email: widget.userEmail,
+                  admin: _isAdmin,
+                ),
+                onOpen: _openNotification,
               ),
+            if (!_isAdmin)
+              IconButton(
+                icon:
+                    const Icon(Icons.person_rounded, color: Color(0xFF15803D)),
+                tooltip: 'Profile',
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => Scaffold(
+                        backgroundColor: const Color(0xFFF8FFF9),
+                        appBar: AppBar(title: const Text('Profile')),
+                        body: _buildProfileTab(),
+                      ),
+                    )),
+              ),
+            if (!_isAdmin)
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('conversations')
+                    .doc(getSafeConversationId(widget.userEmail))
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final data = snapshot.data?.data() as Map<String, dynamic>?;
+                  final bool hasUnread =
+                      (data?['unreadCountCustomer'] as num? ?? 0) > 0 ||
+                          data?['customerUnread'] == true;
+
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.chat_bubble_outline_rounded,
+                            color: Color(0xFF15803D)),
+                        tooltip: 'Live Chat Support',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CustomerChatScreen(
+                                  userEmail: widget.userEmail),
+                            ),
+                          );
+                        },
+                      ),
+                      if (hasUnread)
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF43F5E),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            if (_isAdmin)
+              IconButton(
+                icon:
+                    const Icon(Icons.archive_rounded, color: Color(0xFF15803D)),
+                tooltip: 'System Archive',
+                onPressed: () {
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AdminArchiveScreen()));
+                },
+              ),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
+              tooltip: 'Logout',
+              onPressed: () => _showLogoutConfirmationDialog(context),
             ),
           ],
         ),
-        actions: [
-          if (!_isAdmin)
-            StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('conversations')
-                  .doc(getSafeConversationId(widget.userEmail))
-                  .snapshots(),
-              builder: (context, snapshot) {
-                final data = snapshot.data?.data() as Map<String, dynamic>?;
-                final bool hasUnread = (data?['unreadCountCustomer'] as num? ?? 0) > 0 || data?['customerUnread'] == true;
-
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF15803D)),
-                      tooltip: 'Live Chat Support',
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CustomerChatScreen(userEmail: widget.userEmail),
-                          ),
-                        );
-                      },
-                    ),
-                    if (hasUnread)
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF43F5E),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          IconButton(
-            icon: const Icon(Icons.gavel_rounded, color: Color(0xFF4B7A5E)),
-            tooltip: 'Terms & Conditions',
-            onPressed: () => _showTermsAndConditionsDialog(context),
-          ),
-          if (_isAdmin)
-            IconButton(
-              icon: const Icon(Icons.archive_rounded, color: Color(0xFF15803D)),
-              tooltip: 'Archived Products',
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminArchiveScreen()));
-              },
-            ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
-            tooltip: 'Logout',
-            onPressed: () => _showLogoutConfirmationDialog(context),
-          ),
-        ],
-      ),
-      extendBody: true,
-      body: _buildSelectedTabContent(),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16),
-          child: Container(
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(
-                color: const Color(0xFFBBF7D0),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
+        extendBody: true,
+        body: _buildSelectedTabContent(),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16),
+            child: Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(
+                  color: const Color(0xFFBBF7D0),
+                  width: 1,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildFloatingNavItem(0, Icons.home_rounded, 'Home'),
-                _buildFloatingNavItem(1, Icons.storefront_rounded, 'Store'),
-                _buildFloatingNavItem(2, Icons.receipt_long_rounded, 'Orders'),
-                _buildFloatingNavItem(3, Icons.person_rounded, 'Profile'),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildFloatingNavItem(0, Icons.home_rounded, 'Home'),
+                  _buildFloatingNavItem(1, Icons.storefront_rounded, 'Store'),
+                  _buildFloatingNavItem(
+                      2,
+                      _isAdmin
+                          ? Icons.receipt_long_rounded
+                          : Icons.print_rounded,
+                      _isAdmin ? 'Orders' : 'Order Services'),
+                  _buildFloatingNavItem(
+                      3,
+                      _isAdmin
+                          ? Icons.person_rounded
+                          : Icons.receipt_long_rounded,
+                      _isAdmin ? 'Profile' : 'My Orders'),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
@@ -485,7 +672,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           borderRadius: BorderRadius.circular(30),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
-          onTap: () => setState(() => _currentNavIndex = index),
+          onTap: () {
+            if (!_isAdmin && index == 2) {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        PlaceOrderScreen(userEmail: widget.userEmail),
+                  ));
+              return;
+            }
+            setState(() => _currentNavIndex = index);
+          },
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -531,11 +729,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         case 0:
           return _buildCustomerHomeTab();
         case 1:
-          return const StoreScreen(isAdmin: false, userEmail: 'Customer');
+          return StoreScreen(isAdmin: false, userEmail: widget.userEmail);
         case 2:
           return _buildCustomerOrdersTab();
         case 3:
-          return _buildProfileTab();
+          return _buildCustomerOrdersTab();
         default:
           return _buildCustomerHomeTab();
       }
@@ -553,31 +751,75 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildAdminSubTabButton(0, 'Orders Management', Icons.receipt_long_rounded),
+                _buildAdminSubTabButton(
+                    0, 'Manage Orders', Icons.receipt_long_rounded),
                 const SizedBox(width: 8),
-                _buildAdminSubTabButton(1, 'Live Chat', Icons.chat_bubble_rounded),
+                _buildAdminSubTabButton(9, 'POS', Icons.point_of_sale),
                 const SizedBox(width: 8),
-                _buildAdminSubTabButton(2, 'Analytics', Icons.analytics_rounded),
+                _buildAdminSubTabButton(
+                    1, 'Live Chat', Icons.chat_bubble_rounded),
                 const SizedBox(width: 8),
-                _buildAdminSubTabButton(3, 'RFID Loyalty', Icons.nfc_rounded),
+                _buildAdminSubTabButton(
+                    2, 'Analytics', Icons.analytics_rounded),
                 const SizedBox(width: 8),
-                _buildAdminSubTabButton(4, 'Registered Users', Icons.people_alt_rounded),
+                _buildAdminSubTabButton(3, 'RFID Cards', Icons.nfc_rounded),
+                const SizedBox(width: 8),
+                _buildAdminSubTabButton(4, 'Users', Icons.people_alt_rounded),
+                const SizedBox(width: 8),
+                _buildAdminSubTabButton(
+                    5, 'Samples & Services', Icons.palette_outlined),
+                const SizedBox(width: 8),
+                _buildAdminSubTabButton(6, 'Place Order', Icons.print_rounded),
+                const SizedBox(width: 8),
+                _buildAdminSubTabButton(
+                    7, 'GCash Settings', Icons.payments_outlined),
+                const SizedBox(width: 8),
+                _buildAdminSubTabButton(8, 'Archive', Icons.archive_outlined),
               ],
             ),
           ),
         ),
         const Divider(height: 1, color: Color(0xFFBBF7D0)),
-
         Expanded(
           child: _adminSubTab == 0
               ? _buildManageOrdersView()
               : _adminSubTab == 1
-              ? _buildAdminLiveChatView()
-              : _adminSubTab == 2
-              ? _buildAdminAnalyticsView()
-              : _adminSubTab == 3
-              ? AdminRfidLoyaltyView(userEmail: widget.userEmail)
-              : const AdminRegisteredUsersView(),
+                  ? _buildAdminLiveChatView()
+                  : _adminSubTab == 2
+                      ? _buildAdminAnalyticsView()
+                      : _adminSubTab == 3
+                          ? AdminRfidLoyaltyView(userEmail: widget.userEmail)
+                          : _adminSubTab == 4
+                              ? const AdminRegisteredUsersView()
+                              : _adminSubTab == 5
+                                  ? Theme(
+                                      data: ThemeData.light().copyWith(
+                                          colorScheme: ColorScheme.fromSeed(
+                                              seedColor:
+                                                  const Color(0xFF15803D))),
+                                      child: const AdminCatalogView(
+                                          services: false))
+                                  : _adminSubTab == 6
+                                      ? Theme(
+                                          data: ThemeData.light().copyWith(
+                                              colorScheme: ColorScheme.fromSeed(
+                                                  seedColor:
+                                                      const Color(0xFF15803D))),
+                                          child: const AdminCatalogView(
+                                              services: true))
+                                      : _adminSubTab == 7
+                                          ? Theme(
+                                              data: ThemeData.light().copyWith(
+                                                  colorScheme:
+                                                      ColorScheme.fromSeed(
+                                                          seedColor:
+                                                              const Color(
+                                                                  0xFF15803D))),
+                                              child: const AdminGcashView())
+                                          : _adminSubTab == 9
+                                              ? const AdminPosView()
+                                              : const AdminArchiveScreen(
+                                                  embedded: true),
         ),
       ],
     );
@@ -586,10 +828,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildAdminSubTabButton(int index, String title, IconData icon) {
     final isSelected = _adminSubTab == index;
     return ChoiceChip(
-      avatar: Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF4B7A5E)),
+      avatar: Icon(icon,
+          size: 16, color: isSelected ? Colors.white : const Color(0xFF4B7A5E)),
       label: Text(title),
       selected: isSelected,
-      selectedColor: const Color(0xFF16A34A),
+      selectedColor: DashboardTheme.green,
       backgroundColor: const Color(0xFFF0FDF4),
       labelStyle: TextStyle(
         color: isSelected ? Colors.white : const Color(0xFF4B7A5E),
@@ -599,7 +842,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       onSelected: (_) => setState(() => _adminSubTab = index),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFBBF7D0)),
+        side: BorderSide(
+            color:
+                isSelected ? const Color(0xFF16A34A) : const Color(0xFFBBF7D0)),
       ),
     );
   }
@@ -607,6 +852,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   // ===========================================================================
   // 1. LIVE CUSTOMER CHAT SUPPORT
   // ===========================================================================
+  void _openNotification(InboxNotification notification) {
+    final destination = notificationDestination(notification.destination);
+    if (destination == 'chat') {
+      if (_isAdmin) {
+        final conversation = notification.data['conversationId']?.toString() ??
+            Uri.tryParse('${notification.data['link'] ?? ''}')?.queryParameters['convId'];
+        Navigator.push(context, MaterialPageRoute(builder: (_) => Theme(
+          data: DashboardTheme.light,
+          child: Scaffold(appBar: AppBar(title: const Text('Messages')),
+            body: AdminLiveChatView(initialConversationId: conversation)),
+        )));
+      } else {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerChatScreen(userEmail: widget.userEmail)));
+      }
+      return;
+    }
+    setState(() {
+      _currentNavIndex = _isAdmin ? 2 : 3;
+      _adminSubTab = 0;
+      _statusFilter = 'All Active';
+      _selectedServiceCategory = 'All Services';
+      _ordersCurrentPage = 1;
+      _searchController.clear();
+      _customerFilter = 'All Orders';
+      _customerCategoryFilter = 'All Services & Store Items';
+      _customerOrdersCurrentPage = 1;
+    });
+  }
+
   Widget _buildAdminLiveChatView() {
     return const AdminLiveChatView();
   }
@@ -618,8 +892,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return StreamBuilder<QuerySnapshot>(
       stream: _ordersRef.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Analytics Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
+        if (snapshot.hasError)
+          return Center(
+              child: Text('Analytics Error: ${snapshot.error}',
+                  style: const TextStyle(color: DashboardTheme.ink)));
+        if (!snapshot.hasData)
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
         final docs = snapshot.data!.docs;
         double totalRevenue = 0.0;
@@ -632,9 +911,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         Map<String, int> statusCounts = {
           'Completed': 0,
           'Order Submitted': 0,
+          'Approved': 0,
           'Printing': 0,
           'Ready for Pickup': 0,
           'Rejected': 0,
+          'Cancelled': 0,
         };
 
         Map<String, int> serviceBreakdown = {};
@@ -646,43 +927,71 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           double totalVal = 0.0;
           if (rawTotal is num) totalVal = rawTotal.toDouble();
           if (rawTotal is String) {
-            totalVal = double.tryParse(rawTotal.replaceAll('₱', '').replaceAll(',', '').trim()) ?? 0.0;
+            totalVal = double.tryParse(
+                    rawTotal.replaceAll('₱', '').replaceAll(',', '').trim()) ??
+                0.0;
           }
+          final cancelled = '${data['status']}'.toLowerCase() == 'cancelled';
+          if (cancelled) totalVal = 0;
           totalRevenue += totalVal;
 
-          int copies = int.tryParse((data['copies'] ?? data['quantity'] ?? 1).toString()) ?? 1;
+          int copies = int.tryParse(
+                  (data['copies'] ?? data['quantity'] ?? 1).toString()) ??
+              1;
           int pages = int.tryParse((data['pages'] ?? 1).toString()) ?? 1;
-          pagesPrinted += (copies * pages);
+          if (data['source'] != 'POS' && !cancelled)
+            pagesPrinted += (copies * pages);
 
-          final cust = (data['customer'] ?? data['email'] ?? data['customerId'] ?? '').toString().trim();
+          final cust =
+              (data['customer'] ?? data['email'] ?? '').toString().trim();
           if (cust.isNotEmpty) uniqueCustomers.add(cust.toLowerCase());
 
-          final service = (data['service'] ?? data['serviceName'] ?? 'Standard A4 Print').toString();
+          final service =
+              (data['service'] ?? data['serviceName'] ?? 'Standard A4 Print')
+                  .toString();
           serviceBreakdown[service] = (serviceBreakdown[service] ?? 0) + 1;
 
           final serviceLower = service.toLowerCase();
-          if (serviceLower.contains('store') || serviceLower.contains('supply') || serviceLower.contains('in-store')) {
+          if (data['source'] == 'POS') {
+            storeRevenue += (data['productTotal'] as num? ?? 0).toDouble();
+            printRevenue += (data['serviceTotal'] as num? ?? 0).toDouble();
+          } else if (serviceLower.contains('store') ||
+              serviceLower.contains('supply') ||
+              serviceLower.contains('in-store') ||
+              serviceLower.contains('notebook') ||
+              serviceLower.contains('pen')) {
             storeRevenue += totalVal;
           } else {
             printRevenue += totalVal;
           }
 
-          final rawStatus = (data['status'] ?? 'Order Submitted').toString().toLowerCase();
-          if (rawStatus.contains('reject') || rawStatus.contains('cancel')) {
+          final rawStatus =
+              (data['status'] ?? 'Order Submitted').toString().toLowerCase();
+          if (rawStatus == 'cancelled') {
+            statusCounts['Cancelled'] = (statusCounts['Cancelled'] ?? 0) + 1;
+          } else if (rawStatus.contains('reject')) {
             statusCounts['Rejected'] = (statusCounts['Rejected'] ?? 0) + 1;
-          } else if (rawStatus.contains('complet') || rawStatus.contains('done')) {
+          } else if (rawStatus.contains('complet') ||
+              rawStatus.contains('done')) {
             statusCounts['Completed'] = (statusCounts['Completed'] ?? 0) + 1;
-          } else if (rawStatus.contains('ready') || rawStatus.contains('pickup')) {
-            statusCounts['Ready for Pickup'] = (statusCounts['Ready for Pickup'] ?? 0) + 1;
-          } else if (rawStatus.contains('print')) {
+          } else if (rawStatus.contains('ready') ||
+              rawStatus.contains('pickup')) {
+            statusCounts['Ready for Pickup'] =
+                (statusCounts['Ready for Pickup'] ?? 0) + 1;
+          } else if (rawStatus.contains('approve')) {
+            statusCounts['Approved'] = (statusCounts['Approved'] ?? 0) + 1;
+          } else if ((rawStatus.contains('print') ||
+              rawStatus.contains('prepar'))) {
             statusCounts['Printing'] = (statusCounts['Printing'] ?? 0) + 1;
           } else {
-            statusCounts['Order Submitted'] = (statusCounts['Order Submitted'] ?? 0) + 1;
+            statusCounts['Order Submitted'] =
+                (statusCounts['Order Submitted'] ?? 0) + 1;
           }
         }
 
-        double avgOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders) : 0.0;
-        int activeCustomersCount = uniqueCustomers.isNotEmpty ? uniqueCustomers.length : (totalOrders > 0 ? 4 : 0);
+        double avgOrderValue =
+            totalOrders > 0 ? (totalRevenue / totalOrders) : 0.0;
+        int activeCustomersCount = uniqueCustomers.length;
 
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -752,7 +1061,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ],
             ),
             const SizedBox(height: 20),
-
             _buildChartCard(
               title: 'ORDER STATUS DISTRIBUTION',
               subtitle: 'Live active job status breakdown',
@@ -774,17 +1082,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
                     children: [
-                      _buildChartLegendItem('Completed', const Color(0xFFF59E0B)),
-                      _buildChartLegendItem('Order Submitted', const Color(0xFF8B5CF6)),
-                      _buildChartLegendItem('Printing', const Color(0xFF22C55E)),
-                      _buildChartLegendItem('Rejected', const Color(0xFFF43F5E)),
+                      _buildChartLegendItem(
+                          'Completed', const Color(0xFFF59E0B)),
+                      _buildChartLegendItem(
+                          'Order Submitted', const Color(0xFF8B5CF6)),
+                      _buildChartLegendItem(
+                          'Printing', const Color(0xFF22C55E)),
+                      _buildChartLegendItem(
+                          'Rejected', const Color(0xFFF43F5E)),
                     ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-
             _buildChartCard(
               title: 'ORDERS BY SERVICE TYPE',
               subtitle: 'Popular print products volume',
@@ -797,20 +1108,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     height: 180,
                     width: double.infinity,
                     child: CustomPaint(
-                      painter: _BarChartPainter(serviceBreakdown: serviceBreakdown),
+                      painter:
+                          _BarChartPainter(serviceBreakdown: serviceBreakdown),
                     ),
                   ),
                   const SizedBox(height: 12),
                   const Text(
                     'Flyers & Leaflets • Spiral Notebooks • In-Store Supplies • Invitations',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF4B7A5E),
+                        fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-
             _buildChartCard(
               title: 'REVENUE SHARE',
               subtitle: 'Print jobs vs Store supply sales',
@@ -833,9 +1147,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildChartLegendItem('Print Services', const Color(0xFF15803D)),
+                      _buildChartLegendItem(
+                          'Print Services', const Color(0xFF15803D)),
                       const SizedBox(width: 20),
-                      _buildChartLegendItem('Store Supplies', const Color(0xFFFB923C)),
+                      _buildChartLegendItem(
+                          'Store Supplies', const Color(0xFFFB923C)),
                     ],
                   ),
                 ],
@@ -874,20 +1190,29 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Color(0xFF4B7A5E), letterSpacing: 0.5),
+                  style: const TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF4B7A5E),
+                      letterSpacing: 0.5),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                    color: bgColor, borderRadius: BorderRadius.circular(8)),
                 child: Icon(icon, color: iconColor, size: 14),
               ),
             ],
           ),
           Text(
             value,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: valueColor, fontFamily: 'monospace'),
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: valueColor,
+                fontFamily: 'monospace'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -926,15 +1251,27 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Color(0xFF14532D), letterSpacing: 0.5)),
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          color: Color(0xFF14532D),
+                          letterSpacing: 0.5)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 10, color: Color(0xFF4B7A5E))),
                 ],
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(12)),
-                child: Text(badgeLabel, style: TextStyle(color: badgeTextColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                decoration: BoxDecoration(
+                    color: badgeColor, borderRadius: BorderRadius.circular(12)),
+                child: Text(badgeLabel,
+                    style: TextStyle(
+                        color: badgeTextColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 9)),
               ),
             ],
           ),
@@ -949,15 +1286,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+        Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4B7A5E))),
       ],
     );
   }
 
   String _formatNumberWithCommas(int number) {
-    return number.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+    return number.toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
   }
 
   // ===========================================================================
@@ -967,8 +1313,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return StreamBuilder<QuerySnapshot>(
       stream: _rfidLogsRef.orderBy('timestamp', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('RFID Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
+        if (snapshot.hasError)
+          return Center(
+              child: Text('RFID Error: ${snapshot.error}',
+                  style: const TextStyle(color: DashboardTheme.ink)));
+        if (!snapshot.hasData)
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
         final rfidDocs = snapshot.data!.docs;
 
@@ -986,17 +1337,27 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.nfc_rounded, color: Color(0xFF10B981), size: 24),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.nfc_rounded,
+                        color: Color(0xFF10B981), size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Text('RFID Reader Active (Store Counter)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        Text('RFID Reader Active (Store Counter)',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: DashboardTheme.ink)),
                         SizedBox(height: 2),
-                        Text('Live card taps, customer points & discount tapping', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5)),
+                        Text(
+                            'Live card taps, customer points & discount tapping',
+                            style: TextStyle(
+                                color: Color(0xFF4B7A5E), fontSize: 10.5)),
                       ],
                     ),
                   ),
@@ -1009,27 +1370,38 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 await _rfidLogsRef.add({
                   'cardUid': 'A4:8F:C2:90',
                   'customerName': widget.userEmail.split('@').first,
-                  'pointsAdded': 10,
+                  'pointsAdded': 0,
                   'timestamp': FieldValue.serverTimestamp(),
                 });
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Simulated RFID Tap registered! (+10 Loyalty Points)'),
+                    content: Text(
+                        'Simulated RFID identification logged.'),
                     backgroundColor: Color(0xFF10B981),
                   ),
                 );
               },
-              icon: const Icon(Icons.tap_and_play, color: Color(0xFF14532D), size: 18),
-              label: const Text('Simulate Test Card Tap (+10 Points)', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
+              icon: const Icon(Icons.tap_and_play,
+                  color: Color(0xFF14532D), size: 18),
+              label: const Text('Simulate Test Card Identification',
+                  style: TextStyle(
+                      color: Color(0xFF14532D),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF16A34A),
+                backgroundColor: DashboardTheme.green,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 20),
-            const Text('LIVE CARD TAP LOGS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+            const Text('LIVE CARD TAP LOGS',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: DashboardTheme.ink)),
             const SizedBox(height: 10),
             if (rfidDocs.isEmpty)
               Container(
@@ -1040,7 +1412,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFBBF7D0)),
                 ),
-                child: const Text('No RFID taps logged yet.', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
+                child: const Text('No RFID taps logged yet.',
+                    style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 12)),
               )
             else
               ...rfidDocs.map((doc) {
@@ -1062,23 +1435,39 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: const Color(0xFF15803D).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF15803D), size: 20),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFF15803D).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.credit_card_rounded,
+                            color: Color(0xFF15803D), size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$name ($uid)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                            Text(dt, style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
+                            Text('$name ($uid)',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: DashboardTheme.ink)),
+                            Text(dt,
+                                style: const TextStyle(
+                                    fontSize: 10, color: Color(0xFF4B7A5E))),
                           ],
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                        child: Text('+$pts PTS', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6)),
+                        child: Text('+$pts PTS',
+                            style: const TextStyle(
+                                color: Color(0xFF10B981),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10)),
                       ),
                     ],
                   ),
@@ -1121,16 +1510,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       color: const Color(0xFF16A34A).withOpacity(0.25),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF15803D), size: 24),
+                    child: const Icon(Icons.inventory_2_rounded,
+                        color: Color(0xFF15803D), size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Text('Admin Product Management', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('Admin Product Management',
+                            style: TextStyle(
+                                color: Color(0xFF14532D),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13)),
                         SizedBox(height: 2),
-                        Text('Edit prices, update stocks & import product photos', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10.5)),
+                        Text(
+                            'Edit prices, update stocks & import product photos',
+                            style: TextStyle(
+                                color: Color(0xFF4B7A5E), fontSize: 10.5)),
                       ],
                     ),
                   ),
@@ -1139,12 +1536,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       setState(() => _currentNavIndex = 1);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF16A34A),
+                      backgroundColor: DashboardTheme.green,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
                     ),
-                    child: const Text('Manage', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    child: const Text('Manage',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
               ),
@@ -1243,20 +1644,25 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         } else {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+                            MaterialPageRoute(
+                                builder: (context) => PlaceOrderScreen(
+                                    userEmail: widget.userEmail)),
                           );
                         }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFF0FDF4),
-                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        foregroundColor: DashboardTheme.green,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30)),
                         elevation: 0,
                       ),
                       child: Text(
                         _isAdmin ? 'Manage Orders' : 'Place New Print Order',
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 13),
                       ),
                     ),
                   ),
@@ -1275,19 +1681,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Print Services', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10, fontWeight: FontWeight.w600)),
+                            const Text('Print Services',
+                                style: TextStyle(
+                                    color: Color(0xFF4B7A5E),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
                             Container(
                               width: 18,
                               height: 18,
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.north_east_rounded, color: Color(0xFF14532D), size: 10),
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.north_east_rounded,
+                                  color: Color(0xFF14532D), size: 10),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        const Text('Unparalleled\nQuality Proofing', style: TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold, height: 1.2)),
+                        const Text('Unparalleled\nQuality Proofing',
+                            style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                height: 1.2)),
                         const SizedBox(height: 6),
-                        const Text('100% Guaranteed', style: TextStyle(color: Color(0xFF15803D), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                        const Text('100% Guaranteed',
+                            style: TextStyle(
+                                color: Color(0xFF15803D),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -1306,28 +1728,44 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Order Tracking', style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 10, fontWeight: FontWeight.w600)),
+                            const Text('Order Tracking',
+                                style: TextStyle(
+                                    color: Color(0xFF4B7A5E),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
                             Container(
                               width: 18,
                               height: 18,
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.north_east_rounded, color: Color(0xFF14532D), size: 10),
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.north_east_rounded,
+                                  color: Color(0xFF14532D), size: 10),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        const Text('99.4%', style: TextStyle(color: Color(0xFF0F172A), fontSize: 17, fontWeight: FontWeight.w900)),
+                        const Text('99.4%',
+                            style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900)),
                         const SizedBox(height: 6),
                         Container(
                           width: double.infinity,
                           height: 4,
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
+                          decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(2)),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
                             widthFactor: 0.94,
                             child: Container(
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(colors: [Color(0xFF15803D), Color(0xFF22C55E)]),
+                                gradient: const LinearGradient(colors: [
+                                  Color(0xFF15803D),
+                                  Color(0xFF22C55E)
+                                ]),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -1356,34 +1794,33 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       } else {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+                          MaterialPageRoute(
+                              builder: (context) => PlaceOrderScreen(
+                                  userEmail: widget.userEmail)),
                         );
                       }
                     },
-                    icon: Icon(_isAdmin ? Icons.assignment_turned_in_rounded : Icons.add_circle_rounded, size: 18),
-                    label: Text(_isAdmin ? 'View Orders' : 'Order Prints', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                    icon: Icon(
+                        _isAdmin
+                            ? Icons.assignment_turned_in_rounded
+                            : Icons.add_circle_rounded,
+                        size: 18),
+                    label: Text(_isAdmin ? 'View Orders' : 'Order Prints',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12.5)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF16A34A),
+                      backgroundColor: DashboardTheme.green,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => setState(() => _currentNavIndex = 1),
-                    icon: const Icon(Icons.storefront_rounded, size: 18),
-                    label: const Text('Store Supplies', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFFBBF7D0)),
-                      backgroundColor: const Color(0xFFFFFFFF),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
+                  child: StoreSuppliesButton(
+                      onPressed: () => setState(() => _currentNavIndex = 1)),
                 ),
               ],
             ),
@@ -1397,10 +1834,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('OUR SERVICES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF15803D), letterSpacing: 1.2)),
+                const Text('OUR SERVICES',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF15803D),
+                        letterSpacing: 1.2)),
                 const SizedBox(height: 4),
-                const Text('Everything your business needs printed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                const Text('Tap a service to customize and calculate instant prices.', style: TextStyle(fontSize: 11.5, color: Color(0xFF4B7A5E))),
+                const Text('Everything your business needs printed',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A))),
+                const Text(
+                    'Tap a service to customize and calculate instant prices.',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFF4B7A5E))),
                 const SizedBox(height: 14),
                 GridView.count(
                   crossAxisCount: 2,
@@ -1410,10 +1858,30 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisSpacing: 12,
                   childAspectRatio: 0.95,
                   children: [
-                    _buildDarkServiceCard('Document Print', 'Short, Long, A4 B&W or Color.', 'Starts at ₱3.00 / pg', Icons.description_rounded, const Color(0xFF15803D)),
-                    _buildDarkServiceCard('PVC ID Cards', 'Durable waterproof PVC cards.', 'Starts at ₱50.00 / pc', Icons.badge_rounded, const Color(0xFFFBBF24)),
-                    _buildDarkServiceCard('Stickers & Labels', 'Glossy, Matte, or Vinyl die-cut.', 'Starts at ₱45.00 / sheet', Icons.auto_awesome_rounded, const Color(0xFFA78BFA)),
-                    _buildDarkServiceCard('Store Supplies', 'Notebooks, pens, and paper packs.', 'Available in Store Tab', Icons.storefront_rounded, const Color(0xFF10B981)),
+                    _buildDarkServiceCard(
+                        'Document Print',
+                        'Short, Long, A4 B&W or Color.',
+                        'Starts at ₱3.00 / pg',
+                        Icons.description_rounded,
+                        const Color(0xFF15803D)),
+                    _buildDarkServiceCard(
+                        'PVC ID Cards',
+                        'Durable waterproof PVC cards.',
+                        'Starts at ₱50.00 / pc',
+                        Icons.badge_rounded,
+                        const Color(0xFFFBBF24)),
+                    _buildDarkServiceCard(
+                        'Stickers & Labels',
+                        'Glossy, Matte, or Vinyl die-cut.',
+                        'Starts at ₱45.00 / sheet',
+                        Icons.auto_awesome_rounded,
+                        const Color(0xFFA78BFA)),
+                    _buildDarkServiceCard(
+                        'Store Supplies',
+                        'Notebooks, pens, and paper packs.',
+                        'Available in Store Tab',
+                        Icons.storefront_rounded,
+                        const Color(0xFF10B981)),
                   ],
                 ),
               ],
@@ -1446,20 +1914,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildDarkServiceCard(String title, String desc, String price, IconData icon, Color accentColor) {
+  Widget _buildDarkServiceCard(String title, String desc, String price,
+      IconData icon, Color accentColor) {
     return InkWell(
       onTap: () {
         if (_isAdmin) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Naka-login bilang Admin. Ang mga customers lamang ang maaaring mag-order.'),
+              content: Text(
+                  'You are signed in as an admin. Only customers can place orders.'),
               backgroundColor: Color(0xFF15803D),
             ),
           );
         } else {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail)),
+            MaterialPageRoute(
+                builder: (context) =>
+                    PlaceOrderScreen(userEmail: widget.userEmail)),
           );
         }
       },
@@ -1483,11 +1955,26 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               child: Icon(icon, size: 20, color: accentColor),
             ),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F172A)), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Color(0xFF0F172A)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
             const SizedBox(height: 3),
-            Expanded(child: Text(desc, style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E)), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            Expanded(
+                child: Text(desc,
+                    style:
+                        const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E)),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis)),
             const SizedBox(height: 4),
-            Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF10B981))),
+            Text(price,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    color: Color(0xFF10B981))),
           ],
         ),
       ),
@@ -1501,8 +1988,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return StreamBuilder<QuerySnapshot>(
       stream: _ordersRef.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
+        if (snapshot.hasError)
+          return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: const TextStyle(color: DashboardTheme.ink)));
+        if (!snapshot.hasData)
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
         final docs = snapshot.data!.docs;
         int approvalCount = 0;
@@ -1511,7 +2003,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
         for (var d in docs) {
           final data = d.data() as Map<String, dynamic>;
-          final category = _getStatusCategory((data['status'] ?? '').toString());
+          final category =
+              _getStatusCategory((data['status'] ?? '').toString());
           if (category == 'approval') approvalCount++;
           if (category == 'printing') printingCount++;
           if (category == 'ready') readyCount++;
@@ -1523,28 +2016,37 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           final data = doc.data() as Map<String, dynamic>;
           final rawStatus = (data['status'] ?? 'Order Submitted').toString();
           final category = _getStatusCategory(rawStatus);
-          final serviceName = (data['service'] ?? data['serviceName'] ?? '').toString();
+          final serviceName =
+              (data['service'] ?? data['serviceName'] ?? '').toString();
 
-          bool matchesCategory = _checkServiceCategoryMatch(serviceName, _selectedServiceCategory, data);
+          bool matchesCategory = _checkServiceCategoryMatch(
+              serviceName, _selectedServiceCategory, data);
           bool matchesSearch = queryClean.isEmpty;
           if (!matchesSearch) {
-            String fullDocString = '${_cleanStr(doc.id)} ${_cleanStr(data.toString())}';
+            String fullDocString =
+                '${_cleanStr(doc.id)} ${_cleanStr(data.toString())}';
             if (fullDocString.contains(queryClean)) matchesSearch = true;
           }
 
           bool matchesStatus = true;
           if (queryClean.isEmpty) {
             if (_statusFilter == 'All Active') {
-              matchesStatus = (category != 'completed' && category != 'rejected');
+              matchesStatus = (category != 'completed' &&
+                  category != 'rejected' &&
+                  category != 'cancelled');
             } else if (_statusFilter == 'For Approval') {
               matchesStatus = (category == 'approval');
+            } else if (_statusFilter == 'Approved') {
+              matchesStatus = (category == 'approved');
             } else if (_statusFilter == 'Printing') {
               matchesStatus = (category == 'printing');
             } else if (_statusFilter == 'Ready for Pickup') {
               matchesStatus = (category == 'ready');
             } else if (_statusFilter == 'Completed') {
               matchesStatus = (category == 'completed');
-            } else if (_statusFilter == 'Rejected / Cancelled') {
+            } else if (_statusFilter == 'Cancelled') {
+              matchesStatus = (category == 'cancelled');
+            } else if (_statusFilter == 'Rejected') {
               matchesStatus = (category == 'rejected');
             }
           }
@@ -1571,7 +2073,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         if (_ordersCurrentPage < 1) _ordersCurrentPage = 1;
 
         int startIndex = (_ordersCurrentPage - 1) * _ordersPerPage;
-        int endIndex = math.min(startIndex + _ordersPerPage, filteredDocs.length);
+        int endIndex =
+            math.min(startIndex + _ordersPerPage, filteredDocs.length);
         final pagedDocs = filteredDocs.sublist(startIndex, endIndex);
 
         return ListView(
@@ -1591,8 +2094,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFF16A34A).withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
-                        child: const Icon(Icons.print_rounded, color: Color(0xFF15803D)),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFF16A34A).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.print_rounded,
+                            color: Color(0xFF15803D)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1601,17 +2107,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           children: [
                             Row(
                               children: [
-                                const Text('Print Production Queue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                                const Text('Print Production Queue',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: DashboardTheme.ink)),
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(color: const Color(0xFF16A34A).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                                  child: Text('${docs.length} Active', style: const TextStyle(color: Color(0xFF15803D), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                      color: const Color(0xFF16A34A)
+                                          .withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6)),
+                                  child: Text('${docs.length} Active',
+                                      style: const TextStyle(
+                                          color: Color(0xFF15803D),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
-                            const Text('Organized print job management • FIFO', style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+                            const Text('Organized print job management • FIFO',
+                                style: TextStyle(
+                                    fontSize: 11, color: Color(0xFF4B7A5E))),
                           ],
                         ),
                       ),
@@ -1620,11 +2140,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      _buildStatusCounterBox('APPROVAL', approvalCount.toString(), const Color(0xFFFBBF24).withOpacity(0.15), const Color(0xFFFBBF24)),
+                      _buildStatusCounterBox(
+                          'APPROVAL',
+                          approvalCount.toString(),
+                          const Color(0xFFFBBF24).withOpacity(0.15),
+                          const Color(0xFFFBBF24)),
                       const SizedBox(width: 8),
-                      _buildStatusCounterBox('PRINTING', printingCount.toString(), const Color(0xFF15803D).withOpacity(0.15), const Color(0xFF15803D)),
+                      _buildStatusCounterBox(
+                          'PRINTING',
+                          printingCount.toString(),
+                          const Color(0xFF15803D).withOpacity(0.15),
+                          const Color(0xFF15803D)),
                       const SizedBox(width: 8),
-                      _buildStatusCounterBox('READY', readyCount.toString(), const Color(0xFF10B981).withOpacity(0.15), const Color(0xFF10B981)),
+                      _buildStatusCounterBox(
+                          'READY',
+                          readyCount.toString(),
+                          const Color(0xFF10B981).withOpacity(0.15),
+                          const Color(0xFF10B981)),
                     ],
                   ),
                 ],
@@ -1637,13 +2169,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search PRNT-7767, Client, or Item...',
-                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-                prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF4B7A5E)),
+                hintStyle:
+                    const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
+                prefixIcon: const Icon(Icons.search,
+                    size: 20, color: Color(0xFF4B7A5E)),
                 filled: true,
                 fillColor: const Color(0xFFFFFFFF),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF16A34A), width: 1.5)),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFBBF7D0))),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF16A34A), width: 1.5)),
               ),
             ),
             const SizedBox(height: 12),
@@ -1658,7 +2198,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       children: [
                         // Sort Dropdown (Latest to Previous / Previous to Latest)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFFFFF),
                             borderRadius: BorderRadius.circular(10),
@@ -1668,8 +2209,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             child: DropdownButton<String>(
                               dropdownColor: const Color(0xFFFFFFFF),
                               value: _orderSortOrder,
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
-                              style: const TextStyle(color: Color(0xFF14532D), fontSize: 11, fontWeight: FontWeight.bold),
+                              icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: DashboardTheme.ink),
+                              style: const TextStyle(
+                                  color: Color(0xFF14532D),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold),
                               onChanged: (val) {
                                 if (val != null) {
                                   setState(() {
@@ -1694,7 +2241,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         const SizedBox(width: 8),
                         // Service Category Dropdown
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFFFFF),
                             borderRadius: BorderRadius.circular(10),
@@ -1703,9 +2251,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               dropdownColor: const Color(0xFFFFFFFF),
-                              value: _serviceCategories.contains(_selectedServiceCategory) ? _selectedServiceCategory : 'All Services',
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.white),
-                              style: const TextStyle(color: Color(0xFF14532D), fontSize: 11, fontWeight: FontWeight.bold),
+                              value: _serviceCategories
+                                      .contains(_selectedServiceCategory)
+                                  ? _selectedServiceCategory
+                                  : 'All Services',
+                              icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: DashboardTheme.ink),
+                              style: const TextStyle(
+                                  color: Color(0xFF14532D),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold),
                               onChanged: (val) {
                                 if (val != null) {
                                   setState(() {
@@ -1714,7 +2271,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                   });
                                 }
                               },
-                              items: _serviceCategories.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                              items: _serviceCategories
+                                  .map((s) => DropdownMenuItem(
+                                      value: s, child: Text(s)))
+                                  .toList(),
                             ),
                           ),
                         ),
@@ -1722,14 +2282,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     ),
                   ),
                 ),
-
               ],
             ),
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: ['All Active', 'For Approval', 'Printing', 'Ready for Pickup', 'Completed', 'Rejected / Cancelled'].map((status) {
+                children: [
+                  'All Active',
+                  'For Approval',
+                  'Approved',
+                  'Printing',
+                  'Ready for Pickup',
+                  'Completed',
+                  'Rejected',
+                  'Cancelled'
+                ].map((status) {
                   final isSelected = _statusFilter == status;
                   return Padding(
                     padding: const EdgeInsets.only(right: 6.0),
@@ -1740,10 +2308,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         _statusFilter = status;
                         _ordersCurrentPage = 1;
                       }),
-                      selectedColor: const Color(0xFF16A34A),
-                      labelStyle: TextStyle(color: isSelected ? Colors.white : const Color(0xFF4B7A5E), fontSize: 11, fontWeight: FontWeight.bold),
+                      selectedColor: DashboardTheme.green,
+                      labelStyle: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF4B7A5E),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
                       backgroundColor: const Color(0xFFFFFFFF),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSelected ? Colors.transparent : const Color(0xFFBBF7D0))),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                              color: isSelected
+                                  ? Colors.transparent
+                                  : const Color(0xFFBBF7D0))),
                     ),
                   );
                 }).toList(),
@@ -1754,31 +2332,67 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Container(
                 padding: const EdgeInsets.all(32),
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFBBF7D0))),
-                child: Text('No matching orders found under "$_selectedServiceCategory".', style: const TextStyle(color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold, fontSize: 13)),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0))),
+                child: Text(
+                    'No matching orders found under "$_selectedServiceCategory".',
+                    style: const TextStyle(
+                        color: Color(0xFF4B7A5E),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13)),
               )
             else
               ...pagedDocs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final docId = doc.id;
-                final String displayRefId = (data['id'] ?? data['refId'] ?? data['ref_id'] ?? data['orderNumber'] ?? (docId.length > 10 ? 'PRNT-${docId.substring(0, 6).toUpperCase()}' : docId)).toString();
-                final serviceName = (data['service'] ?? data['serviceName'] ?? data['item_name'] ?? 'Standard A4 Print').toString();
-                final customer = (data['customer'] ?? data['userEmail'] ?? data['fullName'] ?? 'Customer').toString();
-                final rawTotal = data['total'] ?? data['price'] ?? data['amount'];
-                final String totalStr = rawTotal != null ? (rawTotal is num ? '₱${rawTotal.toStringAsFixed(2)}' : rawTotal.toString()) : '₱30.00';
+                final String displayRefId = (data['id'] ??
+                        data['refId'] ??
+                        data['ref_id'] ??
+                        data['orderNumber'] ??
+                        (docId.length > 10
+                            ? 'PRNT-${docId.substring(0, 6).toUpperCase()}'
+                            : docId))
+                    .toString();
+                final serviceName = (data['service'] ??
+                        data['serviceName'] ??
+                        data['item_name'] ??
+                        'Standard A4 Print')
+                    .toString();
+                final customer = (data['customer'] ??
+                        data['userEmail'] ??
+                        data['fullName'] ??
+                        'Customer')
+                    .toString();
+                final rawTotal =
+                    data['total'] ?? data['price'] ?? data['amount'];
+                final String totalStr = rawTotal != null
+                    ? (rawTotal is num
+                        ? '₱${rawTotal.toStringAsFixed(2)}'
+                        : rawTotal.toString())
+                    : '₱30.00';
                 final status = (data['status'] ?? 'Order Submitted').toString();
-                final payment = (data['payment'] ?? data['payment_method'] ?? 'GCash').toString();
-                final dateTimeStr = _formatDateTime(data['createdAt'] ?? data['created_at'] ?? data['timestamp'] ?? data['date'] ?? data['time']);
+                final payment =
+                    (data['payment'] ?? data['payment_method'] ?? 'GCash')
+                        .toString();
+                final dateTimeStr = _formatDateTime(data['createdAt'] ??
+                    data['created_at'] ??
+                    data['timestamp'] ??
+                    data['date'] ??
+                    data['time']);
 
                 return _isListView
-                    ? _buildOrderListItem(docId, displayRefId, serviceName, customer, totalStr, status, payment, dateTimeStr, data)
-                    : _buildOrderCardItem(docId, displayRefId, serviceName, customer, totalStr, status, payment, dateTimeStr, data);
+                    ? _buildOrderListItem(docId, displayRefId, serviceName,
+                        customer, totalStr, status, payment, dateTimeStr, data)
+                    : _buildOrderCardItem(docId, displayRefId, serviceName,
+                        customer, totalStr, status, payment, dateTimeStr, data);
               }),
-
             if (filteredDocs.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFFFF),
                   borderRadius: BorderRadius.circular(12),
@@ -1788,17 +2402,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
+                      icon: const Icon(Icons.chevron_left_rounded,
+                          color: DashboardTheme.ink),
                       onPressed: _ordersCurrentPage > 1
                           ? () => setState(() => _ordersCurrentPage--)
                           : null,
                     ),
                     Text(
                       "Page $_ordersCurrentPage of $totalPages (${filteredDocs.length} orders)",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          color: DashboardTheme.ink),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                      icon: const Icon(Icons.chevron_right_rounded,
+                          color: DashboardTheme.ink),
                       onPressed: _ordersCurrentPage < totalPages
                           ? () => setState(() => _ordersCurrentPage++)
                           : null,
@@ -1812,7 +2431,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildViewToggleBtn(String label, IconData icon, bool isSelected, VoidCallback onTap) {
+  Widget _buildViewToggleBtn(
+      String label, IconData icon, bool isSelected, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -1824,16 +2444,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         ),
         child: Row(
           children: [
-            Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF4B7A5E)),
+            Icon(icon,
+                size: 14,
+                color: isSelected ? Colors.white : const Color(0xFF4B7A5E)),
             const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF4B7A5E))),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        isSelected ? Colors.white : const Color(0xFF4B7A5E))),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOrderCardItem(String docId, String refId, String service, String customer, String total, String status, String payment, String dateTimeStr, Map<String, dynamic> data) {
+  Widget _buildOrderCardItem(
+      String docId,
+      String refId,
+      String service,
+      String customer,
+      String total,
+      String status,
+      String payment,
+      String dateTimeStr,
+      Map<String, dynamic> data) {
     final statusCategory = _getStatusCategory(status);
     Color statusBgColor = const Color(0xFFFBBF24).withOpacity(0.2);
     Color statusTextColor = const Color(0xFFFBBF24);
@@ -1846,6 +2482,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     } else if (statusCategory == 'completed') {
       statusBgColor = const Color(0xFF10B981).withOpacity(0.2);
       statusTextColor = const Color(0xFF10B981);
+    } else if (statusCategory == 'cancelled') {
+      statusBgColor = const Color(0xFFE2E8F0);
+      statusTextColor = const Color(0xFF334155);
     } else if (statusCategory == 'rejected') {
       statusBgColor = const Color(0xFFF43F5E).withOpacity(0.2);
       statusTextColor = const Color(0xFFF43F5E);
@@ -1854,21 +2493,46 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFBBF7D0))),
+      decoration: BoxDecoration(
+          color: const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFBBF7D0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(6)), child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusTextColor))),
+              Text(refId,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF0F172A))),
+              Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: statusBgColor,
+                      borderRadius: BorderRadius.circular(6)),
+                  child: Text(status,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: statusTextColor))),
             ],
           ),
           const SizedBox(height: 8),
-          Text(customer, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF334155))),
-          Text(service, style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
-          if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
+          Text(customer,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Color(0xFF334155))),
+          Text(service,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+          if ((data['customerNote'] ?? data['specialInstructions'] ?? '')
+              .toString()
+              .trim()
+              .isNotEmpty) ...[
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1879,14 +2543,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.note_alt_outlined, size: 12, color: Color(0xFFFBBF24)),
+                  const Icon(Icons.note_alt_outlined,
+                      size: 12, color: Color(0xFFFBBF24)),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF92400E), fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xFF92400E),
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -1897,7 +2566,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
+              Text(total,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF10B981))),
               _buildAdminOrderActions(docId, refId, status, data),
             ],
           ),
@@ -1906,36 +2579,69 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildOrderListItem(String docId, String refId, String service, String customer, String total, String status, String payment, String dateTimeStr, Map<String, dynamic> data) {
+  Widget _buildOrderListItem(
+      String docId,
+      String refId,
+      String service,
+      String customer,
+      String total,
+      String status,
+      String payment,
+      String dateTimeStr,
+      Map<String, dynamic> data) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFBBF7D0))),
+      decoration: BoxDecoration(
+          color: const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFBBF7D0))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(refId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
-              Text(total, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF10B981))),
+              Text(refId,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF0F172A))),
+              Text(total,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF10B981))),
             ],
           ),
           const SizedBox(height: 4),
-          Text(customer, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155))),
-          Text(service, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
-          if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
+          Text(customer,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: Color(0xFF334155))),
+          Text(service,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
+          if ((data['customerNote'] ?? data['specialInstructions'] ?? '')
+              .toString()
+              .trim()
+              .isNotEmpty) ...[
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.note_alt_outlined, size: 12, color: Color(0xFFFBBF24)),
+                const Icon(Icons.note_alt_outlined,
+                    size: 12, color: Color(0xFFFBBF24)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF92400E), fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 10.5,
+                        color: Color(0xFF92400E),
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1945,7 +2651,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFFBBF7D0), borderRadius: BorderRadius.circular(6)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF14532D)))),
+              Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFBBF7D0),
+                      borderRadius: BorderRadius.circular(6)),
+                  child: Text(status,
+                      style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF14532D)))),
               _buildAdminOrderActions(docId, refId, status, data),
             ],
           ),
@@ -1955,169 +2671,42 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // --- STOCK DEDUCTION / RESTORATION LOGIC FOR ORDERS ---
-  List<Map<String, dynamic>> _extractOrderItems(Map<String, dynamic> orderData) {
-    final itemsToProcess = <Map<String, dynamic>>[];
-    if (orderData['items'] is List && (orderData['items'] as List).isNotEmpty) {
-      for (final item in (orderData['items'] as List)) {
-        if (item is Map) {
-          itemsToProcess.add({
-            'id': item['id'] ?? item['productId'],
-            'name': item['name'] ?? '',
-            'qty': (item['qty'] ?? item['quantity'] ?? 1) as int,
-          });
-        }
-      }
-      return itemsToProcess;
-    }
-
-    final serviceStr = (orderData['service'] ?? '').toString();
-    if (serviceStr.contains('In-Store:') || (orderData['paperSize'] ?? '').toString().contains('Store Supply')) {
-      final cleanStr = serviceStr.replaceAll('In-Store:', '').trim();
-      final reg = RegExp(r'([^,\(\)]+?)\s*\((\d+)x\)');
-      final matches = reg.allMatches(cleanStr);
-      if (matches.isNotEmpty) {
-        for (final m in matches) {
-          itemsToProcess.add({
-            'id': null,
-            'name': m.group(1)?.trim() ?? '',
-            'qty': int.tryParse(m.group(2) ?? '1') ?? 1,
-          });
-        }
-      } else {
-        final orderQty = (orderData['quantity'] ?? orderData['copies'] ?? 1) as int;
-        itemsToProcess.add({
-          'id': null,
-          'name': cleanStr,
-          'qty': orderQty,
-        });
-      }
-    }
-    return itemsToProcess;
-  }
-
-  Future<bool> _deductOrderStockIfNecessary(String orderId, Map<String, dynamic> orderData) async {
-    if (orderData['stockDeducted'] == true) {
-      return true; // Already deducted
-    }
-    final itemsToDeduct = _extractOrderItems(orderData);
-    if (itemsToDeduct.isEmpty) {
-      return true; // No inventory items to deduct
-    }
-
-    final prodsSnap = await FirebaseFirestore.instance.collection('products').get();
-    final allProds = prodsSnap.docs.map((d) {
-      final data = d.data();
-      data['doc_id'] = d.id;
-      return data;
-    }).toList();
-
-    // Verify stock availability
-    final deductionPlan = <Map<String, dynamic>>[];
-    for (final target in itemsToDeduct) {
-      final targetId = target['id']?.toString();
-      final targetName = (target['name'] ?? '').toString().trim().toLowerCase();
-      final qtyToDeduct = (target['qty'] as num?)?.toInt() ?? 1;
-
-      Map<String, dynamic>? matched;
-      for (final p in allProds) {
-        final pId = (p['id'] ?? p['doc_id'] ?? '').toString();
-        final pName = (p['name'] ?? '').toString().trim().toLowerCase();
-        if (targetId != null && targetId.isNotEmpty && pId == targetId) {
-          matched = p;
-          break;
-        }
-        if (targetName.isNotEmpty && (pName == targetName || (targetName.length >= 3 && (pName.contains(targetName) || targetName.contains(pName))))) {
-          matched = p;
-          break;
-        }
-      }
-
-      if (matched == null) {
-        throw Exception("Product '${target['name']}' not found in inventory.");
-      }
-
-      final currentStock = (matched['stock'] as num?)?.toInt() ?? 0;
-      if (currentStock < qtyToDeduct) {
-        throw Exception("Insufficient stock for '${matched['name']}'. Available: $currentStock, Requested: $qtyToDeduct.");
-      }
-
-      deductionPlan.add({
-        'doc_id': matched['doc_id'],
-        'name': matched['name'],
-        'new_stock': currentStock - qtyToDeduct,
-      });
-    }
-
-    // Apply deduction atomically
-    final batch = FirebaseFirestore.instance.batch();
-    for (final plan in deductionPlan) {
-      final pRef = FirebaseFirestore.instance.collection('products').doc(plan['doc_id'].toString());
-      batch.update(pRef, {'stock': plan['new_stock']});
-    }
-    batch.update(_ordersRef.doc(orderId), {'stockDeducted': true});
-    await batch.commit();
-    return true;
-  }
-
-  Future<void> _restoreOrderStockIfNecessary(String orderId, Map<String, dynamic> orderData) async {
-    if (orderData['stockDeducted'] != true) {
-      return; // Stock was never deducted
-    }
-    final itemsToRestore = _extractOrderItems(orderData);
-    if (itemsToRestore.isEmpty) return;
-
-    final prodsSnap = await FirebaseFirestore.instance.collection('products').get();
-    final allProds = prodsSnap.docs.map((d) {
-      final data = d.data();
-      data['doc_id'] = d.id;
-      return data;
-    }).toList();
-
-    final batch = FirebaseFirestore.instance.batch();
-    for (final target in itemsToRestore) {
-      final targetId = target['id']?.toString();
-      final targetName = (target['name'] ?? '').toString().trim().toLowerCase();
-      final qtyToRestore = (target['qty'] as num?)?.toInt() ?? 1;
-
-      for (final p in allProds) {
-        final pId = (p['id'] ?? p['doc_id'] ?? '').toString();
-        final pName = (p['name'] ?? '').toString().trim().toLowerCase();
-        if ((targetId != null && targetId.isNotEmpty && pId == targetId) ||
-            (targetName.isNotEmpty && (pName == targetName || (targetName.length >= 3 && (pName.contains(targetName) || targetName.contains(pName)))))) {
-          final currentStock = (p['stock'] as num?)?.toInt() ?? 0;
-          final pRef = FirebaseFirestore.instance.collection('products').doc(p['doc_id'].toString());
-          batch.update(pRef, {'stock': currentStock + qtyToRestore});
-          break;
-        }
-      }
-    }
-    batch.update(_ordersRef.doc(orderId), {'stockDeducted': false});
-    await batch.commit();
-  }
-
-  Future<void> _confirmAndUpdateOrderStatus(String orderId, String newStatus, String actionLabel, Map<String, dynamic> orderData) async {
+  Future<void> _confirmAndUpdateOrderStatus(String orderId, String newStatus,
+      String actionLabel, Map<String, dynamic> orderData) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFFF0FDF4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBBF7D0))),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFBBF7D0))),
         title: Row(
           children: const [
             Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF16A34A)),
             SizedBox(width: 8),
-            Text('Confirm Action', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text('Confirm Action',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: DashboardTheme.ink)),
           ],
         ),
-        content: Text('Are you sure you want to change order status to "$newStatus"?', style: const TextStyle(color: Color(0xFF4B7A5E))),
+        content: Text(
+            newStatus == 'Completed' ? 'Confirm that payment was received and this order was completed. Fully free rewards require no cash payment.' : 'Are you sure you want to change order status to "$newStatus"?',
+            style: const TextStyle(color: Color(0xFF4B7A5E))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF4B7A5E))),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF4B7A5E))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: DashboardTheme.green),
             onPressed: () => Navigator.pop(c, true),
-            child: Text(actionLabel, style: const TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+            child: Text(actionLabel,
+                style: const TextStyle(
+                    color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -2125,11 +2714,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
     if (confirm == true) {
       try {
-        if (newStatus == 'Approved' || newStatus == 'Printing') {
-          // If moving to Approved/Printing and stock wasn't deducted yet, perform safe deduction
-          await _deductOrderStockIfNecessary(orderId, orderData);
-        }
-        await _ordersRef.doc(orderId).update({'status': newStatus});
+        await updateOrderWorkflow(orderId, newStatus, paymentConfirmed: newStatus == 'Completed');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2149,22 +2734,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     }
   }
 
-  Widget _buildAdminOrderActions(String orderId, String refId, String status, Map<String, dynamic> data) {
+  Widget _buildAdminOrderActions(
+      String orderId, String refId, String status, Map<String, dynamic> data) {
     final category = _getStatusCategory(status);
-    final isFinished = category == 'completed' || category == 'rejected';
+    final isFinished = category == 'completed' ||
+        category == 'rejected' ||
+        category == 'cancelled';
 
-    String nextStatus = 'Printing';
+    String nextStatus = 'Approved';
     String actionLabel = 'Approve';
-    Color btnColor = const Color(0xFF10B981); // Emerald green like screenshot
+    Color btnColor = DashboardTheme.green; // Emerald green like screenshot
 
-    if (category == 'printing') {
+    if (status == 'Approved') {
+      nextStatus = 'Printing';
+      actionLabel = 'Start Printing';
+    } else if (category == 'printing') {
       nextStatus = 'Ready for Pickup';
       actionLabel = 'Ready';
-      btnColor = const Color(0xFFD97706);
+      btnColor = const Color(0xFFB45309);
     } else if (category == 'ready') {
       nextStatus = 'Completed';
       actionLabel = 'Done';
-      btnColor = const Color(0xFF10B981);
+      btnColor = DashboardTheme.green;
     }
 
     return Row(
@@ -2181,18 +2772,25 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               mainAxisSize: MainAxisSize.min,
               children: [
                 InkWell(
-                  onTap: () => _confirmAndUpdateOrderStatus(orderId, nextStatus, '$actionLabel Order', data),
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
+                  onTap: () => _confirmAndUpdateOrderStatus(
+                      orderId, nextStatus, '$actionLabel Order', data),
+                  borderRadius:
+                      const BorderRadius.horizontal(left: Radius.circular(10)),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                        const Icon(Icons.check_rounded,
+                            size: 13, color: Colors.white),
                         const SizedBox(width: 4),
                         Text(
                           actionLabel,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF14532D), fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF14532D),
+                              fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -2204,7 +2802,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   color: Colors.white.withValues(alpha: 0.25),
                 ),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: Colors.white),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 14, color: Colors.white),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   color: const Color(0xFFF0FDF4),
@@ -2214,13 +2813,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   ),
                   tooltip: 'Change Status',
                   onSelected: (selectedStatus) {
-                    _confirmAndUpdateOrderStatus(orderId, selectedStatus, 'Update Status', data);
+                    _confirmAndUpdateOrderStatus(
+                        orderId, selectedStatus, 'Update Status', data);
                   },
                   itemBuilder: (context) => [
-                    _buildStatusMenuItem('For Approval', '✓ For Approval', const Color(0xFFFBBF24)),
-                    _buildStatusMenuItem('Printing', '🖨️ Start Printing', const Color(0xFF15803D)),
-                    _buildStatusMenuItem('Ready for Pickup', '📦 Ready for Pickup', const Color(0xFF15803D)),
-                    _buildStatusMenuItem('Completed', '🎉 Complete Order', const Color(0xFF10B981)),
+                    _buildStatusMenuItem('For Approval', '✓ For Approval',
+                        const Color(0xFFFBBF24)),
+                    _buildStatusMenuItem('Printing', '🖨️ Start Printing',
+                        const Color(0xFF15803D)),
+                    _buildStatusMenuItem('Ready for Pickup',
+                        '📦 Ready for Pickup', const Color(0xFF15803D)),
+                    _buildStatusMenuItem('Completed', '🎉 Complete Order',
+                        const Color(0xFF10B981)),
                   ],
                 ),
               ],
@@ -2228,164 +2832,87 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
           const SizedBox(width: 6),
         ],
-
-        // Three-dots menu button with exact options from reference screenshot
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: const Color(0xFFBBF7D0),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, size: 16, color: Color(0xFF4B7A5E)),
-            padding: EdgeInsets.zero,
-            color: const Color(0xFFF0FDF4),
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Color(0xFFBBF7D0)),
-            ),
-            tooltip: 'Order Options',
-            onSelected: (value) {
-              if (value == 'review') {
-                _showReviewSpecsModal(orderId, refId, data);
-              } else if (value == 'file') {
-                _openAttachedFile(data);
-              } else if (value == 'slip') {
-                _showPrintJobSlipModal(refId, data);
-              } else if (value == 'reject') {
-                _showRejectOrderModal(orderId, refId, data);
-              }
-            },
-            itemBuilder: (context) {
-              final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? data['url'] ?? data['file'] ?? '').toString().trim();
-              final bool hasFile = fileUrl.isNotEmpty && fileUrl != 'Pending / Direct In-Store Upload' && fileUrl != 'Walang napiling file';
-
-              return [
-                PopupMenuItem<String>(
-                  value: 'review',
-                  height: 38,
-                  child: Row(
-                    children: const [
-                      Icon(Icons.remove_red_eye_rounded, size: 16, color: Color(0xFF15803D)),
-                      SizedBox(width: 10),
-                      Text(
-                        'Review Specs & File',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  value: 'file',
-                  height: 38,
-                  enabled: hasFile,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.description_rounded,
-                        size: 16,
-                        color: hasFile ? const Color(0xFF22C55E) : const Color(0xFF86EFAC),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Open Attached File',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: hasFile ? const Color(0xFF86EFAC) : const Color(0xFF86EFAC),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  value: 'slip',
-                  height: 38,
-                  child: Row(
-                    children: const [
-                      Icon(Icons.print_rounded, size: 16, color: Color(0xFFA855F7)),
-                      SizedBox(width: 10),
-                      Text(
-                        'Print Job Slip',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(height: 1),
-                PopupMenuItem<String>(
-                  value: 'reject',
-                  height: 38,
-                  child: Row(
-                    children: const [
-                      Icon(Icons.cancel_rounded, size: 16, color: Color(0xFFF43F5E)),
-                      SizedBox(width: 10),
-                      Text(
-                        'Reject Order',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF43F5E)),
-                      ),
-                    ],
-                  ),
-                ),
-              ];
-            },
-          ),
+        OrderOptionsButton(
+          hasFile: (data['fileUrl'] ??
+                      data['file_url'] ??
+                      data['url'] ??
+                      data['file'] ??
+                      '')
+                  .toString()
+                  .trim()
+                  .isNotEmpty &&
+              !['Pending / Direct In-Store Upload', 'No file selected']
+                  .contains(systemDisplayText(data['fileUrl'] ??
+                          data['file_url'] ?? data['url'] ?? data['file'])),
+          onSelected: (value) {
+            if (value == 'review') _showReviewSpecsModal(orderId, refId, data);
+            if (value == 'file') _openAttachedFile(data);
+            if (value == 'slip') _showPrintJobSlipModal(refId, data);
+            if (value == 'reject') _showRejectOrderModal(orderId, refId, data);
+          },
         ),
       ],
     );
   }
 
-  PopupMenuItem<String> _buildStatusMenuItem(String value, String label, Color color) {
+  PopupMenuItem<String> _buildStatusMenuItem(
+      String value, String label, Color color) {
     return PopupMenuItem<String>(
       value: value,
       height: 36,
       child: Text(
         label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+        style:
+            TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
       ),
     );
   }
 
   // ── MODAL 1: REVIEW SPECS & FILE ───────────────────────────────────────────
-  void _showReviewSpecsModal(String orderId, String refId, Map<String, dynamic> data) {
-    final customer = (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
+  void _showReviewSpecsModal(
+      String orderId, String refId, Map<String, dynamic> data) {
+    final customer =
+        (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
     final service = (data['service'] ?? 'Standard A4 Print').toString();
-    final total = (data['total'] ?? data['price'] ?? 0).toString();
+    final total = orderAmount(data['total'] ?? data['price'] ?? 0);
+    final store = isStoreSupplyOrder(data);
+    final items = data['items'] is List
+        ? (data['items'] as List).whereType<Map>().toList()
+        : const <Map>[];
     final payment = (data['payment'] ?? 'GCash Online').toString();
     final status = (data['status'] ?? 'Order Submitted').toString();
-    final fileName = (data['fileName'] ?? data['file'] ?? 'Walang in-attach na file').toString();
+    final fileName =
+        systemDisplayText(data['fileName'] ?? data['file'] ?? 'No file attached');
     final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? '').toString();
-    final note = (data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim();
+    final note = (data['customerNote'] ?? data['specialInstructions'] ?? '')
+        .toString()
+        .trim();
     final details = data['details'] as Map<String, dynamic>?;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFF0FDF4),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: Color(0xFFBBF7D0)),
         ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: const [
-                Icon(Icons.assignment_outlined, color: Color(0xFF15803D), size: 20),
-                SizedBox(width: 8),
-                Text('Order Specifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.close_rounded, color: Color(0xFF4B7A5E), size: 20),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+        title: Row(children: [
+          const Icon(Icons.assignment_outlined,
+              color: DashboardTheme.green, size: 22),
+          const SizedBox(width: 10),
+          const Expanded(
+              child: Text('Review Specs & File',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: DashboardTheme.ink))),
+          IconButton(
+              tooltip: 'Close',
               onPressed: () => Navigator.pop(ctx),
-            ),
-          ],
-        ),
+              icon: const Icon(Icons.close_rounded,
+                  color: DashboardTheme.muted, size: 20)),
+        ]),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2394,67 +2921,123 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _buildSpecRow('Order ID', refId, isMono: true),
               _buildSpecRow('Customer', customer),
               _buildSpecRow('Service', service),
+              if (!store) ...[
+                _buildSpecRow(
+                    'Paper Specs', '${data['paperSize'] ?? 'Standard Specs'}'),
+                _buildSpecRow('Copies / Quantity',
+                    '${data['copies'] ?? data['quantity'] ?? 1}'),
+                _buildSpecRow(
+                    'Color Mode', '${data['colorMode'] ?? 'Not specified'}'),
+              ],
+              if (store && items.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Store items',
+                    style: TextStyle(
+                        color: DashboardTheme.ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
+                ...items.map((item) {
+                  final quantity =
+                      int.tryParse('${item['qty'] ?? item['quantity'] ?? 1}') ??
+                          1;
+                  return _buildSpecRow('${item['name'] ?? 'Store item'}',
+                      '$quantity ${quantity == 1 ? 'unit' : 'units'}');
+                }),
+              ],
               _buildSpecRow('Status', status),
               _buildSpecRow('Payment', payment),
-              _buildSpecRow('Total', '₱$total', isHighlight: true),
-              if (details != null && details.isNotEmpty) ...[
+              if ((data['gcashRef'] ?? '').toString().isNotEmpty)
+                _buildSpecRow('GCash reference', data['gcashRef'].toString()),
+              if ((data['gcashReceiptUrl'] ?? '').toString().isNotEmpty)
+                sharedImage(data['gcashReceiptUrl'].toString()),
+              _buildSpecRow('Subtotal', orderAmount(data['subtotal'] ?? data['total'])),
+              _buildSpecRow('Points used', '${data['pointsUsed'] ?? 0}'),
+              _buildSpecRow('Points discount', orderAmount(data['pointsDiscount'] ?? 0)),
+              _buildSpecRow('Points earned', '${data['pointsEarned'] ?? 0}'),
+              _buildSpecRow('Total', total, isHighlight: true),
+              if (!store && details != null && details.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Text('Custom Specs:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
+                const Text('Custom Specs:',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF15803D))),
                 const SizedBox(height: 4),
-                ...details.entries.map((e) => _buildSpecRow(e.key.toUpperCase(), e.value.toString())),
+                ...details.entries.map((e) =>
+                    _buildSpecRow(e.key.toUpperCase(), e.value.toString())),
               ],
               const SizedBox(height: 10),
               const Divider(color: Color(0xFFBBF7D0)),
               const SizedBox(height: 6),
-              const Text('Customer Note / Instructions:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
+              const Text('Customer Note / Instructions:',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4B7A5E))),
               const SizedBox(height: 4),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFBBF7D0),
+                  color: const Color(0xFFF1F5F3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   note.isNotEmpty ? note : 'No special instructions provided.',
                   style: TextStyle(
                     fontSize: 11,
-                    fontStyle: note.isNotEmpty ? FontStyle.normal : FontStyle.italic,
-                    color: note.isNotEmpty ? const Color(0xFFFDE68A) : const Color(0xFF4B7A5E),
+                    fontStyle:
+                        note.isNotEmpty ? FontStyle.normal : FontStyle.italic,
+                    color: DashboardTheme.ink,
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Attached File:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
+              const Text('Attached File:',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4B7A5E))),
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFBBF7D0),
+                  color: const Color(0xFFF1F5F3),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFF334155)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.file_present_rounded, color: Color(0xFF86EFAC), size: 24),
+                    const Icon(Icons.file_present_rounded,
+                        color: DashboardTheme.green, size: 24),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         fileName,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: DashboardTheme.ink),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (fileUrl.isNotEmpty && fileUrl.startsWith('http'))
                       ElevatedButton.icon(
                         onPressed: () => _openAttachedFile(data),
-                        icon: const Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
-                        label: const Text('Open', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                        icon: const Icon(Icons.open_in_new_rounded,
+                            size: 12, color: Colors.white),
+                        label: const Text('Open',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF22C55E),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          backgroundColor: DashboardTheme.green,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           minimumSize: Size.zero,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                   ],
@@ -2469,10 +3052,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFBBF7D0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
+              child: const Text('Close',
+                  style: TextStyle(
+                      color: Color(0xFF14532D),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12)),
             ),
           ),
         ],
@@ -2480,38 +3068,46 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildSpecRow(String label, String value, {bool isMono = false, bool isHighlight = false}) {
+  Widget _buildSpecRow(String label, String value,
+      {bool isMono = false, bool isHighlight = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.bold,
-                fontFamily: isMono ? 'monospace' : null,
-                color: isHighlight ? const Color(0xFF10B981) : Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+            flex: 2,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 12, color: DashboardTheme.muted))),
+        const SizedBox(width: 12),
+        Expanded(
+            flex: 3,
+            child: Text(value,
+                textAlign: TextAlign.right,
+                softWrap: true,
+                style: TextStyle(
+                    fontSize: isHighlight ? 16 : 13,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: isMono ? 'monospace' : null,
+                    color: isHighlight
+                        ? DashboardTheme.green
+                        : DashboardTheme.ink))),
+      ]),
     );
   }
 
   // ── MODAL 2: OPEN ATTACHED FILE ───────────────────────────────────────────
   Future<void> _openAttachedFile(Map<String, dynamic> data) async {
-    final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? data['url'] ?? data['file'] ?? '').toString().trim();
+    final fileUrl = (data['fileUrl'] ??
+            data['file_url'] ??
+            data['url'] ??
+            data['file'] ??
+            '')
+        .toString()
+        .trim();
     if (fileUrl.isEmpty || !fileUrl.startsWith('http')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Walang valid web link o file URL na naka-attach.'),
+          content: Text('No valid web link or file URL is attached.'),
           backgroundColor: Color(0xFFF43F5E),
         ),
       );
@@ -2520,11 +3116,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
     final uri = Uri.tryParse(fileUrl);
     if (uri != null) {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Hindi mabuksan ang file link.'),
+            content: Text('Unable to open the file link.'),
             backgroundColor: Color(0xFFF43F5E),
           ),
         );
@@ -2534,7 +3131,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // ── MODAL 3: PRINT JOB SLIP TICKET ─────────────────────────────────────────
   void _showPrintJobSlipModal(String refId, Map<String, dynamic> data) {
-    final customer = (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
+    final customer =
+        (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
     final service = (data['service'] ?? 'Standard A4 Print').toString();
     final total = (data['total'] ?? data['price'] ?? 0).toString();
     final payment = (data['payment'] ?? 'GCash Online').toString();
@@ -2554,13 +3152,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: [
             Row(
               children: const [
-                Icon(Icons.receipt_long_rounded, color: Color(0xFFA855F7), size: 20),
+                Icon(Icons.receipt_long_rounded,
+                    color: Color(0xFFA855F7), size: 20),
                 SizedBox(width: 8),
-                Text('Job Slip Ticket', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Job Slip Ticket',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: DashboardTheme.ink)),
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Color(0xFF4B7A5E), size: 20),
+              icon: const Icon(Icons.close_rounded,
+                  color: Color(0xFF4B7A5E), size: 20),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () => Navigator.pop(ctx),
@@ -2581,17 +3185,26 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               const Center(
                 child: Text(
                   'KEZ C-EM ZEK PRINT SHOP',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF14532D), letterSpacing: 1.1),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF14532D),
+                      letterSpacing: 1.1),
                 ),
               ),
               const Center(
-                child: Text('Official Production Job Ticket', style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
+                child: Text('Official Production Job Ticket',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF4B7A5E))),
               ),
               const Divider(color: Color(0xFFBBF7D0), height: 16),
               _buildSlipLine('JOB TICKET #:', refId),
               _buildSlipLine('CLIENT:', customer),
               _buildSlipLine('SERVICE:', service),
               _buildSlipLine('QUANTITY:', '$qty pcs'),
+              _buildSlipLine('Subtotal', orderAmount(data['subtotal'] ?? data['total'])),
+              _buildSlipLine('Points used', '${data['pointsUsed'] ?? 0}'),
+              _buildSlipLine('Points discount', orderAmount(data['pointsDiscount'] ?? 0)),
+              _buildSlipLine('Points earned', '${data['pointsEarned'] ?? 0}'),
               _buildSlipLine('TOTAL:', '₱$total'),
               _buildSlipLine('PAYMENT:', payment),
               _buildSlipLine('STATUS:', status),
@@ -2600,7 +3213,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 alignment: Alignment.centerRight,
                 child: Text(
                   DateTime.now().toString().substring(0, 19),
-                  style: const TextStyle(fontSize: 9, color: Color(0xFF4B7A5E), fontFamily: 'monospace'),
+                  style: const TextStyle(
+                      fontSize: 9,
+                      color: Color(0xFF4B7A5E),
+                      fontFamily: 'monospace'),
                 ),
               ),
             ],
@@ -2612,19 +3228,39 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B5CF6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    backgroundColor: const Color(0xFF7C3AED),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: const Icon(Icons.print_rounded, size: 14, color: Colors.white),
-                  label: const Text('Print Ticket', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Job ticket queued for printing!'),
-                        backgroundColor: Color(0xFF10B981),
-                      ),
-                    );
+                  icon: const Icon(Icons.print_rounded,
+                      size: 14, color: Colors.white),
+                  label: const Text('Print Ticket',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
+                  onPressed: () async {
+                    try {
+                      await const MethodChannel('printingshop/job_ticket')
+                          .invokeMethod('print', {
+                        'title': 'Job Ticket $refId',
+                        'lines': data.entries
+                            .where((e) =>
+                                !['fileUrl', 'gcashReceiptUrl'].contains(e.key))
+                            .map((e) => '${e.key}: ${e.value}')
+                            .toList(),
+                      });
+                    } on MissingPluginException {
+                      if (mounted)
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text('Printing is available on Android.')));
+                    } catch (e) {
+                      if (mounted)
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Could not open printing: $e')));
+                    }
                   },
                 ),
               ),
@@ -2632,10 +3268,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFBBF7D0),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('Close',
+                    style: TextStyle(
+                        color: Color(0xFF14532D),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12)),
               ),
             ],
           ),
@@ -2650,13 +3291,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E), fontFamily: 'monospace')),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10.5,
+                  color: Color(0xFF4B7A5E),
+                  fontFamily: 'monospace')),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF14532D), fontFamily: 'monospace'),
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF14532D),
+                  fontFamily: 'monospace'),
             ),
           ),
         ],
@@ -2665,7 +3314,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // ── MODAL 4: REJECT ORDER REASON ───────────────────────────────────────────
-  void _showRejectOrderModal(String orderId, String refId, Map<String, dynamic> orderData) {
+  void _showRejectOrderModal(
+      String orderId, String refId, Map<String, dynamic> orderData) {
     final reasonController = TextEditingController();
 
     showDialog(
@@ -2680,22 +3330,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: const [
             Icon(Icons.cancel_outlined, color: Color(0xFFF43F5E), size: 20),
             SizedBox(width: 8),
-            Text('Reject Order Reason', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text('Reject Order Reason',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: DashboardTheme.ink)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Order: $refId', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+            Text('Order: $refId',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: DashboardTheme.muted)),
             const SizedBox(height: 10),
             TextField(
               controller: reasonController,
               maxLines: 3,
               style: const TextStyle(color: Color(0xFF14532D), fontSize: 12),
               decoration: InputDecoration(
-                hintText: 'Reason (e.g., Low file resolution, unreadable text)...',
-                hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
+                hintText:
+                    'Reason (e.g., Low file resolution, unreadable text)...',
+                hintStyle:
+                    const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                 filled: true,
                 fillColor: const Color(0xFFF8FFF9),
                 contentPadding: const EdgeInsets.all(12),
@@ -2718,39 +3378,57 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF43F5E),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: () async {
                     final reason = reasonController.text.trim();
-                    if (reason.isEmpty) {
+                    if (reason.length < 4) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a rejection reason.'), backgroundColor: Color(0xFFF43F5E)),
+                        const SnackBar(
+                            content: Text(
+                                'Please enter a rejection reason (at least 4 characters).'),
+                            backgroundColor: Color(0xFFF43F5E)),
                       );
                       return;
                     }
                     Navigator.pop(ctx);
-                    await _restoreOrderStockIfNecessary(orderId, orderData);
-                    await _ordersRef.doc(orderId).update({
-                      'status': 'Rejected',
-                      'rejectionReason': reason,
-                      'rejectedAt': FieldValue.serverTimestamp(),
-                    });
+                    try {
+                      await updateOrderWorkflow(orderId, 'Rejected',
+                          reason: reason);
+                    } catch (e) {
+                      if (mounted)
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.toString())));
+                      return;
+                    }
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Order $refId marked as Rejected.'), backgroundColor: const Color(0xFFF43F5E)),
+                      SnackBar(
+                          content: Text('Order $refId marked as Rejected.'),
+                          backgroundColor: const Color(0xFFF43F5E)),
                     );
                   },
-                  child: const Text('Confirm Reject', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: const Text('Confirm Reject',
+                      style: TextStyle(
+                          color: Color(0xFF14532D),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
                 ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFBBF7D0),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('Cancel',
+                    style: TextStyle(
+                        color: Color(0xFF14532D),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12)),
               ),
             ],
           ),
@@ -2759,55 +3437,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildStatusCounterBox(String label, String count, Color bgColor, Color textColor) {
+  Widget _buildStatusCounterBox(
+      String label, String count, Color bgColor, Color textColor) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(
+            color: bgColor, borderRadius: BorderRadius.circular(10)),
         child: Column(
           children: [
-            Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: textColor)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: textColor)),
             const SizedBox(height: 2),
-            Text(count, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+            Text(count,
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textColor)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCustomersAndProfileView() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFBBF7D0))),
-          child: Row(
-            children: [
-              const CircleAvatar(radius: 24, backgroundColor: Color(0xFFBBF7D0), child: Icon(Icons.admin_panel_settings, color: Color(0xFF15803D))),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Administrator Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                  Text(widget.userEmail, style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFBBF7D0))),
-          tileColor: const Color(0xFFFFFFFF),
-          leading: const Icon(Icons.gavel_rounded, color: Color(0xFF15803D)),
-          title: const Text("Terms and Conditions", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF4B7A5E)),
-          onTap: () => _showTermsAndConditionsDialog(context),
-        ),
-      ],
-    );
-  }
+  Widget _buildCustomersAndProfileView() => AdminProfilePanel(
+      email: widget.userEmail,
+      onTerms: () => _showTermsAndConditionsDialog(context));
 
   // ===========================================================================
   // --- CUSTOMER ORDERS & LIVE STATUS TRACKER TAB (SCREENSHOT DESIGN) ---
@@ -2826,24 +3484,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.cloud_off_rounded, size: 48, color: Color(0xFFF43F5E)),
+                  const Icon(Icons.cloud_off_rounded,
+                      size: 48, color: Color(0xFFF43F5E)),
                   const SizedBox(height: 12),
                   const Text(
                     'Failed to connect to database',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: DashboardTheme.ink),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     '${snapshot.error}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
-                    onPressed: () => setState(() => _customerTrackerRefreshKey = UniqueKey()),
-                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
-                    label: const Text('Retry Connection', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: DashboardTheme.green),
+                    onPressed: () => setState(
+                        () => _customerTrackerRefreshKey = UniqueKey()),
+                    icon: const Icon(Icons.refresh_rounded,
+                        size: 16, color: Colors.white),
+                    label: const Text('Retry Connection',
+                        style: TextStyle(
+                            color: Color(0xFF14532D),
+                            fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -2852,7 +3521,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         }
 
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)));
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF16A34A)));
         }
 
         final allDocs = snapshot.data!.docs;
@@ -2860,12 +3530,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         // Filter strictly to currently authenticated user's orders (email or customer ID)
         final myDocs = allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final orderEmail = (data['email'] ?? data['userEmail'] ?? '').toString().trim().toLowerCase();
-          final orderCustomer = (data['customer'] ?? '').toString().trim().toLowerCase();
-          final username = cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
+          if (data['source'] == 'POS') return false;
+          final orderEmail = (data['email'] ?? data['userEmail'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          final orderCustomer =
+              (data['customer'] ?? '').toString().trim().toLowerCase();
+          final username = cleanEmail.contains('@')
+              ? cleanEmail.split('@').first
+              : cleanEmail;
 
           return orderEmail == cleanEmail ||
-              (orderCustomer.isNotEmpty && (orderCustomer == cleanEmail || orderCustomer == username));
+              (orderCustomer.isNotEmpty &&
+                  (orderCustomer == cleanEmail || orderCustomer == username));
         }).toList();
 
         // Sort newest first by creation timestamp/date
@@ -2879,10 +3557,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
         // Apply Service / Category Dropdown Filter
         final categoryFiltered = myDocs.where((doc) {
-          if (_customerCategoryFilter == 'All Services & Store Items') return true;
+          if (_customerCategoryFilter == 'All Services & Store Items')
+            return true;
           final data = doc.data() as Map<String, dynamic>;
-          final service = (data['service'] ?? data['serviceName'] ?? data['item_name'] ?? '').toString();
-          return _checkServiceCategoryMatch(service, _customerCategoryFilter, data);
+          final service = (data['service'] ??
+                  data['serviceName'] ??
+                  data['item_name'] ??
+                  '')
+              .toString();
+          return _checkServiceCategoryMatch(
+              service, _customerCategoryFilter, data);
         }).toList();
 
         // Apply Status Filter Chips
@@ -2892,13 +3576,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           return _matchesCustomerStatusFilter(rawStatus, _customerFilter);
         }).toList();
 
-        final custTotalPages = (filteredDocs.length / _customerOrdersPerPage).ceil().clamp(1, 9999);
-        if (_customerOrdersCurrentPage > custTotalPages) _customerOrdersCurrentPage = custTotalPages;
+        final custTotalPages = (filteredDocs.length / _customerOrdersPerPage)
+            .ceil()
+            .clamp(1, 9999);
+        if (_customerOrdersCurrentPage > custTotalPages)
+          _customerOrdersCurrentPage = custTotalPages;
         if (_customerOrdersCurrentPage < 1) _customerOrdersCurrentPage = 1;
-        final custStartIndex = (_customerOrdersCurrentPage - 1) * _customerOrdersPerPage;
-        final custEndIndex = math.min(custStartIndex + _customerOrdersPerPage, filteredDocs.length);
+        final custStartIndex =
+            (_customerOrdersCurrentPage - 1) * _customerOrdersPerPage;
+        final custEndIndex = math.min(
+            custStartIndex + _customerOrdersPerPage, filteredDocs.length);
         final pagedDocs = filteredDocs.sublist(custStartIndex, custEndIndex);
-
 
         final customerDisplayName = widget.userEmail.contains('@')
             ? widget.userEmail.split('@').first
@@ -2913,13 +3601,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           },
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics()),
             children: [
               // ── Header Profile & Stats Banner (Matching Reference) ────
               _buildCustomerTopBanner(
                 customerName: customerDisplayName,
                 totalOrders: myDocs.length,
-                rfidPoints: 170, // Synced RFID Loyalty Points
+                rfidPoints: 0,
               ),
               const SizedBox(height: 14),
 
@@ -2934,7 +3623,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white.withOpacity(0.4),
+                        color: DashboardTheme.muted,
                         letterSpacing: 0.8,
                       ),
                     ),
@@ -2947,7 +3636,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => PlaceOrderScreen(userEmail: widget.userEmail),
+                            builder: (context) =>
+                                PlaceOrderScreen(userEmail: widget.userEmail),
                           ),
                         );
                       },
@@ -3010,7 +3700,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                               SizedBox(height: 3),
                               Text(
                                 "Track your printing orders and view real-time production updates step-by-step.",
-                                style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
+                                style: TextStyle(
+                                    fontSize: 11, color: Color(0xFF4B7A5E)),
                               ),
                             ],
                           ),
@@ -3029,15 +3720,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FFF9),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFFBBF7D0)),
+                              border:
+                                  Border.all(color: const Color(0xFFBBF7D0)),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 value: _customerCategoryFilter,
                                 dropdownColor: const Color(0xFFF0FDF4),
                                 isExpanded: true,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF4B7A5E)),
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                icon: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 18,
+                                    color: Color(0xFF4B7A5E)),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: DashboardTheme.ink),
                                 items: [
                                   'All Services & Store Items',
                                   'Standard A4 Print',
@@ -3050,9 +3748,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                   'Photo & Canvas',
                                   'Booklets & Menus',
                                   'In-Store Supplies',
-                                ].map((cat) => DropdownMenuItem(value: cat, child: Text(cat, overflow: TextOverflow.ellipsis))).toList(),
+                                ]
+                                    .map((cat) => DropdownMenuItem(
+                                        value: cat,
+                                        child: Text(cat,
+                                            overflow: TextOverflow.ellipsis)))
+                                    .toList(),
                                 onChanged: (val) {
-                                  if (val != null) setState(() => _customerCategoryFilter = val);
+                                  if (val != null)
+                                    setState(
+                                        () => _customerCategoryFilter = val);
                                 },
                               ),
                             ),
@@ -3063,24 +3768,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           height: 36,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
+                              foregroundColor: DashboardTheme.green,
                               side: const BorderSide(color: Color(0xFFBBF7D0)),
                               backgroundColor: const Color(0xFFF8FFF9),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
                             ),
                             onPressed: () {
-                              setState(() => _customerTrackerRefreshKey = UniqueKey());
+                              setState(() =>
+                                  _customerTrackerRefreshKey = UniqueKey());
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text("Orders updated from live server."),
+                                  content:
+                                      Text("Orders updated from live server."),
                                   backgroundColor: Color(0xFF10B981),
                                   duration: Duration(milliseconds: 900),
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF15803D)),
-                            label: const Text("Refresh", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.refresh_rounded,
+                                size: 14, color: Color(0xFF15803D)),
+                            label: const Text("Refresh",
+                                style: TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -3101,7 +3813,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     'Approved & Printing',
                     'Ready for Pickup',
                     'Completed',
-                    'Rejected / Cancelled',
+                    'Rejected',
+                    'Cancelled',
                   ].map((filter) {
                     final isSelected = _customerFilter == filter;
                     return Padding(
@@ -3109,10 +3822,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       child: ChoiceChip(
                         label: Text(filter),
                         selected: isSelected,
-                        onSelected: (val) => setState(() => _customerFilter = filter),
+                        onSelected: (val) =>
+                            setState(() => _customerFilter = filter),
                         selectedColor: const Color(0xFF2563EB),
                         labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : const Color(0xFF4B7A5E),
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF4B7A5E),
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -3120,7 +3836,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                           side: BorderSide(
-                            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFBBF7D0),
+                            color: isSelected
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFFBBF7D0),
                           ),
                         ),
                       ),
@@ -3142,7 +3860,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   ),
                   child: Column(
                     children: [
-                      const Icon(Icons.receipt_long_outlined, size: 48, color: Color(0xFF334155)),
+                      const Icon(Icons.receipt_long_outlined,
+                          size: 48, color: Color(0xFF334155)),
                       const SizedBox(height: 10),
                       Text(
                         myDocs.isEmpty
@@ -3158,7 +3877,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       const SizedBox(height: 4),
                       const Text(
                         "Tap 'Place Print Order' or visit the Store to begin.",
-                        style: TextStyle(color: Color(0xFF4B7A5E), fontSize: 11),
+                        style:
+                            TextStyle(color: Color(0xFF4B7A5E), fontSize: 11),
                       ),
                     ],
                   ),
@@ -3170,7 +3890,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 }),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFFFFF),
                     borderRadius: BorderRadius.circular(14),
@@ -3180,17 +3901,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF14532D), size: 20),
+                        icon: const Icon(Icons.chevron_left_rounded,
+                            color: Color(0xFF14532D), size: 20),
                         onPressed: _customerOrdersCurrentPage > 1
                             ? () => setState(() => _customerOrdersCurrentPage--)
                             : null,
                       ),
                       Text(
                         "Page $_customerOrdersCurrentPage of $custTotalPages (${filteredDocs.length} orders)",
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                            color: DashboardTheme.ink),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF14532D), size: 20),
+                        icon: const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF14532D), size: 20),
                         onPressed: _customerOrdersCurrentPage < custTotalPages
                             ? () => setState(() => _customerOrdersCurrentPage++)
                             : null,
@@ -3234,7 +3960,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.print_rounded, color: Color(0xFF14532D), size: 22),
+            child: const Icon(Icons.print_rounded,
+                color: Color(0xFF14532D), size: 22),
           ),
           const SizedBox(width: 10),
 
@@ -3267,7 +3994,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     const SizedBox(width: 4),
                     const Text(
                       "Customer Portal",
-                      style: TextStyle(fontSize: 10.5, color: Color(0xFF4B7A5E), fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xFF4B7A5E),
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -3285,11 +4015,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ),
             child: Column(
               children: [
-                const Text("RFID POINTS", style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
-                Text(
-                  "$rfidPoints PTS",
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
-                ),
+                const Text("RFID POINTS",
+                    style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF10B981))),
+                InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardsScreen())),
+                  child: const Padding(padding: EdgeInsets.all(6), child: LoyaltyBalance())),
               ],
             ),
           ),
@@ -3305,10 +4037,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ),
             child: Column(
               children: [
-                const Text("MY ORDERS", style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF4B7A5E))),
+                const Text("MY ORDERS",
+                    style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4B7A5E))),
                 Text(
                   "$totalOrders",
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: DashboardTheme.ink),
                 ),
               ],
             ),
@@ -3339,7 +4078,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: isActive ? Colors.white : const Color(0xFF4B7A5E)),
+            Icon(icon,
+                size: 13,
+                color: isActive ? Colors.white : const Color(0xFF4B7A5E)),
             const SizedBox(width: 6),
             Text(
               label,
@@ -3356,282 +4097,38 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // --- SINGLE TRACKED CUSTOMER ORDER CARD ---
-  Widget _buildTrackedCustomerOrderCard(String docId, Map<String, dynamic> data) {
-    final String displayRefId = (data['id'] ?? data['refId'] ?? data['ref_id'] ?? data['orderNumber'] ??
-            (docId.length > 8 ? 'PRNT-${docId.substring(0, 6).toUpperCase()}' : docId))
+  Widget _buildTrackedCustomerOrderCard(
+      String docId, Map<String, dynamic> data) {
+    final String displayRefId = (data['id'] ??
+            data['refId'] ??
+            data['ref_id'] ??
+            data['orderNumber'] ??
+            (docId.length > 8
+                ? 'PRNT-${docId.substring(0, 6).toUpperCase()}'
+                : docId))
         .toString();
 
-    final serviceName = (data['service'] ?? data['serviceName'] ?? data['item_name'] ?? 'Document Printing').toString();
-    final rawTotal = data['total'] ?? data['price'] ?? data['amount'] ?? 0;
-    final double totalNum = rawTotal is num ? rawTotal.toDouble() : (double.tryParse(rawTotal.toString()) ?? 0.0);
-    final String totalStr = "₱ ${totalNum.toStringAsFixed(2)}";
-
-    final rawStatus = (data['status'] ?? 'Order Submitted').toString();
-    final payment = (data['payment'] ?? data['payment_method'] ?? 'GCash Online').toString();
-    final fileName = (data['fileName'] ?? data['file'] ?? '').toString();
-    final quantity = data['quantity'] ?? data['copies'] ?? 1;
-
-    final dateTimeStr = _formatDateTime(data['createdAt'] ?? data['created_at'] ?? data['timestamp'] ?? data['orderDate']);
-
-    // Check if store supply item
-    final isStoreItem = serviceName.toLowerCase().contains('store') ||
-        serviceName.toLowerCase().contains('notebook') ||
-        serviceName.toLowerCase().contains('supply') ||
-        serviceName.toLowerCase().contains('pen') ||
-        (data['paperSize'] ?? '').toString().toLowerCase().contains('store');
-
-    final stageIndex = _getTrackerStageIndex(rawStatus);
-    final isRejected = stageIndex == -1;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isRejected ? const Color(0xFFF43F5E).withOpacity(0.4) : const Color(0xFFBBF7D0),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Top Header Row: Order ID, Badges, Date, Price & Delete ─
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Ref ID
-              Text(
-                displayRefId,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12.5,
-                  color: Color(0xFF14532D),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Service category badge (Print Job vs Store Item)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFBBF7D0),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isStoreItem ? Icons.shopping_bag_outlined : Icons.print_outlined,
-                      size: 11,
-                      color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF15803D),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      isStoreItem ? "Store Item" : "Print Job",
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.bold,
-                        color: isStoreItem ? const Color(0xFF10B981) : const Color(0xFF15803D),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-
-              // Payment badge
-              if (payment.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                  decoration: BoxDecoration(
-                    color: payment.toLowerCase().contains('gcash')
-                        ? const Color(0xFF2563EB).withOpacity(0.18)
-                        : const Color(0xFF10B981).withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: payment.toLowerCase().contains('gcash')
-                          ? const Color(0xFF22C55E).withOpacity(0.4)
-                          : const Color(0xFF10B981).withOpacity(0.4),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Text(
-                    payment,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: payment.toLowerCase().contains('gcash')
-                          ? const Color(0xFF86EFAC)
-                          : const Color(0xFF34D399),
-                    ),
-                  ),
-                ),
-
-              const Spacer(),
-
-              // Cancel / Delete Order button with confirmation dialog
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFF4B7A5E)),
-                splashRadius: 16,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'Cancel/Delete Order',
-                onPressed: () => _confirmDeleteCustomerOrder(docId, displayRefId),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Date & Time row
-          Row(
-            children: [
-              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF4B7A5E)),
-              const SizedBox(width: 4),
-              Text(
-                dateTimeStr,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF4B7A5E), fontWeight: FontWeight.w500),
-              ),
-              const Spacer(),
-              // Price Display
-              Text(
-                totalStr,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14.5,
-                  color: Color(0xFF14532D),
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // ── Service & Specifications Details ───────────────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      serviceName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Color(0xFF14532D),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatOrderSpecs(data, quantity),
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF4B7A5E)),
-                    ),
-                    if (fileName.isNotEmpty && fileName != 'Walang napiling file') ...[
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          const Icon(Icons.attach_file_rounded, size: 11, color: Color(0xFF15803D)),
-                          const SizedBox(width: 2),
-                          Expanded(
-                            child: Text(
-                              fileName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF15803D)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if ((data['customerNote'] ?? data['specialInstructions'] ?? '').toString().trim().isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFBBF7D0).withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFDE68A), width: 1.0),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.sticky_note_2_outlined, size: 12, color: Color(0xFFFBBF24)),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                "Note: ${(data['customerNote'] ?? data['specialInstructions']).toString().trim()}",
-                                style: const TextStyle(fontSize: 10.5, color: Color(0xFF92400E), fontStyle: FontStyle.italic, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Status Pill Right Side
-              if (isRejected)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF43F5E).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFF43F5E).withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.cancel_rounded, size: 12, color: Color(0xFFF43F5E)),
-                      const SizedBox(width: 4),
-                      Text(
-                        rawStatus.startsWith("Rejected:") ? rawStatus : "Rejected",
-                        style: const TextStyle(
-                          color: Color(0xFFF43F5E),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // ── Visual Order Progress Tracker / Rejection Notice ────────
-          if (isRejected)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF450A0A).withOpacity(0.4),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFF43F5E).withOpacity(0.3)),
-              ),
-              child: Text(
-                rawStatus.startsWith("Rejected:")
-                    ? "Order Notice: ${rawStatus.replaceFirst('Rejected:', '').trim()}"
-                    : "This order was cancelled or rejected and is not progressing.",
-                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11),
-              ),
-            )
-          else
-            _buildOrderTimelineProgress(stageIndex),
-        ],
-      ),
+    final stage =
+        _getTrackerStageIndex((data['status'] ?? 'Order Submitted').toString());
+    return CustomerOrderCard(
+      reference: displayRefId,
+      order: data,
+      dateLabel: _formatDateTime(data['createdAt'] ??
+          data['created_at'] ??
+          data['timestamp'] ??
+          data['orderDate']),
+      specsLabel:
+          _formatOrderSpecs(data, data['quantity'] ?? data['copies'] ?? 1),
+      timeline:
+          OrderTimeline(currentStage: stage, store: isStoreSupplyOrder(data)),
+      onAction: (action) {
+        if (action == 'review')
+          _showReviewSpecsModal(docId, displayRefId, data);
+        if (action == 'file') _openAttachedFile(data);
+        if (action == 'slip') _showPrintJobSlipModal(displayRefId, data);
+        if (action == 'cancel')
+          _confirmCancelCustomerOrder(docId, displayRefId);
+      },
     );
   }
 
@@ -3641,7 +4138,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final details = data['details'];
 
     if (details is Map) {
-      if (details['dimensions'] != null) parts.add(details['dimensions'].toString());
+      if (details['dimensions'] != null)
+        parts.add(details['dimensions'].toString());
       if (details['size'] != null) parts.add(details['size'].toString());
       if (details['paper'] != null) parts.add(details['paper'].toString());
       if (details['sides'] != null) parts.add(details['sides'].toString());
@@ -3656,127 +4154,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return parts.join(' • ');
   }
 
-  // --- VISUAL HORIZONTAL STEPPER TIMELINE ---
-  Widget _buildOrderTimelineProgress(int currentStage) {
-    const stages = [
-      {'label': 'Submitted', 'icon': Icons.file_present_rounded},
-      {'label': 'Approved', 'icon': Icons.check_circle_outline_rounded},
-      {'label': 'Printing', 'icon': Icons.print_rounded},
-      {'label': 'Ready', 'icon': Icons.inventory_2_outlined},
-      {'label': 'Completed', 'icon': Icons.flag_outlined},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FFF9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final totalSteps = stages.length;
-          final double stepWidth = constraints.maxWidth / totalSteps;
-
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              // Background track line
-              Positioned(
-                top: 15,
-                left: stepWidth / 2,
-                right: stepWidth / 2,
-                child: Container(
-                  height: 2.5,
-                  color: const Color(0xFFBBF7D0),
-                ),
-              ),
-
-              // Active track progress line
-              if (currentStage > 0)
-                Positioned(
-                  top: 15,
-                  left: stepWidth / 2,
-                  child: Container(
-                    height: 2.5,
-                    width: ((constraints.maxWidth - stepWidth) / (totalSteps - 1)) *
-                        math.min(currentStage, totalSteps - 1),
-                    color: const Color(0xFF2563EB),
-                  ),
-                ),
-
-              // Step Circles & Labels
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(totalSteps, (index) {
-                  final isDone = index <= currentStage;
-                  final isCurrent = index == currentStage;
-
-                  return SizedBox(
-                    width: stepWidth,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Circle Indicator
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isCurrent
-                                ? const Color(0xFF2563EB)
-                                : (isDone ? const Color(0xFF1D4ED8) : const Color(0xFFF0FDF4)),
-                            border: Border.all(
-                              color: isDone ? const Color(0xFF22C55E) : const Color(0xFF334155),
-                              width: isCurrent ? 2.5 : 1.5,
-                            ),
-                            boxShadow: isCurrent
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(0xFF2563EB).withOpacity(0.5),
-                                      blurRadius: 8,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Icon(
-                            isDone && !isCurrent ? Icons.check_rounded : (stages[index]['icon'] as IconData),
-                            size: 14,
-                            color: isDone ? Colors.white : const Color(0xFF4B7A5E),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-
-                        // Label
-                        Text(
-                          stages[index]['label'] as String,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: isDone ? FontWeight.w800 : FontWeight.w500,
-                            color: isDone ? Colors.white : const Color(0xFF4B7A5E),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   // --- STAGE MAPPING HELPER ---
   int _getTrackerStageIndex(String rawStatus) {
     final s = rawStatus.toLowerCase().trim();
     if (s.contains('reject') || s.contains('cancel')) return -1;
-    if (s.contains('complet') || s.contains('done') || s.contains('finish')) return 4;
+    if (s.contains('complet') || s.contains('done') || s.contains('finish'))
+      return 4;
     if (s.contains('ready') || s.contains('pickup')) return 3;
-    if (s.contains('print') || s.contains('production')) return 2;
-    if (s.contains('approve') && !s.contains('for approve') && !s.contains('for approval')) return 1;
+    if (s.contains('print') || s.contains('production') || s.contains('prepar'))
+      return 2;
+    if (s.contains('approve') &&
+        !s.contains('for approve') &&
+        !s.contains('for approval')) return 1;
     return 0; // Default: 0 (Submitted / For Approval)
   }
 
@@ -3786,7 +4175,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final s = rawStatus.toLowerCase().trim();
 
     if (filter == 'For Approval') {
-      return (s.contains('submitted') || s.contains('for approval') || s.contains('pending')) &&
+      return (s.contains('submitted') ||
+              s.contains('for approval') ||
+              s.contains('pending')) &&
           !s.contains('print') &&
           !s.contains('ready') &&
           !s.contains('complet') &&
@@ -3804,10 +4195,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           !s.contains('reject');
     }
     if (filter == 'Completed') {
-      return s.contains('complet') || s.contains('done') || s.contains('finish');
+      return s.contains('complet') ||
+          s.contains('done') ||
+          s.contains('finish');
     }
-    if (filter == 'Rejected / Cancelled') {
-      return s.contains('reject') || s.contains('cancel');
+    if (filter == 'Cancelled') return s == 'cancelled';
+    if (filter == 'Rejected') {
+      return s.contains('reject');
     }
     return true;
   }
@@ -3823,60 +4217,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  // --- CANCEL / DELETE ORDER WITH CONFIRMATION DIALOG ---
-  Future<void> _confirmDeleteCustomerOrder(String docId, String refId) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFF0FDF4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFBBF7D0)),
-        ),
-        title: Row(
-          children: const [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFF43F5E)),
-            SizedBox(width: 8),
-            Text("Cancel Order", style: TextStyle(color: Color(0xFF14532D), fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text(
-          "Are you sure you want to cancel or delete order $refId?\nThis action cannot be undone.",
-          style: const TextStyle(color: Color(0xFF4B7A5E), fontSize: 12.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Keep Order", style: TextStyle(color: Color(0xFF4B7A5E))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Yes, Cancel Order", style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await _ordersRef.doc(docId).delete();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Order $refId successfully removed."),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to remove order: $e"),
-            backgroundColor: const Color(0xFFF43F5E),
-          ),
-        );
-      }
+  Future<void> _confirmCancelCustomerOrder(String docId, String refId) async {
+    final reason = await showDialog<String>(
+        context: context, builder: (_) => OrderCancelDialog(reference: refId));
+    if (reason == null) return;
+    try {
+      await cancelCustomerOrder(docId, reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Order $refId cancelled.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to cancel order: $error')));
     }
   }
 
@@ -3887,23 +4240,38 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFF16A34A).withOpacity(0.15), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: const Color(0xFF16A34A).withOpacity(0.15),
+                shape: BoxShape.circle),
             child: const Icon(Icons.person, color: Color(0xFF15803D), size: 48),
           ),
           const SizedBox(height: 12),
-          Text(widget.userEmail, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+          Text(widget.userEmail,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: DashboardTheme.ink)),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => _showTermsAndConditionsDialog(context),
-            icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFF15803D)),
-            label: const Text("Terms & Conditions", style: TextStyle(color: Color(0xFF15803D), fontWeight: FontWeight.bold, fontSize: 12)),
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0))),
+            icon: const Icon(Icons.gavel_rounded,
+                size: 16, color: Color(0xFF15803D)),
+            label: const Text("Terms & Conditions",
+                style: TextStyle(
+                    color: Color(0xFF15803D),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFBBF7D0))),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _showLogoutConfirmationDialog(context),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
-            child: const Text('Log Out', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Log Out',
+                style: TextStyle(
+                    color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -3955,7 +4323,8 @@ class _FuturisticSpherePainter extends CustomPainter {
       canvas.save();
       canvas.translate(center.dx, center.dy);
 
-      final double angle = (i * (math.pi / ringCount)) + (progress * 2 * math.pi * 0.05);
+      final double angle =
+          (i * (math.pi / ringCount)) + (progress * 2 * math.pi * 0.05);
       canvas.rotate(angle);
 
       final rect = Rect.fromCenter(
@@ -4008,6 +4377,7 @@ class _DonutChartPainter extends CustomPainter {
       'Order Submitted': const Color(0xFF8B5CF6),
       'Printing': const Color(0xFF22C55E),
       'Rejected': const Color(0xFFF43F5E),
+      'Cancelled': const Color(0xFF475569),
       'Ready for Pickup': const Color(0xFF10B981),
     };
 

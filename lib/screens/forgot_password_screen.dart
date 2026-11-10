@@ -61,7 +61,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       // Expiration check (5 minutes = 300 seconds)
       if (_otpTime != null && DateTime.now().difference(_otpTime!).inSeconds > 300) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Expired na ang OTP. Humingi ng bagong code.')),
+          const SnackBar(content: Text('The verification code has expired. Please request a new code.')),
         );
         return;
       }
@@ -73,7 +73,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Maling OTP Code. Subukang muli.')),
+          const SnackBar(content: Text('Incorrect verification code. Please try again.')),
         );
       }
     }
@@ -84,7 +84,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_formKeyC.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password reset successfully! Maaari ka nang mag-login.'),
+          content: Text('Password reset successfully. You can now sign in.'),
           backgroundColor: Color(0xFF059669),
         ),
       );
