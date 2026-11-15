@@ -285,7 +285,7 @@ class AdminCatalogEditorState extends State<AdminCatalogEditor> {
           type: FileType.custom, allowedExtensions: ['png', 'jpg', 'jpeg']);
       if (selected != null && selected.files.single.path != null) {
         final f = selected.files.single;
-        fields['imageUrl']!.text = await SupabaseStorageService.uploadFile(
+        fields['imageUrl']!.text = await SupabaseStorageService.uploadFile(purpose: 'catalog',
             file: File(f.path!), originalFilename: f.name);
       }
     } catch (e) {
@@ -560,7 +560,7 @@ class _AdminGcashViewState extends State<AdminGcashView> {
           type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png']);
       if (result != null && result.files.single.path != null) {
         final file = result.files.single;
-        qr.text = await SupabaseStorageService.uploadFile(
+        qr.text = await SupabaseStorageService.uploadFile(purpose: 'catalog',
             file: File(file.path!), originalFilename: file.name);
       }
     } catch (e) {

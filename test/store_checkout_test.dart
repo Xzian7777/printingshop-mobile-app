@@ -1,3 +1,4 @@
+import 'package:printingshop/services/payment_eligibility.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -89,6 +90,8 @@ void main() {
         theme: DashboardTheme.light,
         home: Scaffold(
             body: StoreCheckoutSheet(
+          paymentEligibility: Future.value(const PaymentEligibility(
+              cashOnPickupAllowed: true, hasOrders: true)),
           cart: const {'p1': 1},
           products: const {
             'p1': {'name': 'Notebook', 'price': 19, 'stock': 12}
@@ -128,6 +131,8 @@ void main() {
         theme: DashboardTheme.light,
         home: Scaffold(
             body: StoreCheckoutSheet(
+          paymentEligibility: Future.value(const PaymentEligibility(
+              cashOnPickupAllowed: true, hasOrders: true)),
           cart: const {'p1': 1},
           products: const {
             'p1': {'name': 'Notebook', 'price': 19, 'stock': 1}

@@ -1,4 +1,19 @@
 import 'loyalty_api.dart';
+import 'display_text.dart';
+
+double analyticsOrderAmount(Map<String, dynamic> order,
+    [String field = 'total']) {
+  if (isStoppedOrderStatus(order['status'])) return 0;
+  final value = field == 'total'
+      ? order['total'] ?? order['price'] ?? order['amount']
+      : order[field];
+  final amount = value is num
+      ? value.toDouble()
+      : double.tryParse(
+              '$value'.replaceAll('₱', '').replaceAll(',', '').trim()) ??
+          0;
+  return amount.isFinite && amount >= 0 ? amount : 0;
+}
 
 bool validOrderTransition(String current, String target) {
   if (current == 'Cancelled') return false;
@@ -67,7 +82,11 @@ Map<String, int> inventoryPlan(
 
 Future<void> updateOrderWorkflow(String id, String target,
     {String? reason, bool paymentConfirmed = false}) async {
-  await LoyaltyApi.call('/api/orders/${Uri.encodeComponent(id)}/status', method: 'POST', data: {
-    'status': target, 'reason': reason ?? '', 'paymentConfirmed': paymentConfirmed,
-  });
+  await LoyaltyApi.call('/api/orders/${Uri.encodeComponent(id)}/status',
+      method: 'POST',
+      data: {
+        'status': target,
+        'reason': reason ?? '',
+        'paymentConfirmed': paymentConfirmed,
+      });
 }

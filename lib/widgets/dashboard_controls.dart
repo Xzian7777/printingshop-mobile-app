@@ -1,6 +1,84 @@
 import 'package:flutter/material.dart';
 import '../theme/dashboard_theme.dart';
 
+class ActionNotice extends StatelessWidget {
+  const ActionNotice({super.key, required this.message, this.isError = false});
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        liveRegion: true,
+        child: Material(
+          color: isError ? const Color(0xFFFFF1F2) : const Color(0xFFF0FDF4),
+          elevation: 6,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(isError ? Icons.error_outline : Icons.check_circle_outline,
+                  color: isError ? const Color(0xFFBE123C) : DashboardTheme.green),
+              const SizedBox(width: 10),
+              Expanded(child: Text(message, style: TextStyle(
+                  fontSize: 13, color: isError ? const Color(0xFF9F1239) : DashboardTheme.ink))),
+            ]),
+          ),
+        ),
+      );
+}
+
+class LogoutConfirmationDialog extends StatefulWidget {
+  const LogoutConfirmationDialog({super.key, required this.onLogout});
+  final Future<void> Function() onLogout;
+
+  @override
+  State<LogoutConfirmationDialog> createState() => _LogoutConfirmationDialogState();
+}
+
+class _LogoutConfirmationDialogState extends State<LogoutConfirmationDialog> {
+  bool busy = false;
+  String? error;
+
+  Future<void> logout() async {
+    if (busy) return;
+    setState(() { busy = true; error = null; });
+    try {
+      await widget.onLogout();
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) setState(() {
+        busy = false;
+        error = 'Unable to log out. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: !busy,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFFF0FDF4),
+          title: const Text('Confirm Logout', style: TextStyle(color: DashboardTheme.ink)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (busy) const Padding(padding: EdgeInsets.only(bottom: 12),
+                child: CircularProgressIndicator(color: DashboardTheme.green)),
+            Text(busy ? 'Logging out…' : 'Are you sure you want to log out of your account?',
+                style: const TextStyle(color: DashboardTheme.ink)),
+            if (error != null) Padding(padding: const EdgeInsets.only(top: 12),
+                child: Text(error!, style: const TextStyle(color: Color(0xFFBE123C)))),
+          ]),
+          actions: [
+            TextButton(onPressed: busy ? null : () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            ElevatedButton(onPressed: busy ? null : logout,
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E),
+                    foregroundColor: Colors.white),
+                child: Text(busy ? 'Logging out…' : 'Log Out')),
+          ],
+        ),
+      );
+}
+
 class AdminProfilePanel extends StatelessWidget {
   final String email;
   final VoidCallback onTerms;

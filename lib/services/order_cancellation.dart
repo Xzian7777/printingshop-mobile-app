@@ -1,6 +1,7 @@
 import 'loyalty_api.dart';
 
 bool canCancelOrder(Map<String, dynamic> order) =>
+    order['ownershipReviewRequired'] != true &&
     order['source'] != 'POS' &&
     ['Order Submitted', 'For Approval'].contains(
         order.containsKey('status') ? order['status'] : 'Order Submitted') &&

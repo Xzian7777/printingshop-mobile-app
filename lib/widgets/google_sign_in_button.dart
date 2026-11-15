@@ -59,13 +59,22 @@ class GoogleSignInButton extends StatelessWidget {
             height: 48,
             child: OutlinedButton.icon(
               onPressed: busy ? null : () => _signIn(context),
-              icon: Image.asset('assets/images/google_g.png',
-                  width: 20, height: 20),
-              label: const Text('Continue with Google',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              icon: busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Color(0xFF1F1F1F)))
+                  : Image.asset('assets/images/google_g.png',
+                      width: 20, height: 20),
+              label: Text(busy ? 'Please wait…' : 'Continue with Google',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
               style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: const Color(0xFF1F1F1F),
+                  disabledForegroundColor: const Color(0xFF1F1F1F),
+                  disabledBackgroundColor: const Color(0xFFF1F5F3),
                   side: const BorderSide(color: Color(0xFF747775)),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12))),

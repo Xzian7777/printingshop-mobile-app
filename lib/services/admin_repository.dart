@@ -1,3 +1,4 @@
+import 'profile_directory.dart';
 import 'loyalty_api.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -43,8 +44,9 @@ class AdminRepository {
     }
     // Maintain a web profile for mobile users without changing existing IDs.
     final webId = (data['customerId'] ?? data['id'] ?? id).toString();
-    found.putIfAbsent(
-        'customers/$webId', () => db.collection('customers').doc(webId));
+    if (!found.values.any((reference) => reference.parent.id == 'customers')) {
+      found['customers/$webId'] = db.collection('customers').doc(webId);
+    }
     if (!found.values.any((r) => r.parent.id == 'users')) {
       final uid = (data['uid'] ?? id).toString();
       found['users/$uid'] = db.collection('users').doc(uid);
@@ -89,10 +91,23 @@ class AdminRepository {
 
   Future<void> saveProfile(String id, Map<String, dynamic> data,
       {bool create = false}) async {
-    final targets = await refs('user', id, data);
+    var targets = await refs('user', id, data);
     if (create &&
         (await Future.wait(targets.map((r) => r.get()))).any((d) => d.exists))
       throw StateError('A customer with this email already exists.');
+    var review = false;
+    if (!create) {
+      final sources = await Future.wait(
+          [db.collection('users').get(), db.collection('customers').get()]);
+      final rows = mergeProfiles(
+        [for (final doc in sources[0].docs) ProfileRecord(doc.id, doc.data())],
+        [for (final doc in sources[1].docs) ProfileRecord(doc.id, doc.data())],
+      );
+      review = rows.any(
+          (row) => row.id == id && row.data()['rfidReviewRequired'] == true);
+      if (review && sources[0].docs.any((doc) => doc.id == id))
+        targets = [db.collection('users').doc(id)];
+    }
     final batch = db.batch();
     final name = data['fullName'] ?? data['full_name'] ?? data['name'];
     final payload = {
@@ -100,6 +115,21 @@ class AdminRepository {
       if (name != null) ...{'fullName': name, 'full_name': name, 'name': name},
       'updatedAt': FieldValue.serverTimestamp()
     };
+    payload.removeWhere((key, _) => [
+          'profileResolution',
+          'rfidReviewRequired',
+          'legacyCustomerIds'
+        ].contains(key));
+    if (review)
+      payload.removeWhere((key, _) => ![
+            'fullName',
+            'full_name',
+            'name',
+            'email',
+            'phone',
+            'contact',
+            'updatedAt'
+          ].contains(key));
     for (final target in targets) {
       final safe = Map<String, dynamic>.from(payload);
       if (target.parent.id == 'users') {

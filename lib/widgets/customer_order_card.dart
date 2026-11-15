@@ -56,7 +56,7 @@ class CustomerOrderCard extends StatelessWidget {
             .toString();
     final payment =
         (order['payment'] ?? order['payment_method'] ?? '').toString();
-    final status = (order['status'] ?? 'Order Submitted').toString();
+    final status = orderStatusLabel(order['status'] ?? 'Order Submitted');
     final stopped =
         RegExp('reject|cancel', caseSensitive: false).hasMatch(status);
     final note = (order['customerNote'] ?? order['specialInstructions'] ?? '')
@@ -231,7 +231,7 @@ class OrderTimeline extends StatelessWidget {
     final labels = [
       'Submitted',
       'Approved',
-      store ? 'Preparing' : 'Printing',
+      'Processing',
       'Ready',
       'Completed'
     ];

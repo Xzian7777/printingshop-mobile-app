@@ -21,13 +21,18 @@ class LocalDbService {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 5) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS customer_tutorial (uid TEXT PRIMARY KEY)');
+        }
         if (oldVersion < 2)
           await db.execute('ALTER TABLE local_orders ADD COLUMN payload TEXT');
         if (oldVersion < 4) {
-          await db.execute('CREATE TABLE IF NOT EXISTS loyalty_pending (uid TEXT PRIMARY KEY, payload TEXT NOT NULL)');
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS loyalty_pending (uid TEXT PRIMARY KEY, payload TEXT NOT NULL)');
         }
         if (oldVersion < 3) {
           await db.execute(
@@ -38,7 +43,9 @@ class LocalDbService {
   }
 
   Future<void> _createDB(Database db, int version) async {
-    await db.execute('CREATE TABLE loyalty_pending (uid TEXT PRIMARY KEY, payload TEXT NOT NULL)');
+    await db.execute('CREATE TABLE customer_tutorial (uid TEXT PRIMARY KEY)');
+    await db.execute(
+        'CREATE TABLE loyalty_pending (uid TEXT PRIMARY KEY, payload TEXT NOT NULL)');
     await db.execute(
         'CREATE TABLE pos_drafts (cashier TEXT PRIMARY KEY, payload TEXT NOT NULL)');
     // Table para sa Cached Orders at Offline Queue
@@ -61,15 +68,36 @@ class LocalDbService {
     ''');
   }
 
+  Future<bool> hasSeenCustomerTutorial(String uid) async {
+    final rows = await (await database).query('customer_tutorial',
+        where: 'uid = ?', whereArgs: [uid], limit: 1);
+    return rows.isNotEmpty;
+  }
+
+  Future<void> markCustomerTutorialSeen(String uid) async {
+    await (await database).insert('customer_tutorial', {'uid': uid},
+        conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
   Future<Map<String, dynamic>?> getLoyaltyPending(String uid) async {
-    final rows = await (await database).query('loyalty_pending', where: 'uid = ?', whereArgs: [uid]);
-    return rows.isEmpty ? null : Map<String, dynamic>.from(jsonDecode(rows.first['payload'] as String));
+    final rows = await (await database)
+        .query('loyalty_pending', where: 'uid = ?', whereArgs: [uid]);
+    return rows.isEmpty
+        ? null
+        : Map<String, dynamic>.from(
+            jsonDecode(rows.first['payload'] as String));
   }
-  Future<void> saveLoyaltyPending(String uid, Map<String, dynamic> payload) async {
-    await (await database).insert('loyalty_pending', {'uid': uid, 'payload': jsonEncode(payload)}, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  Future<void> saveLoyaltyPending(
+      String uid, Map<String, dynamic> payload) async {
+    await (await database).insert(
+        'loyalty_pending', {'uid': uid, 'payload': jsonEncode(payload)},
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
+
   Future<void> clearLoyaltyPending(String uid) async {
-    await (await database).delete('loyalty_pending', where: 'uid = ?', whereArgs: [uid]);
+    await (await database)
+        .delete('loyalty_pending', where: 'uid = ?', whereArgs: [uid]);
   }
 
   // Save or Update Order sa Local SQLite DB
@@ -102,7 +130,13 @@ class LocalDbService {
     final db = await instance.database;
     await db.insert(
       'local_orders',
-      {
+      _orderRow(order, isSynced),
+      conflictAlgorithm:
+          isSynced ? ConflictAlgorithm.replace : ConflictAlgorithm.abort,
+    );
+  }
+
+  Map<String, Object?> _orderRow(Map<String, dynamic> order, bool isSynced) => {
         'id': order['id'],
         'customer': order['customer'] ?? '',
         'email': order['email'] ?? '',
@@ -124,20 +158,28 @@ class LocalDbService {
             return DateTime.now().toUtc().toIso8601String();
           return value.toString();
         }),
-      },
-      conflictAlgorithm:
-          isSynced ? ConflictAlgorithm.replace : ConflictAlgorithm.abort,
-    );
+      };
+
+  Future<void> confirmQueuedOrder(
+      String queuedId, Map<String, dynamic> order) async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      await transaction.insert('local_orders', _orderRow(order, true),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+      if (queuedId != order['id']) {
+        await transaction.delete('local_orders',
+            where: 'id = ? AND is_synced = 0', whereArgs: [queuedId]);
+      }
+    });
   }
 
   // Get Local Cached Orders (Instant Query)
   Future<List<Map<String, dynamic>>> getLocalOrders(String email) async {
     final db = await instance.database;
-    final isAdm = email.toLowerCase().trim() == 'supernovaelectrodog@gmail.com';
     return await db.query(
       'local_orders',
-      where: isAdm ? null : 'email = ?',
-      whereArgs: isAdm ? null : [email],
+      where: 'email = ?',
+      whereArgs: [email],
       orderBy: 'createdAt DESC',
     );
   }

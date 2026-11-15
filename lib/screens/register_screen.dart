@@ -1,11 +1,7 @@
+import '../services/password_reset_service.dart';
 import '../widgets/google_sign_in_button.dart';
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server.dart';
 import 'login_screen.dart';
 import '../utils/validators.dart';
 
@@ -37,12 +33,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Timer? _countdownTimer;
   int _secondsRemaining = 60;
   bool _canResend = false;
-  String _activeOtp = '';
+  final _verification = PasswordResetService();
   String _recipientEmail = '';
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _verification.close();
     _fullNameController.dispose();
     _mobileController.dispose();
     _emailController.dispose();
@@ -50,46 +47,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _confirmPasswordController.dispose();
     _otpController.dispose();
     super.dispose();
-  }
-
-  String _generate6DigitOTP() {
-    final random = Random();
-    return (100000 + random.nextInt(900000)).toString();
-  }
-
-  Future<bool> _sendEmailOTP({
-    required String recipientEmail,
-    required String otpCode,
-    required String subjectText,
-  }) async {
-    const String senderEmail = 'xdawinan@gmail.com';
-    const String appPassword = 'rowb brnm dtzo oufu';
-
-    final smtpServer = gmail(senderEmail, appPassword);
-
-    final message = Message()
-      ..from = const Address(senderEmail, 'Kez C-Em Zek Printing')
-      ..recipients.add(recipientEmail)
-      ..subject = subjectText
-      ..html = '''
-        <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0b0f19; color: #ffffff; border-radius: 12px; border: 1px solid #1e293b;">
-          <h2 style="color: #16a34a; margin-top: 0;">Kez C-Em Zek Printing Shop</h2>
-          <p style="color: #cbd5e1;">Hello,</p>
-          <p style="color: #cbd5e1;">Your 6-digit account verification code is:</p>
-          <div style="background-color: #111827; padding: 14px 24px; border-radius: 8px; display: inline-block; margin: 12px 0;">
-            <h1 style="color: #4ade80; letter-spacing: 6px; margin: 0; font-size: 32px;">$otpCode</h1>
-          </div>
-          <p style="color: #94a3b8; font-size: 12px;">This code will expire in 5 minutes. If you did not request this, please ignore this email.</p>
-        </div>
-      ''';
-
-    try {
-      await send(message, smtpServer);
-      return true;
-    } catch (e) {
-      debugPrint('SMTP Email Error: $e');
-      return false;
-    }
   }
 
   void _startTimer() {
@@ -109,138 +66,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _sendRegisterOtp() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
-    _activeOtp = _generate6DigitOTP();
-    _recipientEmail = _emailController.text.trim();
-
+    _recipientEmail = _emailController.text.trim().toLowerCase();
     try {
-      await FirebaseFirestore.instance
-          .collection('pending_users')
-          .doc(_recipientEmail)
-          .set({
-        'full_name': _fullNameController.text.trim(),
-        'phone': _mobileController.text.trim(),
-        'email': _recipientEmail,
-        'password': _passwordController.text.trim(),
-        'otp': _activeOtp,
-        'created_at': FieldValue.serverTimestamp(),
-      });
-
-      bool sent = await _sendEmailOTP(
-        recipientEmail: _recipientEmail,
-        otpCode: _activeOtp,
-        subjectText: 'Account Verification - Kez C-Em Zek',
-      );
-
-      setState(() => _isLoading = false);
-
-      if (sent) {
-        _otpController.clear();
-        _startTimer();
-        setState(() => _regStep = 2);
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to send verification email. Please check your internet or email address.'),
-            backgroundColor: Color(0xFFF43F5E),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
+      await _verification.requestSignupCode(_recipientEmail);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving registration data: $e'),
+      _otpController.clear();
+      _startTimer();
+      setState(() => _regStep = 2);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error is StateError ? error.message.toString() : 'Unable to request verification. Please try again.'),
           backgroundColor: const Color(0xFFF43F5E),
-        ),
-      );
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _verifyOtpAndComplete() async {
-    if (_otpFormKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-
-      try {
-        final docRef = FirebaseFirestore.instance
-            .collection('pending_users')
-            .doc(_recipientEmail);
-
-        final doc = await docRef.get();
-
-        if (!doc.exists) {
-          setState(() => _isLoading = false);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pending registration expired or not found. Please register again.'),
-              backgroundColor: Color(0xFFF43F5E),
-            ),
-          );
-          return;
-        }
-
-        final pendingData = doc.data()!;
-
-        if (pendingData['otp'] == _otpController.text.trim()) {
-          UserCredential userCredential = await FirebaseAuth.instance
-              .createUserWithEmailAndPassword(
-            email: pendingData['email'],
-            password: pendingData['password'],
-          );
-
-          await userCredential.user?.updateDisplayName(pendingData['full_name']);
-
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userCredential.user!.uid)
-              .set({
-            'uid': userCredential.user!.uid,
-            'full_name': pendingData['full_name'],
-            'phone': pendingData['phone'],
-            'email': pendingData['email'],
-            'role': 'customer',
-            'created_at': FieldValue.serverTimestamp(),
-          });
-
-          await docRef.delete();
-
-          _countdownTimer?.cancel();
-          setState(() => _isLoading = false);
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Registration successful! You can now log in.'),
-              backgroundColor: Color(0xFF10B981),
-            ),
-          );
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-          );
-        } else {
-          setState(() => _isLoading = false);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid OTP code. Please enter the correct code.'),
-              backgroundColor: Color(0xFFF43F5E),
-            ),
-          );
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error completing registration: $e'),
-            backgroundColor: const Color(0xFFF43F5E),
-          ),
-        );
+    if (_isLoading || !_otpFormKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      await _verification.register({
+        'email': _recipientEmail,
+        'fullName': _fullNameController.text.trim(),
+        'contact': _mobileController.text.trim(),
+        'password': _passwordController.text,
+        'confirmPassword': _confirmPasswordController.text,
+        'otp': _otpController.text.trim(),
+      });
+      if (!mounted) return;
+      _countdownTimer?.cancel();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Registration successful! You can now log in.'),
+        backgroundColor: Color(0xFF10B981),
+      ));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error is StateError ? error.message.toString() : 'Unable to complete registration. Please retry the same code.'),
+          backgroundColor: const Color(0xFFF43F5E),
+        ));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -290,7 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           children: [
             Expanded(child: Text(
               label,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFCBD5E1)),
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF14532D)),
             )),
             if (isRequired)
               const Text(' *', style: TextStyle(color: Color(0xFFF43F5E), fontWeight: FontWeight.bold, fontSize: 13)),
@@ -303,7 +177,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboardType: keyboardType,
           maxLength: maxLength,
           onChanged: onChanged,
-          style: const TextStyle(fontSize: 13, color: Colors.white),
+          style: const TextStyle(fontSize: 13, color: Color(0xFF14532D)),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF4B7A5E)),
@@ -653,8 +527,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       }
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF16A34A),
+                                      backgroundColor: const Color(0xFF15803D),
                                       foregroundColor: Colors.white,
+                                      disabledBackgroundColor: const Color(0xFF15803D),
+                                      disabledForegroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                       elevation: 0,
                                     ),
@@ -784,8 +660,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _verifyOtpAndComplete,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
+                                backgroundColor: const Color(0xFF15803D),
                                 foregroundColor: Colors.white,
+                                disabledBackgroundColor: const Color(0xFF15803D),
+                                disabledForegroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),

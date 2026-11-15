@@ -1,11 +1,7 @@
+import 'forgot_password_screen.dart';
 import '../services/auth_service.dart';
 import '../widgets/google_sign_in_button.dart';
-import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dashboard_screen.dart';
 import 'register_screen.dart';
@@ -87,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(height: 10),
               Text("2. Printing Orders & Proofing", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF14532D))),
               SizedBox(height: 2),
-              Text("Customers must verify file contents, document sizes, and spelling prior to submitting orders. Printing custom jobs cannot be cancelled once processing begins.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
+              Text("Customers must verify file contents, document sizes, and spelling prior to submitting orders. Orders may be cancelled only before admin approval. New customers use GCash. Cash on Pickup unlocks after the first payment-verified, completed order.", style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
               Text("3. Unclaimed Print Items Disposal", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF14532D))),
               SizedBox(height: 2),
@@ -97,51 +93,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF15803D), foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx),
             child: const Text("I Understand & Agree"),
           ),
         ],
       ),
     );
-  }
-
-  Future<bool> _sendEmailOTP({
-    required String recipientEmail,
-    required String otpCode,
-    required String subjectText,
-  }) async {
-    const String senderEmail = 'xdawinan@gmail.com';
-    const String appPassword = 'rowb brnm dtzo oufu';
-
-    final smtpServer = gmail(senderEmail, appPassword);
-
-    final message = Message()
-      ..from = const Address(senderEmail, 'Kez C-Em Zek Printing')
-      ..recipients.add(recipientEmail)
-      ..subject = subjectText
-      ..html = '''
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #0b0f19; color: #ffffff; border-radius: 10px;">
-          <h2 style="color: #16a34a;">Kez C-Em Zek Printing Shop</h2>
-          <p>Hello,</p>
-          <p>Your password reset code is:</p>
-          <h1 style="color: #4ade80; letter-spacing: 5px;">$otpCode</h1>
-          <p style="color: #94a3b8; font-size: 12px;">This code will expire in 5 minutes.</p>
-        </div>
-      ''';
-
-    try {
-      await send(message, smtpServer);
-      return true;
-    } catch (e) {
-      debugPrint('SMTP Email Error: $e');
-      return false;
-    }
-  }
-
-  String _generate6DigitOTP() {
-    final random = Random();
-    return (100000 + random.nextInt(900000)).toString();
   }
 
   Future<void> _handleLogin() async {
@@ -159,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final email = _loginEmailController.text.trim();
-    final password = _loginPasswordController.text.trim();
+    final password = _loginPasswordController.text;
 
     setState(() => _isLoading = true);
 
@@ -177,13 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
 
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      final role = userDoc.data()?['role']?.toString().toLowerCase();
-      final isAdmin = role == 'admin';
+      final profile = await AuthService.readyProfile(user);
+      final isAdmin = profile['role'] == 'admin';
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -204,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (e.code == 'user-not-found') {
         errorMsg = 'Account not found. Please check email.';
       } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        errorMsg = 'Incorrect email or password.';
+        errorMsg = 'Incorrect email or password. Use Forgot password to set or reset your app password.';
       } else {
         errorMsg = 'Authentication error: ${e.message ?? e.code}';
       }
@@ -215,278 +168,22 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFF43F5E)),
+        SnackBar(content: Text(signInError(e)), backgroundColor: const Color(0xFFF43F5E)),
       );
     }
   }
 
-  void _showForgotPasswordModal(BuildContext context) {
-    int currentStep = 1;
-    final stepAKey = GlobalKey<FormState>();
-    final stepBKey = GlobalKey<FormState>();
-    final stepCKey = GlobalKey<FormState>();
-
-    final emailController = TextEditingController();
-    final otpController = TextEditingController();
-    final newPasswordController = TextEditingController();
-
-    Timer? countdownTimer;
-    int secondsRemaining = 60;
-    bool canResend = false;
-    bool isLoading = false;
-    String activeOtp = '';
-    String recipientEmail = '';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (bottomSheetCtx) {
-        return StatefulBuilder(
-          builder: (modalCtx, setModalState) {
-            void startTimer() {
-              setModalState(() {
-                secondsRemaining = 60;
-                canResend = false;
-              });
-              countdownTimer?.cancel();
-              countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-                if (secondsRemaining > 0) {
-                  setModalState(() => secondsRemaining--);
-                } else {
-                  setModalState(() => canResend = true);
-                  timer.cancel();
-                }
-              });
-            }
-
-            Future<void> sendOtpToEmail() async {
-              setModalState(() => isLoading = true);
-              activeOtp = _generate6DigitOTP();
-
-              bool success = await _sendEmailOTP(
-                recipientEmail: recipientEmail,
-                otpCode: activeOtp,
-                subjectText: 'Password Reset OTP - Kez C-Em Zek',
-              );
-
-              setModalState(() => isLoading = false);
-
-              if (success) {
-                startTimer();
-                setModalState(() => currentStep = 2);
-              } else {
-                if (modalCtx.mounted) {
-                  ScaffoldMessenger.of(modalCtx).showSnackBar(
-                    const SnackBar(
-                      content: Text('Failed to send OTP email. Please try again.'),
-                      backgroundColor: Color(0xFFF43F5E),
-                    ),
-                  );
-                }
-              }
-            }
-
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF0FDF4),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border(top: BorderSide(color: Color(0xFFBBF7D0))),
-                ),
-                padding: const EdgeInsets.all(22.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            currentStep == 1
-                                ? 'Forgot Password'
-                                : (currentStep == 2 ? 'Verify OTP Code' : 'Set New Password'),
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded, color: Color(0xFF4B7A5E)),
-                            onPressed: () {
-                              countdownTimer?.cancel();
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      if (currentStep == 1)
-                        Form(
-                          key: stepAKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Enter your registered Gmail address to receive a 6-digit OTP code.',
-                                style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
-                                decoration: _buildDarkInputDecoration('Registered Email Address', Icons.email_outlined),
-                                validator: (v) => AppValidators.validateEmail(v),
-                              ),
-                              const SizedBox(height: 18),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 46,
-                                child: ElevatedButton(
-                                  onPressed: isLoading
-                                      ? null
-                                      : () async {
-                                    if (stepAKey.currentState!.validate()) {
-                                      recipientEmail = emailController.text.trim();
-                                      await sendOtpToEmail();
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF16A34A),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  child: isLoading
-                                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                      : const Text('Send Reset OTP', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (currentStep == 2)
-                        Form(
-                          key: stepBKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Code sent to: $recipientEmail',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: otpController,
-                                keyboardType: TextInputType.number,
-                                maxLength: 6,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 8, color: Color(0xFF14532D)),
-                                decoration: _buildDarkInputDecoration('Enter 6-digit OTP', Icons.security_rounded),
-                                validator: (v) => (v == null || v.trim().length != 6) ? 'Enter valid 6-digit OTP' : null,
-                              ),
-                              const SizedBox(height: 14),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    secondsRemaining > 0 ? 'Resend in ${secondsRemaining}s' : 'Code expired',
-                                    style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-                                  ),
-                                  TextButton(
-                                    onPressed: canResend && !isLoading ? () async => await sendOtpToEmail() : null,
-                                    child: Text(
-                                      'Resend OTP',
-                                      style: TextStyle(
-                                        color: canResend ? const Color(0xFF15803D) : const Color(0xFF86EFAC),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 46,
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    if (stepBKey.currentState!.validate()) {
-                                      if (otpController.text.trim() == activeOtp) {
-                                        countdownTimer?.cancel();
-                                        setModalState(() => currentStep = 3);
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Invalid OTP code. Please check your email.'),
-                                            backgroundColor: Color(0xFFF43F5E),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF16A34A),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  child: const Text('Verify Code', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (currentStep == 3)
-                        Form(
-                          key: stepCKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Create a new secure password for your account.', style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: newPasswordController,
-                                obscureText: true,
-                                style: const TextStyle(color: Color(0xFF14532D), fontSize: 13),
-                                decoration: _buildDarkInputDecoration('New Password', Icons.lock_outline_rounded),
-                                validator: (v) => (v == null || v.length < 6) ? 'Password must be at least 6 characters' : null,
-                              ),
-                              const SizedBox(height: 18),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 46,
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (stepCKey.currentState!.validate()) {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Password updated. Please log in with your new password.'),
-                                          backgroundColor: Color(0xFF10B981),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF10B981),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  child: const Text('Save New Password', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+  Future<void> _showForgotPasswordModal(BuildContext context) async {
+    final changed = await showModalBottomSheet<bool>(context: context,
+      isScrollControlled: true, useSafeArea: true, isDismissible: false, enableDrag: false,
+      builder: (_) => SizedBox(height: MediaQuery.sizeOf(context).height * .9,
+        child: ForgotPasswordScreen(initialEmail: _loginEmailController.text.trim())));
+    if (changed == true && mounted && context.mounted) {
+      _loginPasswordController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Password updated. Sign in with your email and new app password.'),
+        backgroundColor: Color(0xFF15803D)));
+    }
   }
 
   @override
@@ -560,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Welcome Back',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFF14532D),
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.2,
@@ -695,8 +392,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _handleLogin,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF16A34A),
+                                    backgroundColor: const Color(0xFF15803D),
                                     foregroundColor: Colors.white,
+                                    disabledBackgroundColor: const Color(0xFF15803D),
+                                    disabledForegroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     elevation: 0,
                                     shadowColor: const Color(0xFF16A34A).withValues(alpha: 0.5),

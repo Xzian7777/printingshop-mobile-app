@@ -1,5 +1,4 @@
 import '../services/loyalty_api.dart';
-import '../services/app_notifications.dart';
 import '../services/store_price.dart';
 import '../services/order_number_input_formatter.dart';
 import '../widgets/store_checkout_sheet.dart';
@@ -154,7 +153,7 @@ class _StoreScreenState extends State<StoreScreen> {
           ? ''
           : await SupabaseStorageService.uploadFile(
               file: payment.receipt!,
-              originalFilename: payment.receiptName,
+              originalFilename: payment.receiptName, purpose: 'receipt',
               orderId: orderId),
       'merchantAccountNumber': payment.merchantAccount,
       'status': 'Order Submitted',
@@ -163,39 +162,13 @@ class _StoreScreenState extends State<StoreScreen> {
       'orderDate': "${_formatMonthDayYear(now)} • ${_formatHourMinute(now)}",
     };
 
-    // Write to shared orders collection: artifacts/printcraft-pro/public/data/orders
-    final orderRef = _db
-        .collection('artifacts')
-        .doc('printcraft-pro')
-        .collection('public')
-        .doc('data')
-        .collection('orders')
-        .doc(orderId);
-    if (payment.pointsUsed > 0) {
-      _loyaltyKey ??= LoyaltyApi.submissionId();
-      final saved = await LoyaltyApi.submitOrder({...orderPayload, 'submissionId': _loyaltyKey, 'pointsUsed': payment.pointsUsed, 'expectedDiscount': payment.pointsDiscount});
-      orderId = saved['orderId'];
-      _loyaltyKey = null;
-    } else {
-    await _db.runTransaction((transaction) async {
-      if (payment.method == 'GCash') {
-        final merchant = await transaction
-            .get(_db.collection('settings').doc('gcash_config'));
-        if (merchant.data()?['isActive'] == false ||
-            merchant.data()?['accountNumber'] != payment.merchantAccount) {
-          throw StateError(
-              'GCash details changed. Review the current merchant account before ordering.');
-        }
-      }
-      final existing = await transaction.get(orderRef);
-      if (existing.exists) {
-        throw StateError(
-            'Order reference already exists. Please retry to generate a new reference.');
-      }
-      transaction.set(orderRef, orderPayload);
-      addNewOrderNotification(transaction, _db, orderRef.id, orderPayload);
+    _loyaltyKey ??= LoyaltyApi.submissionId();
+    final saved = await LoyaltyApi.submitOrder({
+      ...orderPayload, 'submissionId': _loyaltyKey,
+      'pointsUsed': payment.pointsUsed, 'expectedDiscount': payment.pointsDiscount,
     });
-    }
+    orderId = saved['orderId'];
+    _loyaltyKey = null;
 
     if (!mounted) return;
     setState(() => _cart.clear());
@@ -279,7 +252,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   return;
                 final f = selected.files.single;
                 final url = await SupabaseStorageService.uploadFile(
-                    file: File(f.path!), originalFilename: f.name);
+                    file: File(f.path!), originalFilename: f.name, purpose: 'catalog');
                 if (mounted) image.text = url;
               } catch (e) {
                 if (mounted)

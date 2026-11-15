@@ -1,3 +1,4 @@
+import 'package:printingshop/services/payment_eligibility.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -106,12 +107,12 @@ void main() {
         theme: DashboardTheme.light,
         home: Scaffold(
             body: StoreCheckoutSheet(
-                cart: const {
-              'p1': 1
-            },
+                paymentEligibility: Future.value(const PaymentEligibility(
+                    cashOnPickupAllowed: true, hasOrders: true)),
+                cart: const {'p1': 1},
                 products: const {
-              'p1': {'name': 'Wagyu', 'price': 5.6e150, 'stock': 12}
-            },
+                  'p1': {'name': 'Wagyu', 'price': 5.6e150, 'stock': 12}
+                },
                 merchantSettings: Stream.value(const {'isActive': false}),
                 onCartChanged: (_) {},
                 onCheckout: (_, entries, total, payment) async {

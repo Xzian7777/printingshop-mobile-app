@@ -1,6 +1,7 @@
 # Miscellaneous
 *.class
 *.log
+*.logs
 *.pyc
 *.swp
 .DS_Store
@@ -46,3 +47,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+/android/key.properties
+*.jks
+*.keystore
+/release-signing-fingerprints.txt

@@ -1,324 +1,255 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../services/password_reset_service.dart';
+import '../theme/dashboard_theme.dart';
+import '../utils/validators.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
-
+  const ForgotPasswordScreen({super.key, this.initialEmail = '', this.service});
+  final String initialEmail;
+  final PasswordResetService? service;
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  int _currentStep = 1; // Step 1: Identity, Step 2: OTP, Step 3: Reset Password
-
-  // Step A Controllers
-  final TextEditingController _identityController = TextEditingController();
-
-  // Step B Controllers
-  final TextEditingController _otpController = TextEditingController();
+  late final _service = widget.service ?? PasswordResetService();
+  late final _email = TextEditingController(text: widget.initialEmail);
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  final _form = GlobalKey<FormState>();
   Timer? _timer;
-  int _secondsRemaining = 60;
-  bool _canResend = false;
-  String _generatedOtp = '';
-  DateTime? _otpTime;
-
-  // Step C Controllers
-  final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmNewPasswordController = TextEditingController();
-  bool _obscureNewPass = true;
-  bool _obscureConfirmPass = true;
-
-  final _formKeyA = GlobalKey<FormState>();
-  final _formKeyB = GlobalKey<FormState>();
-  final _formKeyC = GlobalKey<FormState>();
-
-  String _maskedContact = '';
+  int _step = 1, _remaining = 0;
+  bool _busy = false, _obscure = true;
+  String? _error;
+  String _verifiedCode = '';
+  String get _address => _email.text.trim().toLowerCase();
 
   @override
   void dispose() {
     _timer?.cancel();
+    for (final controller in [_email, _code, _password, _confirm]) {
+      controller.dispose();
+    }
+    if (widget.service == null) _service.close();
     super.dispose();
   }
 
-  // --- STEP A HANDLER ---
-  void _submitStepA() {
-    if (_formKeyA.currentState!.validate()) {
-      final input = _identityController.text.trim();
-      _maskedContact = _maskContact(input);
-
-      _sendDualOtp();
-      _startTimer();
-
-      setState(() {
-        _currentStep = 2;
-      });
-    }
-  }
-
-  // --- STEP B HANDLER ---
-  void _submitStepB() {
-    if (_formKeyB.currentState!.validate()) {
-      // Expiration check (5 minutes = 300 seconds)
-      if (_otpTime != null && DateTime.now().difference(_otpTime!).inSeconds > 300) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('The verification code has expired. Please request a new code.')),
-        );
+  void _startCooldown() {
+    _timer?.cancel();
+    _remaining = 60;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
         return;
       }
+      setState(() => _remaining--);
+      if (_remaining == 0) timer.cancel();
+    });
+  }
 
-      if (_otpController.text.trim() == _generatedOtp) {
-        _timer?.cancel();
-        setState(() {
-          _currentStep = 3;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Incorrect verification code. Please try again.')),
-        );
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await action();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error is StateError
+            ? error.message.toString()
+            : 'Unable to complete password recovery. Check your connection and try again.');
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  // --- STEP C HANDLER ---
-  void _submitStepC() {
-    if (_formKeyC.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset successfully. You can now sign in.'),
-          backgroundColor: Color(0xFF059669),
-        ),
-      );
+  Future<void> _requestCode() async {
+    if (_step == 1 && !_form.currentState!.validate()) return;
+    await _run(() async {
+      await _service.requestCode(_address);
+      if (!mounted) return;
+      _code.clear();
+      _verifiedCode = '';
+      setState(() {
+        _step = 2;
+        _startCooldown();
+      });
+    });
+  }
+
+  Future<void> _verify() async {
+    if (!_form.currentState!.validate()) return;
+    await _run(() async {
+      final code = _code.text.trim();
+      await _service.verifyCode(_address, code);
+      if (mounted) {
+        setState(() {
+          _verifiedCode = code;
+          _step = 3;
+        });
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_form.currentState!.validate()) return;
+    await _run(() async {
+      await _service.resetPassword(_address, _verifiedCode, _password.text);
+      if (mounted) Navigator.pop(context, true);
+    });
+  }
+
+  void _back() {
+    if (_busy) return;
+    if (_step > 1) {
+      setState(() {
+        _step--;
+        _error = null;
+      });
+    } else {
       Navigator.pop(context);
     }
   }
 
-  void _sendDualOtp() {
-    // Generate 6-digit dummy OTP code for demo/testing
-    _generatedOtp = '123456';
-    _otpTime = DateTime.now();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Dual OTP Code sent to $_maskedContact (Demo Code: $_generatedOtp)'),
-        backgroundColor: const Color(0xFF2563EB),
-      ),
-    );
-  }
-
-  void _startTimer() {
-    setState(() {
-      _secondsRemaining = 60;
-      _canResend = false;
-    });
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsRemaining > 0) {
-        setState(() => _secondsRemaining--);
-      } else {
-        setState(() => _canResend = true);
-        timer.cancel();
-      }
-    });
-  }
-
-  String _maskContact(String value) {
-    if (value.contains('@')) {
-      final parts = value.split('@');
-      if (parts[0].length <= 2) return value;
-      return '${parts[0].substring(0, 2)}***@${parts[1]}';
-    } else {
-      if (value.length < 11) return value;
-      return '${value.substring(0, 4)}***${value.substring(8)}';
-    }
-  }
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text('Password Recovery', style: TextStyle(color: Color(0xFFF0FDF4), fontWeight: FontWeight.bold, fontSize: 16)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFFF0FDF4)),
-          onPressed: () {
-            if (_currentStep > 1) {
-              setState(() => _currentStep--);
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_currentStep == 1) _buildStepA(),
-              if (_currentStep == 2) _buildStepB(),
-              if (_currentStep == 3) _buildStepC(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- STEP A UI: IDENTIFICATION ---
-  Widget _buildStepA() {
-    return Form(
-      key: _formKeyA,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Forgot Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFF0FDF4))),
-          const SizedBox(height: 6),
-          const Text('Enter your registered Email or PH Mobile Number to receive a dual verification code.', style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _identityController,
-            decoration: _buildInputDecoration('Registered Email or Mobile (09XX...)', Icons.person_search_rounded),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Enter your email or mobile number';
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _submitStepA,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Send Verification Code', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- STEP B UI: OTP VERIFICATION ---
-  Widget _buildStepB() {
-    return Form(
-      key: _formKeyB,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Enter OTP Code', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFF0FDF4))),
-          const SizedBox(height: 6),
-          Text('We sent a 6-digit verification code to: $_maskedContact', style: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _otpController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 8),
-            decoration: _buildInputDecoration('6-Digit Code', Icons.security_rounded).copyWith(counterText: ''),
-            validator: (value) {
-              if (value == null || value.trim().length != 6) return 'Enter 6-digit OTP code';
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _submitStepB,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Verify OTP', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: TextButton(
-              onPressed: _canResend ? () { _sendDualOtp(); _startTimer(); } : null,
-              child: Text(
-                _canResend ? 'Resend Code' : 'Resend Code in ${_secondsRemaining}s',
-                style: TextStyle(
-                  color: _canResend ? const Color(0xFFE11D48) : const Color(0xFF4B7A5E),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- STEP C UI: SET NEW PASSWORD ---
-  Widget _buildStepC() {
-    return Form(
-      key: _formKeyC,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Set New Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFF0FDF4))),
-          const SizedBox(height: 6),
-          const Text('Create a strong new password for your print shop account.', style: TextStyle(fontSize: 12, color: Color(0xFF4B7A5E))),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _newPasswordController,
-            obscureText: _obscureNewPass,
-            decoration: _buildInputDecoration('New Password', Icons.lock_outline_rounded).copyWith(
-              suffixIcon: IconButton(
-                icon: Icon(_obscureNewPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF4B7A5E)),
-                onPressed: () => setState(() => _obscureNewPass = !_obscureNewPass),
-              ),
-            ),
-            validator: (value) {
-              if (value == null || value.length < 6) return 'Password must be at least 6 characters';
-              return null;
-            },
-          ),
-          const SizedBox(height: 14),
-          TextFormField(
-            controller: _confirmNewPasswordController,
-            obscureText: _obscureConfirmPass,
-            decoration: _buildInputDecoration('Confirm New Password', Icons.lock_reset_rounded).copyWith(
-              suffixIcon: IconButton(
-                icon: Icon(_obscureConfirmPass ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF4B7A5E)),
-                onPressed: () => setState(() => _obscureConfirmPass = !_obscureConfirmPass),
-              ),
-            ),
-            validator: (value) {
-              if (value != _newPasswordController.text) return 'Passwords do not match';
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _submitStepC,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Reset Password', style: TextStyle(color: Color(0xFF14532D), fontWeight: FontWeight.bold, fontSize: 14)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)),
-      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF4B7A5E)),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF14532D))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
-      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48))),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1.5)),
-    );
-  }
+  Widget build(BuildContext context) => Theme(
+        data: DashboardTheme.light,
+        child: PopScope(
+            canPop: !_busy,
+            child: Scaffold(
+              appBar: AppBar(
+                  title: const Text('Password recovery'),
+                  leading: IconButton(
+                      onPressed: _busy ? null : _back,
+                      icon: const Icon(Icons.arrow_back_rounded))),
+              body: SafeArea(
+                  child: SingleChildScrollView(
+                padding: const EdgeInsets.all(22),
+                child: Form(
+                    key: _form,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_busy) const LinearProgressIndicator(),
+                          Text(
+                              _step == 1
+                                  ? 'Forgot password'
+                                  : _step == 2
+                                      ? 'Verify your email'
+                                      : 'Set your app password',
+                              style: const TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 8),
+                          Text(_step == 1
+                              ? 'Enter your registered email to receive a verification code.'
+                              : _step == 2
+                                  ? 'Enter the six-digit code sent to $_address. The code is valid for five minutes.'
+                                  : 'Use this password to sign in with your email. Your Google sign-in uses the same account.'),
+                          const SizedBox(height: 20),
+                          if (_error != null)
+                            Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Text(_error!,
+                                    style: const TextStyle(
+                                        color: Color(0xFFBE123C)))),
+                          if (_step == 1)
+                            TextFormField(
+                                controller: _email,
+                                enabled: !_busy,
+                                keyboardType: TextInputType.emailAddress,
+                                autofillHints: const [AutofillHints.email],
+                                decoration: const InputDecoration(
+                                    labelText: 'Registered email',
+                                    prefixIcon: Icon(Icons.email_outlined)),
+                                validator: AppValidators.validateEmail),
+                          if (_step == 2) ...[
+                            TextFormField(
+                                controller: _code,
+                                enabled: !_busy,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(6)
+                                ],
+                                decoration: const InputDecoration(
+                                    labelText: 'Verification code',
+                                    prefixIcon: Icon(Icons.security)),
+                                validator: (value) => value == null ||
+                                        !RegExp(r'^\d{6}$').hasMatch(value)
+                                    ? 'Enter the six-digit verification code.'
+                                    : null),
+                            Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                    onPressed: _busy || _remaining > 0
+                                        ? null
+                                        : _requestCode,
+                                    child: Text(_remaining > 0
+                                        ? 'Resend in ${_remaining}s'
+                                        : 'Resend code'))),
+                          ],
+                          if (_step == 3) ...[
+                            TextFormField(
+                                controller: _password,
+                                enabled: !_busy,
+                                obscureText: _obscure,
+                                autofillHints: const [
+                                  AutofillHints.newPassword
+                                ],
+                                decoration: InputDecoration(
+                                    labelText: 'New password',
+                                    suffixIcon: IconButton(
+                                        onPressed: _busy
+                                            ? null
+                                            : () => setState(
+                                                () => _obscure = !_obscure),
+                                        icon: Icon(_obscure
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined))),
+                                validator: (value) =>
+                                    validateResetPassword(value, _address)),
+                            const SizedBox(height: 8),
+                            const Text(
+                                '8–32 characters, uppercase and lowercase letters, and a number or symbol.',
+                                style: TextStyle(
+                                    fontSize: 12, color: DashboardTheme.muted)),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                                controller: _confirm,
+                                enabled: !_busy,
+                                obscureText: true,
+                                decoration: const InputDecoration(
+                                    labelText: 'Confirm new password'),
+                                validator: (value) => value != _password.text
+                                    ? 'Passwords do not match.'
+                                    : null),
+                          ],
+                          const SizedBox(height: 24),
+                          SizedBox(
+                              height: 48,
+                              child: FilledButton(
+                                  onPressed: _busy
+                                      ? null
+                                      : _step == 1
+                                          ? _requestCode
+                                          : _step == 2
+                                              ? _verify
+                                              : _save,
+                                  child: Text(_busy
+                                      ? 'Please wait…'
+                                      : _step == 1
+                                          ? 'Send verification code'
+                                          : _step == 2
+                                              ? 'Verify code'
+                                              : 'Save new password'))),
+                        ])),
+              )),
+            )),
+      );
 }

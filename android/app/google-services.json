@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "800500466642-8gj791jdsv225fu4eud10msread8odl6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.printingshop",
+            "certificate_hash": "1ad279d3884c2a999d734a9a487337ca8bc1ca5b"
+          }
+        },
+        {
           "client_id": "800500466642-sb5rbcsg9rpeoq970v99iocmfmdj0kbe.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

@@ -1,4 +1,5 @@
 import 'points_selector.dart';
+import '../services/payment_eligibility.dart';
 import '../services/store_price.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -34,6 +35,7 @@ String gcashQrSource(Map<String, dynamic> settings) {
 }
 
 class StoreCheckoutSheet extends StatefulWidget {
+  final Future<PaymentEligibility>? paymentEligibility;
   final Map<String, int> cart;
   final Map<String, Map<String, dynamic>> products;
   final Stream<Map<String, dynamic>> merchantSettings;
@@ -42,6 +44,7 @@ class StoreCheckoutSheet extends StatefulWidget {
       StorePaymentDetails) onCheckout;
   const StoreCheckoutSheet(
       {super.key,
+      this.paymentEligibility,
       required this.cart,
       required this.products,
       required this.merchantSettings,
@@ -54,13 +57,48 @@ class StoreCheckoutSheet extends StatefulWidget {
 class _StoreCheckoutSheetState extends State<StoreCheckoutSheet> {
   late final Map<String, int> cart = Map.of(widget.cart);
   final reference = TextEditingController();
-  String method = 'Cash on Pickup';
+  String method = 'GCash';
+  bool cashAllowed = false;
+  bool eligibilityLoading = true;
+  String? eligibilityError;
   int pointsUsed = 0;
   double pointsDiscount = 0;
   File? receipt;
   String receiptName = '';
   String? error;
   bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEligibility();
+  }
+
+  Future<void> _loadEligibility() async {
+    setState(() {
+      eligibilityLoading = true;
+      eligibilityError = null;
+    });
+    try {
+      final result =
+          await (widget.paymentEligibility ?? PaymentEligibility.load());
+      if (mounted)
+        setState(() {
+          cashAllowed = result.cashOnPickupAllowed;
+          method = cashAllowed ? 'Cash on Pickup' : 'GCash';
+        });
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          cashAllowed = false;
+          method = 'GCash';
+          eligibilityError =
+              'Unable to check payment options. Check your connection and retry.';
+        });
+    } finally {
+      if (mounted) setState(() => eligibilityLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -102,6 +140,10 @@ class _StoreCheckoutSheetState extends State<StoreCheckoutSheet> {
   Future<void> checkout(Map<String, dynamic> merchant,
       List<MapEntry<String, int>> entries, double total) async {
     if (busy) return;
+    if (method == 'Cash on Pickup' && !cashAllowed) {
+      setState(() => error = PaymentEligibility.lockedMessage);
+      return;
+    }
     final issue = OrderValidation.validatePayment(method, reference.text);
     if (issue != null) {
       setState(() => error = issue);
@@ -110,7 +152,9 @@ class _StoreCheckoutSheetState extends State<StoreCheckoutSheet> {
     if (method == 'GCash' &&
         (merchant['isActive'] == false ||
             (merchant['accountNumber'] ?? '').toString().isEmpty)) {
-      setState(() => error = 'GCash is unavailable. Choose Cash on Pickup.');
+      setState(() => error = cashAllowed
+          ? 'GCash is unavailable. Choose Cash on Pickup.'
+          : 'GCash is unavailable. Contact the shop to arrange your first payment.');
       return;
     }
     setState(() {
@@ -289,6 +333,8 @@ class _StoreCheckoutSheetState extends State<StoreCheckoutSheet> {
                                       label: Text(payment),
                                       selected: method == payment,
                                       onSelected: busy ||
+                                              (payment == 'Cash on Pickup' &&
+                                                  !cashAllowed) ||
                                               (payment == 'GCash' &&
                                                   !gcashReady)
                                           ? null
@@ -303,6 +349,28 @@ class _StoreCheckoutSheetState extends State<StoreCheckoutSheet> {
                                               : DashboardTheme.muted),
                                       backgroundColor: const Color(0xFFF1F5F3)))
                                   .toList()),
+                          if (eligibilityLoading)
+                            const Text('Checking Cash on Pickup eligibility…'),
+                          if (!eligibilityLoading && !cashAllowed)
+                            const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Text(PaymentEligibility.lockedMessage,
+                                    style: TextStyle(
+                                        color: DashboardTheme.muted))),
+                          if (eligibilityError != null) ...[
+                            Text(eligibilityError!,
+                                style:
+                                    const TextStyle(color: Color(0xFFBE123C))),
+                            TextButton(
+                                onPressed: busy ? null : _loadEligibility,
+                                child: const Text('Retry payment options')),
+                          ],
+                          if (!cashAllowed && eligibilityError == null)
+                            TextButton(
+                                onPressed: busy || eligibilityLoading
+                                    ? null
+                                    : _loadEligibility,
+                                child: const Text('Refresh payment options')),
                           if (!gcashReady)
                             Padding(
                                 padding: const EdgeInsets.only(top: 8),
@@ -391,7 +459,12 @@ class _StoreCheckoutSheetState extends State<StoreCheckoutSheet> {
                           ],
                           const SizedBox(height: 16),
                         ]))),
-                    PointsSelector(subtotal: total, onChanged: (value) => setState(() => pointsUsed = value), onDiscountChanged: (value) => setState(() => pointsDiscount = value)),
+                    PointsSelector(
+                        subtotal: total,
+                        onChanged: (value) =>
+                            setState(() => pointsUsed = value),
+                        onDiscountChanged: (value) =>
+                            setState(() => pointsDiscount = value)),
                     const Divider(),
                     if (displayError != null)
                       Padding(

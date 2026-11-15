@@ -308,14 +308,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
+                                    const Expanded(child: Text(
                                       'Print Services',
                                       style: TextStyle(
                                         color: Color(0xFF4B7A5E),
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                       ),
-                                    ),
+                                    )),
                                     Container(
                                       width: 20,
                                       height: 20,
@@ -325,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       ),
                                       child: const Icon(
                                         Icons.north_east_rounded,
-                                        color: Colors.white,
+                                        color: Color(0xFF15803D),
                                         size: 11,
                                       ),
                                     ),
@@ -335,7 +335,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 const Text(
                                   'Unparalleled\nQuality Proofing',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: Color(0xFF14532D),
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.bold,
                                     height: 1.25,
@@ -345,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 const Text(
                                   '100% Guaranteed',
                                   style: TextStyle(
-                                    color: Color(0xFF4ADE80),
+                                    color: Color(0xFF15803D),
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -368,14 +368,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
+                                    const Expanded(child: Text(
                                       'Order Tracking',
                                       style: TextStyle(
                                         color: Color(0xFF4B7A5E),
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                       ),
-                                    ),
+                                    )),
                                     Container(
                                       width: 20,
                                       height: 20,
@@ -385,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       ),
                                       child: const Icon(
                                         Icons.north_east_rounded,
-                                        color: Colors.white,
+                                        color: Color(0xFF15803D),
                                         size: 11,
                                       ),
                                     ),
@@ -395,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 const Text(
                                   '99.4%',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: Color(0xFF14532D),
                                     fontSize: 18,
                                     fontWeight: FontWeight.w900,
                                   ),

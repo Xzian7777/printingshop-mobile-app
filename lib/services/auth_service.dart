@@ -14,8 +14,13 @@ class SignInFailure implements Exception {
   String toString() => message;
 }
 
-String googleSignInError(Object error) {
+String googleSignInError(Object error) => signInError(error, google: true);
+
+String signInError(Object error, {bool google = false}) {
   if (error is SignInFailure) return error.message;
+  if (error is StateError || error is FormatException) {
+    return loyaltyErrorMessage(error);
+  }
   if (error is GoogleSignInException) {
     if (error.code == GoogleSignInExceptionCode.clientConfigurationError ||
         error.code == GoogleSignInExceptionCode.providerConfigurationError) {
@@ -38,18 +43,30 @@ String googleSignInError(Object error) {
       return 'This account is disabled. Contact the shop administrator.';
     }
     if (error.code == 'operation-not-allowed') {
-      return 'Google sign-in is unavailable. Contact the shop administrator.';
+      return google
+          ? 'Google sign-in is unavailable. Contact the shop administrator.'
+          : 'Email and password sign-in is unavailable. Contact the shop administrator.';
     }
     if (error.code == 'network-request-failed') {
       return 'Unable to connect. Check your internet connection and try again.';
     }
   }
+  if (error is FirebaseException && error.plugin == 'cloud_firestore') {
+    if (error.code == 'resource-exhausted') {
+      return 'Account data is temporarily unavailable because the shop has reached its Firestore quota. Please try again later.';
+    }
+    return 'Unable to load your account profile. Check your connection and try again later.';
+  }
   if (error is SocketException ||
       error is TimeoutException ||
       error is http.ClientException) {
-    return 'Unable to reach the shop server. Check your connection and try Continue with Google again.';
+    return google
+        ? 'Unable to reach the shop server. Check your connection and try Continue with Google again.'
+        : 'Unable to reach the shop server. Check your connection and try signing in again.';
   }
-  return 'Unable to finish Google sign-in. Please try Continue with Google again.';
+  return google
+      ? 'Unable to finish Google sign-in. Please try Continue with Google again.'
+      : 'Unable to finish sign-in. Check your connection and try again.';
 }
 
 Map<String, dynamic> googleProfileResponse(http.Response response, String uid) {
@@ -225,28 +242,17 @@ class AuthService {
           return await _synchronize(user);
         }
       }
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final data = snapshot.data() ?? {};
-      if (data['archived'] == true ||
-          data['isArchived'] == true ||
-          data['disabled'] == true) {
-        throw const SignInFailure(
-            'This account is archived or disabled. Contact the shop administrator.');
+      final result = await LoyaltyApi.call('/api/auth/me');
+      final profile = Map<String, dynamic>.from(result['user'] as Map);
+      if (profile['uid'] != user.uid || !['admin', 'customer'].contains(profile['role'])) {
+        throw const SignInFailure('Your account profile needs review. Contact the shop administrator.');
       }
-      final profile = <String, dynamic>{
-        'uid': user.uid,
-        'email': user.email ?? data['email'] ?? '',
-        'role': data['role'] == 'admin' ? 'admin' : 'customer'
-      };
       _profiles[user.uid] = profile;
       return profile;
     } catch (error) {
-      restorationError = googleSignInError(error);
+      restorationError = signInError(error);
       if (FirebaseAuth.instance.currentUser?.uid == user.uid) await signOut();
-      throw SignInFailure(googleSignInError(error));
+      throw SignInFailure(signInError(error));
     } finally {
       _restoring.remove(user.uid);
     }

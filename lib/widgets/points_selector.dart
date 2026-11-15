@@ -32,16 +32,6 @@ class _PointsSelectorState extends State<PointsSelector> {
   void initState() {
     super.initState();
     load();
-    if (widget.customer == null && LoyaltyApi.baseUrl.isNotEmpty) {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null)
-        subscription = FirebaseFirestore.instance
-            .collection('loyalty_accounts')
-            .doc(uid)
-            .snapshots()
-            .skip(1)
-            .listen((_) => load(), onError: (_) {});
-    }
   }
 
   @override
@@ -66,6 +56,17 @@ class _PointsSelectorState extends State<PointsSelector> {
     try {
       final result =
           widget.customer ?? await LoyaltyApi.call('/api/loyalty/me');
+      if (widget.customer == null && mounted) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          subscription ??= FirebaseFirestore.instance
+              .collection('loyalty_accounts')
+              .doc(uid)
+              .snapshots()
+              .skip(1)
+              .listen((_) => load(), onError: (_) {});
+        }
+      }
       if (mounted) {
         setState(() {
           account = result;
@@ -108,9 +109,12 @@ class _PointsSelectorState extends State<PointsSelector> {
             type: MaterialType.transparency,
             child: SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Use Points'),
-                subtitle: Text(error ??
-                    '$available available · maximum $limit points (50%)'),
+                title: const Text('Use Points',
+                    style: TextStyle(color: DashboardTheme.ink)),
+                subtitle: Text(
+                    error ??
+                        '$available available · maximum $limit points (50%)',
+                    style: const TextStyle(color: DashboardTheme.muted)),
                 value: enabled,
                 onChanged: account == null || limit == 0
                     ? null
@@ -125,6 +129,7 @@ class _PointsSelectorState extends State<PointsSelector> {
           TextField(
               controller: controller,
               keyboardType: TextInputType.number,
+              style: const TextStyle(color: DashboardTheme.ink),
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(16)
@@ -137,13 +142,16 @@ class _PointsSelectorState extends State<PointsSelector> {
                       controller.text = '$limit';
                     change();
                   })),
-        Text('Subtotal ₱${widget.subtotal.toStringAsFixed(2)}'),
-        Text('Points discount ₱${discount.toStringAsFixed(2)}'),
+        Text('Subtotal ₱${widget.subtotal.toStringAsFixed(2)}',
+            style: const TextStyle(color: DashboardTheme.ink)),
+        Text('Points discount ₱${discount.toStringAsFixed(2)}',
+            style: const TextStyle(color: DashboardTheme.ink)),
         Text('To pay ₱${(widget.subtotal - discount).toStringAsFixed(2)}',
             style: const TextStyle(
                 fontWeight: FontWeight.w700, color: DashboardTheme.green)),
         if (account != null)
-          Text('Available after reservation ${available - points} points'),
+          Text('Available after reservation ${available - points} points',
+              style: const TextStyle(color: DashboardTheme.muted)),
       ]),
     );
   }

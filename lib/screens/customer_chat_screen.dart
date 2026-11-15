@@ -1,3 +1,4 @@
+import '../services/loyalty_api.dart';
 import '../services/app_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,7 +29,9 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
 
-  late final String _convId;
+  String _convId = '';
+  bool _conversationLoading = true;
+  String? _conversationError;
   late final String _customerEmailClean;
   late final String _customerName;
 
@@ -39,13 +42,30 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
   void initState() {
     super.initState();
     _customerEmailClean = widget.userEmail.trim().toLowerCase();
-    _convId = getSafeConversationId(_customerEmailClean);
     _customerName = _customerEmailClean.contains('@')
         ? _customerEmailClean.split('@').first
         : _customerEmailClean;
 
     // Mark customer unread count to 0 and update read flags
-    _markConversationAsRead();
+    _initializeConversation();
+  }
+
+  Future<void> _initializeConversation() async {
+    setState(() { _conversationLoading = true; _conversationError = null; });
+    try {
+      final result = await LoyaltyApi.call('/api/chat/my-conversation?metadataOnly=1');
+      if (!mounted) return;
+      setState(() {
+        _convId = (result['conversation'] as Map)['id'] as String;
+        _conversationLoading = false;
+      });
+      await _markConversationAsRead();
+    } catch (error) {
+      if (mounted) setState(() {
+        _conversationLoading = false;
+        _conversationError = error is StateError ? error.message.toString() : 'Unable to open your conversation. Please try again.';
+      });
+    }
   }
 
   @override
@@ -65,25 +85,6 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
           'unreadCountCustomer': 0,
           'customerUnread': false,
         });
-      } else {
-        // Initialize the conversation document matching the web backend structure
-        final nowIso = DateTime.now().toIso8601String();
-        await convDoc.set({
-          'id': _convId,
-          'customerId': 'CUST-${DateTime.now().millisecondsSinceEpoch}',
-          'customerEmail': _customerEmailClean,
-          'customerName': _customerName,
-          'customerPhone': '',
-          'lastMessage': '',
-          'lastMessageSender': '',
-          'lastMessageSenderName': '',
-          'lastMessageAt': nowIso,
-          'updatedAt': nowIso,
-          'createdAt': nowIso,
-          'unreadCountAdmin': 0,
-          'unreadCountCustomer': 0,
-          'customerUnread': false,
-        }, SetOptions(merge: true));
       }
 
       // Mark unread admin messages as read in subcollection
@@ -204,6 +205,18 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_conversationLoading || _conversationError != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FFF9),
+        appBar: AppBar(title: const Text('Live Chat')),
+        body: Center(child: _conversationLoading
+          ? const CircularProgressIndicator()
+          : Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(padding: const EdgeInsets.all(24), child: Text(_conversationError!, textAlign: TextAlign.center)),
+              ElevatedButton(onPressed: _initializeConversation, child: const Text('Retry')),
+            ])),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF8FFF9),
       appBar: AppBar(

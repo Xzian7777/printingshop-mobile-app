@@ -1,13 +1,69 @@
-import 'app_notifications.dart';
+import 'loyalty_api.dart';
+import 'dart:async';
+import 'profile_directory.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'local_db_service.dart';
-import 'order_reference.dart';
 import 'dart:convert';
 
 class OrderRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final LocalDbService _localDb = LocalDbService.instance;
+
+  Stream<List<ProfileRecord>> watchOrders(Query query,
+      {required bool includeLegacy}) {
+    StreamSubscription? subscription;
+    Timer? timer;
+    String? revision;
+    final current = <String, ProfileRecord>{};
+    final legacy = <String, ProfileRecord>{};
+    late StreamController<List<ProfileRecord>> controller;
+    void emit() {
+      if (controller.hasListener)
+        controller.add({...legacy, ...current}.values.toList());
+    }
+
+    Future<void> refreshLegacy() async {
+      try {
+        final result = await LoyaltyApi.call(
+            '/api/orders/history${revision == null ? '' : '?revision=$revision'}');
+        if (!controller.hasListener || result['notModified'] == true) return;
+        revision = result['revision'] as String?;
+        legacy.clear();
+        for (final value in result['orders'] as List) {
+          final data = Map<String, dynamic>.from(value as Map);
+          if (data['ownershipReviewRequired'] == true)
+            legacy['${data['id']}'] = ProfileRecord('${data['id']}', data);
+        }
+        emit();
+        if (legacy.isEmpty) timer?.cancel();
+      } catch (_) {
+        // Canonical owner-filtered live orders remain available during a server outage.
+      }
+    }
+
+    controller = StreamController<List<ProfileRecord>>.broadcast(onListen: () {
+      subscription = query.snapshots().listen((snapshot) {
+        current.clear();
+        for (final doc in snapshot.docs) {
+          current[doc.id] = ProfileRecord(
+              doc.id, Map<String, dynamic>.from(doc.data() as Map));
+        }
+        emit();
+      }, onError: controller.addError);
+      if (includeLegacy) {
+        timer =
+            Timer.periodic(const Duration(seconds: 30), (_) => refreshLegacy());
+        refreshLegacy();
+      }
+    }, onCancel: () {
+      subscription?.cancel();
+      subscription = null;
+      timer?.cancel();
+    });
+    return controller.stream;
+  }
 
   CollectionReference get _ordersRef => _firestore
       .collection('artifacts')
@@ -31,12 +87,11 @@ class OrderRepository {
     // Sync sa Cloud sa Background kapag online
     if (await isOnline()) {
       try {
-        Query query = _ordersRef
+        final query = _ordersRef
+            .where('customerId',
+                isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
             .orderBy('createdAt', descending: true)
-            .limit(20); // PAGINATION LIMIT
-        if (userEmail.toLowerCase().trim() != 'supernovaelectrodog@gmail.com') {
-          query = query.where('email', isEqualTo: userEmail);
-        }
+            .limit(20);
 
         final snapshot = await query.get();
         for (var doc in snapshot.docs) {
@@ -79,42 +134,16 @@ class OrderRepository {
           'createdAt': FieldValue.serverTimestamp(),
           ...payload,
         };
-        final ref = _ordersRef.doc(order['id']);
-        await _firestore.runTransaction((tx) async {
-          final existing = await tx.get(ref);
-          if (existing.exists) {
-            if (!isSameOrderSubmission(
-                existing.data() as Map<String, dynamic>, complete)) {
-              throw StateError('Order ID conflict.');
-            }
-            return; // A timed-out request may already have created this order.
-          }
-          final serviceId = complete['serviceId']?.toString();
-          if (serviceId != null && serviceId.isNotEmpty) {
-            final service =
-                await tx.get(_firestore.collection('services').doc(serviceId));
-            if (!service.exists ||
-                service.data()?['archived'] == true ||
-                (service.data()?['updatedAt'] ?? '').toString() !=
-                    complete['serviceVersion'])
-              throw StateError(
-                  'Queued service changed; review this order before resubmitting.');
-          }
-          if (complete['payment'] == 'GCash Online' &&
-              complete['merchantAccountNumber'] != null) {
-            final merchant = await tx
-                .get(_firestore.collection('settings').doc('gcash_config'));
-            if (merchant.data()?['isActive'] == false ||
-                merchant.data()?['accountNumber'] !=
-                    complete['merchantAccountNumber'])
-              throw StateError(
-                  'Queued GCash details changed; review payment before resubmitting.');
-          }
-          tx.set(ref, complete);
-          addNewOrderNotification(tx, _firestore, ref.id, complete);
-        });
-
-        await _localDb.markAsSynced(order['id'], order['fileUrl']);
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null ||
+            order['email'].toString().toLowerCase() !=
+                user.email?.toLowerCase()) continue;
+        complete.remove('createdAt');
+        complete['submissionId'] ??= 'legacy_queue_${order['id']}';
+        final result = await LoyaltyApi.call('/api/orders',
+            method: 'POST', data: complete);
+        final saved = Map<String, dynamic>.from(result['order'] as Map);
+        await _localDb.confirmQueuedOrder(order['id'], saved);
       } catch (e) {
         print("Failed to sync offline order ${order['id']}: $e");
       }

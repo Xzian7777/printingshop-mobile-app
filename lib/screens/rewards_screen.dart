@@ -12,7 +12,10 @@ import '../theme/dashboard_theme.dart';
 
 class RewardsScreen extends StatefulWidget {
   final bool isAdmin;
-  const RewardsScreen({super.key, this.isAdmin = false});
+  final bool embedded;
+  final Future<Map<String, dynamic>> Function(String path)? loadData;
+  const RewardsScreen(
+      {super.key, this.isAdmin = false, this.embedded = false, this.loadData});
   @override
   State<RewardsScreen> createState() => _RewardsScreenState();
 }
@@ -54,10 +57,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
       error = null;
     });
     try {
-      final data = await LoyaltyApi.call(widget.isAdmin
+      final request = widget.loadData ?? (String path) => LoyaltyApi.call(path);
+      final data = await request(widget.isAdmin
           ? '/api/admin/loyalty/rewards'
           : '/api/loyalty/rewards');
-      final summary = await LoyaltyApi.call(
+      final summary = await request(
           widget.isAdmin ? '/api/admin/loyalty/settings' : '/api/loyalty/me');
       final saved = widget.isAdmin
           ? null
@@ -101,7 +105,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
     final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => Theme(
+            data: DashboardTheme.light,
+            child: AlertDialog(
                 title: Text('${reward['name']}'),
                 content: Text(
                     'Reserve ${reward['pointsCost']} points for ${reward['quantity']} unit(s)? Points are deducted on approval. Printing rewards require a file.'),
@@ -112,7 +118,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
                       child: const Text('Continue'))
-                ]));
+                ])));
     if (confirmed != true) return;
     setState(() {
       busy = true;
@@ -158,26 +164,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
   }
 
   Future<void> changeRate() async {
-    final controller = TextEditingController(
-        text: '${(account['settings']?['pointValueCents'] ?? 100) / 100}');
     final value = await showDialog<String>(
         context: context,
-        builder: (ctx) => AlertDialog(
-                title: const Text('Value of one point'),
-                content: TextField(
-                    controller: controller,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Peso value')),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancel')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(ctx, controller.text),
-                      child: const Text('Save'))
-                ]));
-    controller.dispose();
+        builder: (_) => Theme(
+            data: DashboardTheme.light,
+            child: _PointValueDialog(
+              initialValue:
+                  '${(account['settings']?['pointValueCents'] ?? 100) / 100}',
+            )));
     if (value == null) return;
     try {
       await LoyaltyApi.call('/api/admin/loyalty/settings',
@@ -191,16 +185,39 @@ class _RewardsScreenState extends State<RewardsScreen> {
   @override
   Widget build(BuildContext context) => Theme(
       data: DashboardTheme.light,
-      child: Scaffold(
-        appBar: AppBar(
-            title: Text(widget.isAdmin ? 'Rewards Management' : 'My Rewards'),
-            actions: [
+      child: widget.embedded
+          ? _content()
+          : Scaffold(
+              appBar: AppBar(
+                  title: Text(
+                      widget.isAdmin ? 'Rewards Management' : 'My Rewards'),
+                  actions: [
+                    IconButton(
+                        onPressed: busy ? null : load,
+                        tooltip: 'Refresh rewards',
+                        icon: const Icon(Icons.refresh))
+                  ]),
+              body: _content(),
+            ));
+
+  Widget _content() => ListView(
+        shrinkWrap: widget.embedded,
+        physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
+        padding: widget.embedded ? EdgeInsets.zero : const EdgeInsets.all(16),
+        children: [
+          if (widget.embedded) ...[
+            Row(children: [
+              const Expanded(
+                  child: Text('Rewards Management',
+                      style: TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w800))),
               IconButton(
                   onPressed: busy ? null : load,
                   tooltip: 'Refresh rewards',
-                  icon: const Icon(Icons.refresh))
+                  icon: const Icon(Icons.refresh)),
             ]),
-        body: ListView(padding: const EdgeInsets.all(16), children: [
+            const SizedBox(height: 8),
+          ],
           if (busy) const LinearProgressIndicator(),
           if (error != null)
             Padding(
@@ -208,6 +225,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 child: Text(error!,
                     style: const TextStyle(
                         color: Color(0xFFBE123C), fontSize: 14, height: 1.4))),
+          if (error != null)
+            TextButton(
+                onPressed: busy ? null : load,
+                child: const Text('Retry rewards')),
           if (!widget.isAdmin)
             Card(
                 child: Padding(
@@ -242,7 +263,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
               OutlinedButton(
                   onPressed: busy ? null : changeRate,
                   child: Text(
-                      '1 point = ₱${(account['settings']?['pointValueCents'] ?? 100) / 100}'))
+                      'Edit conversion · 1 point = ₱${((account['settings']?['pointValueCents'] ?? 100) / 100).toStringAsFixed(2)}'))
             ]),
           const SizedBox(height: 16),
           const Text('Rewards catalog',
@@ -262,6 +283,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               style: const TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w700)),
                           Text('${raw['description'] ?? ''}'),
+                          Text(raw['active'] == true
+                              ? 'Available for redemption'
+                              : 'Disabled'),
                           Text(
                               '${raw['quantity']} unit(s) · ${raw['pointsCost']} points${raw['active'] == true ? '' : ' · Disabled'}'),
                           Align(
@@ -298,13 +322,47 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       '${event['orderId'] ?? ''}\n${event['createdAt'] ?? ''}'),
                   isThreeLine: true),
           ],
-        ]),
-      ));
+        ],
+      );
+}
+
+class _PointValueDialog extends StatefulWidget {
+  const _PointValueDialog({required this.initialValue});
+  final String initialValue;
+  @override
+  State<_PointValueDialog> createState() => _PointValueDialogState();
+}
+
+class _PointValueDialogState extends State<_PointValueDialog> {
+  late final _controller = TextEditingController(text: widget.initialValue);
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Value of one point'),
+        content: TextField(
+            controller: _controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Peso value')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, _controller.text),
+              child: const Text('Save')),
+        ],
+      );
 }
 
 class RewardEditor extends StatefulWidget {
   final Map<String, dynamic>? initial;
-  const RewardEditor({super.key, this.initial});
+  final Future<Map<String, dynamic>> Function()? catalogLoader;
+  const RewardEditor({super.key, this.initial, this.catalogLoader});
   @override
   State<RewardEditor> createState() => _RewardEditorState();
 }
@@ -329,8 +387,13 @@ class _RewardEditorState extends State<RewardEditor> {
   }
 
   Future<void> load() async {
+    setState(() {
+      busy = true;
+      error = null;
+    });
     try {
-      final data = await LoyaltyApi.call('/api/admin/loyalty/catalog');
+      final data = await (widget.catalogLoader?.call() ??
+          LoyaltyApi.call('/api/admin/loyalty/catalog'));
       final rows = <Map<String, dynamic>>[
         for (final kind in ['product', 'service'])
           for (final raw in data[kind == 'product' ? 'products' : 'services'])
@@ -477,59 +540,68 @@ class _RewardEditorState extends State<RewardEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: const Text('Reward details')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        if (busy) const LinearProgressIndicator(),
-        if (error != null)
-          Text(error!, style: const TextStyle(color: Colors.red)),
-        DropdownButtonFormField<Map<String, dynamic>>(
-            initialValue: selected,
-            isExpanded: true,
-            decoration:
-                const InputDecoration(labelText: 'Catalog product or service'),
-            items: [
-              for (final row in catalog)
-                DropdownMenuItem(
-                    value: row,
-                    child: Text('${row['name']} (${row['kind']})',
-                        overflow: TextOverflow.ellipsis))
+  Widget build(BuildContext context) => Theme(
+      data: DashboardTheme.light,
+      child: Scaffold(
+          appBar: AppBar(title: const Text('Reward details')),
+          body: ListView(padding: const EdgeInsets.all(16), children: [
+            if (busy) const LinearProgressIndicator(),
+            if (error != null) ...[
+              Text(error!, style: const TextStyle(color: Color(0xFFBE123C))),
+              if (catalog.isEmpty)
+                TextButton(
+                    onPressed: busy ? null : load,
+                    child: const Text('Retry catalog')),
             ],
-            onChanged: busy
-                ? null
-                : (value) => setState(() {
-                      selected = value;
-                      requirements = {};
-                      specifications = {};
-                    })),
-        TextField(
-            controller: name,
-            maxLength: 100,
-            decoration: const InputDecoration(labelText: 'Reward name')),
-        TextField(
-            controller: description,
-            maxLength: 500,
-            maxLines: 3,
-            decoration: const InputDecoration(
-                labelText: 'Description / package details')),
-        number(cost, 'Points cost'),
-        number(quantity, 'Quantity'),
-        if (selected?['kind'] == 'service') ...[
-          number(pages, 'Pages per package'),
-          if (selected?['id'] == 'tarpaulins') ...[
-            number(width, 'Width in feet'),
-            number(height, 'Height in feet')
-          ],
-          for (final raw in selected!['requirements'] as List? ?? [])
-            requirement(Map<String, dynamic>.from(raw)),
-        ],
-        SwitchListTile(
-            title: const Text('Available for redemption'),
-            value: active,
-            onChanged: busy ? null : (value) => setState(() => active = value)),
-        FilledButton(
-            onPressed: busy ? null : save, child: const Text('Save reward')),
-      ]));
+            DropdownButtonFormField<Map<String, dynamic>>(
+                initialValue: selected,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'Catalog product or service'),
+                items: [
+                  for (final row in catalog)
+                    DropdownMenuItem(
+                        value: row,
+                        child: Text('${row['name']} (${row['kind']})',
+                            overflow: TextOverflow.ellipsis))
+                ],
+                onChanged: busy
+                    ? null
+                    : (value) => setState(() {
+                          selected = value;
+                          requirements = {};
+                          specifications = {};
+                        })),
+            TextField(
+                controller: name,
+                maxLength: 100,
+                decoration: const InputDecoration(labelText: 'Reward name')),
+            TextField(
+                controller: description,
+                maxLength: 500,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                    labelText: 'Description / package details')),
+            number(cost, 'Points cost'),
+            number(quantity, 'Quantity'),
+            if (selected?['kind'] == 'service') ...[
+              number(pages, 'Pages per package'),
+              if (selected?['id'] == 'tarpaulins') ...[
+                number(width, 'Width in feet'),
+                number(height, 'Height in feet')
+              ],
+              for (final raw in selected!['requirements'] as List? ?? [])
+                requirement(Map<String, dynamic>.from(raw)),
+            ],
+            SwitchListTile(
+                title: const Text('Available for redemption'),
+                value: active,
+                onChanged:
+                    busy ? null : (value) => setState(() => active = value)),
+            FilledButton(
+                onPressed: busy ? null : save,
+                child: const Text('Save reward')),
+          ])));
   @override
   void dispose() {
     for (final c in [name, description, cost, quantity, pages, width, height]) {

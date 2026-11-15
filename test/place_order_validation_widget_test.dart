@@ -1,3 +1,4 @@
+import 'package:printingshop/services/payment_eligibility.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:printingshop/screens/place_order_screen.dart';
@@ -5,9 +6,13 @@ import 'package:printingshop/screens/place_order_screen.dart';
 void main() {
   testWidgets('GCash reference field is shown only for GCash payment',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: PlaceOrderScreen(userEmail: 'customer@example.com'),
+    await tester.pumpWidget(MaterialApp(
+      home: PlaceOrderScreen(
+          userEmail: 'customer@example.com',
+          paymentEligibility: Future.value(const PaymentEligibility(
+              cashOnPickupAllowed: true, hasOrders: true))),
     ));
+    await tester.pumpAndSettle();
     expect(find.text('GCash Reference Number'), findsOneWidget);
     await tester.ensureVisible(find.text('Cash on Pickup').first);
     await tester.tap(find.text('Cash on Pickup').first);
@@ -21,8 +26,11 @@ void main() {
 
   testWidgets('missing attachment blocks submission before Firebase access',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: PlaceOrderScreen(userEmail: 'customer@example.com'),
+    await tester.pumpWidget(MaterialApp(
+      home: PlaceOrderScreen(
+          userEmail: 'customer@example.com',
+          paymentEligibility: Future.value(const PaymentEligibility(
+              cashOnPickupAllowed: true, hasOrders: true))),
     ));
     final submit =
         find.widgetWithText(ElevatedButton, 'Confirm & Submit Order →');

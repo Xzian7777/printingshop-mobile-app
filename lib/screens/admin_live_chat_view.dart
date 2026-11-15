@@ -1,3 +1,5 @@
+import '../services/loyalty_api.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/app_notifications.dart';
 import '../services/profile_directory.dart';
 import 'dart:async';
@@ -264,7 +266,19 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
   }
 
   // Open conversation modal bottom sheet
-  void _openConversation(_CustomerChatEntry entry) {
+  Future<void> _openConversation(_CustomerChatEntry entry) async {
+    if (!entry.hasChat) {
+      try {
+        final result = await LoyaltyApi.call('/api/chat/conversations/resolve', method: 'POST', data: {'email': entry.email});
+        final conversation = result['conversation'] as Map;
+        entry = _CustomerChatEntry(uid: entry.uid, fullName: entry.fullName, email: entry.email,
+          convId: conversation['id'] as String, hasChat: true, lastMessage: entry.lastMessage, lastMessageAt: entry.lastMessageAt, hasUnread: entry.hasUnread);
+      } catch (error) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error is StateError ? error.message.toString() : 'Unable to open this customer conversation.')));
+        return;
+      }
+    }
+    if (!mounted) return;
     _replyController.clear();
 
     // Mark as read when admin opens conversation
@@ -600,7 +614,7 @@ class _AdminLiveChatViewState extends State<AdminLiveChatView> {
       batch.set(convDoc.collection('messages').doc(msgId), {
         'id': msgId,
         'conversationId': entry.convId,
-        'senderId': 'admin@kczprint.com',
+        'senderId': FirebaseAuth.instance.currentUser?.email?.toLowerCase() ?? '',
         'senderRole': 'admin',
         'senderName': 'Staff',
         'sender': 'admin', // compatibility

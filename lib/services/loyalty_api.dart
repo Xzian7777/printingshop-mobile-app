@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'local_db_service.dart';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
@@ -31,8 +33,13 @@ bool canRedeemReward(
       available >= cost;
 }
 
+class TransientApiFailure extends StateError {
+  TransientApiFailure(super.message);
+}
+
 class LoyaltyApi {
-  static const baseUrl = String.fromEnvironment('API_BASE_URL');
+  static const baseUrl = String.fromEnvironment('API_BASE_URL',
+      defaultValue: kDebugMode ? 'http://127.0.0.1:5000' : '');
   static String submissionId() => List.generate(16,
           (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'))
       .join();
@@ -47,7 +54,8 @@ class LoyaltyApi {
       throw StateError(
           'A previous checkout needs confirmation. Open Rewards to retry it first.');
     }
-    await local.saveLoyaltyPending(uid, payload);
+    final usesPoints = (payload['pointsUsed'] as num? ?? 0) > 0 || payload['rewardId'] != null;
+    if (usesPoints) await local.saveLoyaltyPending(uid, payload);
     try {
       final result = await call('/api/loyalty/orders',
           method: 'POST', data: pending ?? payload);
@@ -75,8 +83,17 @@ class LoyaltyApi {
         'Content-Type': 'application/json'
       });
     if (data != null) request.body = jsonEncode(data);
-    final response = await http.Response.fromStream(
-        await request.send().timeout(const Duration(seconds: 25)));
+    http.Response response;
+    try {
+      response = await http.Response.fromStream(await request.send()).timeout(const Duration(seconds: 25));
+    } on TimeoutException {
+      throw TransientApiFailure('The shop server took too long to respond. Retry the same submission.');
+    } on http.ClientException {
+      throw TransientApiFailure('Unable to reach the shop server. Retry the same submission when connected.');
+    }
+    if (response.statusCode >= 500 || [408, 429].contains(response.statusCode)) {
+      throw TransientApiFailure('The shop server is temporarily unavailable. Retry the same submission.');
+    }
     Map<String, dynamic> result;
     try {
       result = Map<String, dynamic>.from(jsonDecode(response.body));

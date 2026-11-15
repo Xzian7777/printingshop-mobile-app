@@ -106,7 +106,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('₱15,000.00'), findsOneWidget);
     expect(find.text('Store Supply • 1 copy'), findsNothing);
-    expect(find.text('Preparing'), findsOneWidget);
+    expect(find.text('Processing'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await capture(tester, 'customer-order-card');
     await tester.tap(find.byTooltip('Order Options'));
@@ -153,7 +153,7 @@ void main() {
                     ))))));
     await tester.pumpAndSettle();
     expect(find.text('₱1,000,000.00'), findsOneWidget);
-    expect(find.text('Printing'), findsOneWidget);
+    expect(find.text('Processing'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

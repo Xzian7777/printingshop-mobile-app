@@ -1,3 +1,8 @@
+import '../services/profile_directory.dart';
+import '../services/payment_eligibility.dart';
+import '../services/local_db_service.dart';
+import '../widgets/customer_tutorial.dart';
+import '../services/loyalty_api.dart';
 import '../services/auth_service.dart';
 import '../services/display_text.dart';
 import 'rewards_screen.dart';
@@ -72,6 +77,29 @@ class _DashboardContent extends StatefulWidget {
 class _DashboardScreenState extends State<_DashboardContent>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
+  OverlayEntry? _actionNotice;
+  final Set<String> _pendingOrderActions = {};
+
+  void _showActionNotice(String message, {bool isError = false}) {
+    _actionNotice?.remove();
+    final entry = OverlayEntry(
+        builder: (overlayContext) => Positioned(
+            top: MediaQuery.of(overlayContext).padding.top + 12,
+            left: 12,
+            right: 12,
+            child: ActionNotice(message: message, isError: isError)));
+    _actionNotice = entry;
+    Overlay.of(context).insert(entry);
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      if (identical(_actionNotice, entry)) {
+        entry.remove();
+        _actionNotice = null;
+      }
+    });
+  }
+
+  late final Stream<List<ProfileRecord>> _orderRecords =
+      OrderRepository().watchOrders(_ordersRef, includeLegacy: !_isAdmin);
 
   @override
   void initState() {
@@ -81,6 +109,9 @@ class _DashboardScreenState extends State<_DashboardContent>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await FcmService().registerUserToken(widget.userEmail);
       if (mounted) FcmService().activateNavigation();
+      if (mounted && !_isAdmin && widget.initialNavIndex == null) {
+        await _showFirstCustomerTutorial();
+      }
     });
     OrderRepository().syncOfflineOrders();
 
@@ -91,6 +122,27 @@ class _DashboardScreenState extends State<_DashboardContent>
   }
 
   int _currentNavIndex = 0;
+  Future<void> _showFirstCustomerTutorial() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      if (await LocalDbService.instance.hasSeenCustomerTutorial(uid)) return;
+      final eligibility = await PaymentEligibility.load();
+      if (!mounted ||
+          ModalRoute.of(context)?.isCurrent != true ||
+          FirebaseAuth.instance.currentUser?.uid != uid ||
+          eligibility.hasOrders) return;
+      final finished = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const CustomerTutorial());
+      if (finished == true)
+        await LocalDbService.instance.markCustomerTutorialSeen(uid);
+    } catch (_) {
+      // Try again on the next dashboard visit when the server is reachable.
+    }
+  }
+
   int _adminSubTab =
       0; // 0: Orders Management, 1: Live Chat, 2: Analytics, 3: RFID Loyalty, 4: Registered Users, 5: Samples, 6: Services, 7: GCash, 8: Archive
 
@@ -132,12 +184,18 @@ class _DashboardScreenState extends State<_DashboardContent>
   bool get _isAdmin => widget.isAdmin;
 
   // FIRESTORE COLLECTIONS
-  CollectionReference get _ordersRef => FirebaseFirestore.instance
-      .collection('artifacts')
-      .doc('printcraft-pro')
-      .collection('public')
-      .doc('data')
-      .collection('orders');
+  Query get _ordersRef {
+    final orders = FirebaseFirestore.instance
+        .collection('artifacts')
+        .doc('printcraft-pro')
+        .collection('public')
+        .doc('data')
+        .collection('orders');
+    return _isAdmin
+        ? orders
+        : orders.where('customerId',
+            isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '');
+  }
 
   CollectionReference get _rfidLogsRef => FirebaseFirestore.instance
       .collection('artifacts')
@@ -148,6 +206,8 @@ class _DashboardScreenState extends State<_DashboardContent>
 
   @override
   void dispose() {
+    _actionNotice?.remove();
+    _actionNotice = null;
     _animController.dispose();
     _searchController.dispose();
     _chatReplyController.dispose();
@@ -207,7 +267,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                       color: Color(0xFF0F172A))),
               SizedBox(height: 2),
               Text(
-                  "Orders can be cancelled only before admin approval. Approved orders can no longer be cancelled.",
+                  "Orders can be cancelled only before admin approval. Approved orders can no longer be cancelled. New customers use GCash. Cash on Pickup unlocks after the first payment-verified, completed order.",
                   style: TextStyle(fontSize: 11, color: Color(0xFF4B7A5E))),
               SizedBox(height: 10),
               Text("4. Unclaimed Prints & RFID Rewards",
@@ -283,66 +343,39 @@ class _DashboardScreenState extends State<_DashboardContent>
     return shouldExit ?? false;
   }
 
-  void _showLogoutConfirmationDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFF0FDF4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFBBF7D0)),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.logout_rounded, color: Color(0xFFF43F5E)),
-            SizedBox(width: 10),
-            Text('Confirm Logout',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Color(0xFF0F172A))),
-          ],
-        ),
-        content: const Text('Are you sure you want to log out of your account?',
-            style: TextStyle(fontSize: 13, color: Color(0xFF4B7A5E))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style: TextStyle(
-                    color: Color(0xFF4B7A5E), fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await FcmService().removeUserToken(widget.userEmail);
-                await AuthService.signOut();
-              } catch (e) {
-                debugPrint('Logout error: $e');
-              }
-              if (!context.mounted) return;
-              Navigator.pushAndRemoveUntil(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) =>
-                      const LoginScreen(),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) =>
-                          FadeTransition(opacity: animation, child: child),
-                  transitionDuration: const Duration(milliseconds: 400),
-                ),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF43F5E), elevation: 0),
-            child: const Text('Log Out',
-                style: TextStyle(
-                    color: Color(0xFF14532D), fontWeight: FontWeight.bold)),
-          ),
-        ],
+  bool _logoutDialogOpen = false;
+
+  Future<void> _showLogoutConfirmationDialog(BuildContext context) async {
+    if (_logoutDialogOpen) return;
+    _logoutDialogOpen = true;
+    bool? loggedOut;
+    try {
+      loggedOut = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => LogoutConfirmationDialog(onLogout: () async {
+          try {
+            await FcmService().removeUserToken(widget.userEmail);
+          } catch (error) {
+            debugPrint('Push registration cleanup failed: $error');
+          }
+          await AuthService.signOut();
+        }),
+      );
+    } finally {
+      _logoutDialogOpen = false;
+    }
+    if (loggedOut != true || !context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const LoginScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 400),
       ),
+      (route) => false,
     );
   }
 
@@ -392,7 +425,9 @@ class _DashboardScreenState extends State<_DashboardContent>
     final st = rawStatus.toLowerCase().trim();
     if (st == 'cancelled') return 'cancelled';
     if (st == 'approved') return 'approved';
-    if (st.contains('print') || st.contains('prepar')) {
+    if (st.contains('print') ||
+        st.contains('prepar') ||
+        st.contains('process')) {
       return 'printing';
     } else if (st.contains('ready') || st.contains('pickup')) {
       return 'ready';
@@ -520,8 +555,14 @@ class _DashboardScreenState extends State<_DashboardContent>
             ],
           ),
           actions: [
-            if (_isAdmin) IconButton(tooltip: 'Rewards Management', icon: const Icon(Icons.redeem, color: DashboardTheme.green),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RewardsScreen(isAdmin: _isAdmin)))),
+            if (_isAdmin)
+              IconButton(
+                  tooltip: 'Rewards Management',
+                  icon: const Icon(Icons.redeem, color: DashboardTheme.green),
+                  onPressed: () => setState(() {
+                        _currentNavIndex = 2;
+                        _adminSubTab = 3;
+                      })),
             if (FirebaseAuth.instance.currentUser != null)
               NotificationBell(
                 repository: NotificationRepository(
@@ -857,14 +898,24 @@ class _DashboardScreenState extends State<_DashboardContent>
     if (destination == 'chat') {
       if (_isAdmin) {
         final conversation = notification.data['conversationId']?.toString() ??
-            Uri.tryParse('${notification.data['link'] ?? ''}')?.queryParameters['convId'];
-        Navigator.push(context, MaterialPageRoute(builder: (_) => Theme(
-          data: DashboardTheme.light,
-          child: Scaffold(appBar: AppBar(title: const Text('Messages')),
-            body: AdminLiveChatView(initialConversationId: conversation)),
-        )));
+            Uri.tryParse('${notification.data['link'] ?? ''}')
+                ?.queryParameters['convId'];
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => Theme(
+                      data: DashboardTheme.light,
+                      child: Scaffold(
+                          appBar: AppBar(title: const Text('Messages')),
+                          body: AdminLiveChatView(
+                              initialConversationId: conversation)),
+                    )));
       } else {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerChatScreen(userEmail: widget.userEmail)));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) =>
+                    CustomerChatScreen(userEmail: widget.userEmail)));
       }
       return;
     }
@@ -889,8 +940,8 @@ class _DashboardScreenState extends State<_DashboardContent>
   // 2. FULL ANALYTICS VIEW
   // ===========================================================================
   Widget _buildAdminAnalyticsView() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _ordersRef.snapshots(),
+    return StreamBuilder<List<ProfileRecord>>(
+      stream: _orderRecords,
       builder: (context, snapshot) {
         if (snapshot.hasError)
           return Center(
@@ -900,9 +951,10 @@ class _DashboardScreenState extends State<_DashboardContent>
           return const Center(
               child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data!;
         double totalRevenue = 0.0;
         int totalOrders = docs.length;
+        int revenueOrders = 0;
         int pagesPrinted = 0;
         Set<String> uniqueCustomers = {};
         double storeRevenue = 0.0;
@@ -912,7 +964,7 @@ class _DashboardScreenState extends State<_DashboardContent>
           'Completed': 0,
           'Order Submitted': 0,
           'Approved': 0,
-          'Printing': 0,
+          'Processing': 0,
           'Ready for Pickup': 0,
           'Rejected': 0,
           'Cancelled': 0,
@@ -921,25 +973,18 @@ class _DashboardScreenState extends State<_DashboardContent>
         Map<String, int> serviceBreakdown = {};
 
         for (var doc in docs) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
 
-          final rawTotal = data['total'] ?? data['price'] ?? data['amount'];
-          double totalVal = 0.0;
-          if (rawTotal is num) totalVal = rawTotal.toDouble();
-          if (rawTotal is String) {
-            totalVal = double.tryParse(
-                    rawTotal.replaceAll('₱', '').replaceAll(',', '').trim()) ??
-                0.0;
-          }
-          final cancelled = '${data['status']}'.toLowerCase() == 'cancelled';
-          if (cancelled) totalVal = 0;
+          final totalVal = analyticsOrderAmount(data);
+          final stopped = isStoppedOrderStatus(data['status']);
+          if (!stopped) revenueOrders++;
           totalRevenue += totalVal;
 
           int copies = int.tryParse(
                   (data['copies'] ?? data['quantity'] ?? 1).toString()) ??
               1;
           int pages = int.tryParse((data['pages'] ?? 1).toString()) ?? 1;
-          if (data['source'] != 'POS' && !cancelled)
+          if (data['source'] != 'POS' && !stopped)
             pagesPrinted += (copies * pages);
 
           final cust =
@@ -953,10 +998,11 @@ class _DashboardScreenState extends State<_DashboardContent>
 
           final serviceLower = service.toLowerCase();
           if (data['source'] == 'POS') {
-            storeRevenue += (data['productTotal'] as num? ?? 0).toDouble();
-            printRevenue += (data['serviceTotal'] as num? ?? 0).toDouble();
+            storeRevenue += analyticsOrderAmount(data, 'productTotal');
+            printRevenue += analyticsOrderAmount(data, 'serviceTotal');
           } else if (serviceLower.contains('store') ||
               serviceLower.contains('supply') ||
+              serviceLower.contains('supplies') ||
               serviceLower.contains('in-store') ||
               serviceLower.contains('notebook') ||
               serviceLower.contains('pen')) {
@@ -966,8 +1012,8 @@ class _DashboardScreenState extends State<_DashboardContent>
           }
 
           final rawStatus =
-              (data['status'] ?? 'Order Submitted').toString().toLowerCase();
-          if (rawStatus == 'cancelled') {
+              (data['status'] ?? 'Order Submitted').toString().trim().toLowerCase();
+          if (rawStatus.contains('cancel')) {
             statusCounts['Cancelled'] = (statusCounts['Cancelled'] ?? 0) + 1;
           } else if (rawStatus.contains('reject')) {
             statusCounts['Rejected'] = (statusCounts['Rejected'] ?? 0) + 1;
@@ -980,9 +1026,8 @@ class _DashboardScreenState extends State<_DashboardContent>
                 (statusCounts['Ready for Pickup'] ?? 0) + 1;
           } else if (rawStatus.contains('approve')) {
             statusCounts['Approved'] = (statusCounts['Approved'] ?? 0) + 1;
-          } else if ((rawStatus.contains('print') ||
-              rawStatus.contains('prepar'))) {
-            statusCounts['Printing'] = (statusCounts['Printing'] ?? 0) + 1;
+          } else if (isProcessingOrderStatus(rawStatus)) {
+            statusCounts['Processing'] = (statusCounts['Processing'] ?? 0) + 1;
           } else {
             statusCounts['Order Submitted'] =
                 (statusCounts['Order Submitted'] ?? 0) + 1;
@@ -990,7 +1035,7 @@ class _DashboardScreenState extends State<_DashboardContent>
         }
 
         double avgOrderValue =
-            totalOrders > 0 ? (totalRevenue / totalOrders) : 0.0;
+            revenueOrders > 0 ? (totalRevenue / revenueOrders) : 0.0;
         int activeCustomersCount = uniqueCustomers.length;
 
         return ListView(
@@ -1087,7 +1132,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                       _buildChartLegendItem(
                           'Order Submitted', const Color(0xFF8B5CF6)),
                       _buildChartLegendItem(
-                          'Printing', const Color(0xFF22C55E)),
+                          'Processing', const Color(0xFF22C55E)),
                       _buildChartLegendItem(
                           'Rejected', const Color(0xFFF43F5E)),
                     ],
@@ -1376,8 +1421,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                        'Simulated RFID identification logged.'),
+                    content: Text('Simulated RFID identification logged.'),
                     backgroundColor: Color(0xFF10B981),
                   ),
                 );
@@ -1985,8 +2029,8 @@ class _DashboardScreenState extends State<_DashboardContent>
   // --- MANAGE ORDERS VIEW (ADMIN) ---
   // ===========================================================================
   Widget _buildManageOrdersView() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _ordersRef.snapshots(),
+    return StreamBuilder<List<ProfileRecord>>(
+      stream: _orderRecords,
       builder: (context, snapshot) {
         if (snapshot.hasError)
           return Center(
@@ -1996,24 +2040,24 @@ class _DashboardScreenState extends State<_DashboardContent>
           return const Center(
               child: CircularProgressIndicator(color: Color(0xFF16A34A)));
 
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data!;
         int approvalCount = 0;
         int printingCount = 0;
         int readyCount = 0;
 
         for (var d in docs) {
-          final data = d.data() as Map<String, dynamic>;
+          final data = d.data();
           final category =
               _getStatusCategory((data['status'] ?? '').toString());
           if (category == 'approval') approvalCount++;
-          if (category == 'printing') printingCount++;
+          if (isProcessingOrderStatus(data['status'])) printingCount++;
           if (category == 'ready') readyCount++;
         }
 
         final queryClean = _cleanStr(_searchController.text);
 
         final filteredDocs = docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final rawStatus = (data['status'] ?? 'Order Submitted').toString();
           final category = _getStatusCategory(rawStatus);
           final serviceName =
@@ -2038,8 +2082,8 @@ class _DashboardScreenState extends State<_DashboardContent>
               matchesStatus = (category == 'approval');
             } else if (_statusFilter == 'Approved') {
               matchesStatus = (category == 'approved');
-            } else if (_statusFilter == 'Printing') {
-              matchesStatus = (category == 'printing');
+            } else if (_statusFilter == 'Processing') {
+              matchesStatus = isProcessingOrderStatus(rawStatus);
             } else if (_statusFilter == 'Ready for Pickup') {
               matchesStatus = (category == 'ready');
             } else if (_statusFilter == 'Completed') {
@@ -2056,8 +2100,8 @@ class _DashboardScreenState extends State<_DashboardContent>
 
         // Sort orders based on _orderSortOrder
         filteredDocs.sort((a, b) {
-          final dataA = a.data() as Map<String, dynamic>;
-          final dataB = b.data() as Map<String, dynamic>;
+          final dataA = a.data();
+          final dataB = b.data();
           final timeA = _getOrderTimestamp(dataA);
           final timeB = _getOrderTimestamp(dataB);
           if (_orderSortOrder == 'Latest to Previous') {
@@ -2147,7 +2191,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                           const Color(0xFFFBBF24)),
                       const SizedBox(width: 8),
                       _buildStatusCounterBox(
-                          'PRINTING',
+                          'PROCESSING',
                           printingCount.toString(),
                           const Color(0xFF15803D).withOpacity(0.15),
                           const Color(0xFF15803D)),
@@ -2292,7 +2336,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                   'All Active',
                   'For Approval',
                   'Approved',
-                  'Printing',
+                  'Processing',
                   'Ready for Pickup',
                   'Completed',
                   'Rejected',
@@ -2345,7 +2389,7 @@ class _DashboardScreenState extends State<_DashboardContent>
               )
             else
               ...pagedDocs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
+                final data = doc.data();
                 final docId = doc.id;
                 final String displayRefId = (data['id'] ??
                         data['refId'] ??
@@ -2514,7 +2558,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                   decoration: BoxDecoration(
                       color: statusBgColor,
                       borderRadius: BorderRadius.circular(6)),
-                  child: Text(status,
+                  child: Text(orderStatusLabel(status),
                       style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -2657,7 +2701,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                   decoration: BoxDecoration(
                       color: const Color(0xFFBBF7D0),
                       borderRadius: BorderRadius.circular(6)),
-                  child: Text(status,
+                  child: Text(orderStatusLabel(status),
                       style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -2673,6 +2717,7 @@ class _DashboardScreenState extends State<_DashboardContent>
   // --- STOCK DEDUCTION / RESTORATION LOGIC FOR ORDERS ---
   Future<void> _confirmAndUpdateOrderStatus(String orderId, String newStatus,
       String actionLabel, Map<String, dynamic> orderData) async {
+    if (_pendingOrderActions.contains(orderId)) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -2692,7 +2737,9 @@ class _DashboardScreenState extends State<_DashboardContent>
           ],
         ),
         content: Text(
-            newStatus == 'Completed' ? 'Confirm that payment was received and this order was completed. Fully free rewards require no cash payment.' : 'Are you sure you want to change order status to "$newStatus"?',
+            newStatus == 'Completed'
+                ? 'Confirm that payment was received and this order was completed. Fully free rewards require no cash payment.'
+                : 'Are you sure you want to change order status to "${orderStatusLabel(newStatus)}"?',
             style: const TextStyle(color: Color(0xFF4B7A5E))),
         actions: [
           TextButton(
@@ -2712,24 +2759,20 @@ class _DashboardScreenState extends State<_DashboardContent>
       ),
     );
 
-    if (confirm == true) {
+    if (confirm == true && _pendingOrderActions.add(orderId)) {
+      _showActionNotice('Updating order $orderId…');
       try {
-        await updateOrderWorkflow(orderId, newStatus, paymentConfirmed: newStatus == 'Completed');
+        await updateOrderWorkflow(orderId, newStatus,
+            paymentConfirmed: newStatus == 'Completed');
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Order status updated to "$newStatus"'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
+        _showActionNotice(newStatus == 'Approved'
+            ? 'You approved order $orderId.'
+            : 'Order $orderId updated to ${orderStatusLabel(newStatus)}.');
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: const Color(0xFFF43F5E),
-          ),
-        );
+        _showActionNotice(loyaltyErrorMessage(e), isError: true);
+      } finally {
+        _pendingOrderActions.remove(orderId);
       }
     }
   }
@@ -2747,7 +2790,7 @@ class _DashboardScreenState extends State<_DashboardContent>
 
     if (status == 'Approved') {
       nextStatus = 'Printing';
-      actionLabel = 'Start Printing';
+      actionLabel = 'Start Processing';
     } else if (category == 'printing') {
       nextStatus = 'Ready for Pickup';
       actionLabel = 'Ready';
@@ -2819,7 +2862,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                   itemBuilder: (context) => [
                     _buildStatusMenuItem('For Approval', '✓ For Approval',
                         const Color(0xFFFBBF24)),
-                    _buildStatusMenuItem('Printing', '🖨️ Start Printing',
+                    _buildStatusMenuItem('Printing', '🖨️ Start Processing',
                         const Color(0xFF15803D)),
                     _buildStatusMenuItem('Ready for Pickup',
                         '📦 Ready for Pickup', const Color(0xFF15803D)),
@@ -2843,10 +2886,12 @@ class _DashboardScreenState extends State<_DashboardContent>
                   .isNotEmpty &&
               !['Pending / Direct In-Store Upload', 'No file selected']
                   .contains(systemDisplayText(data['fileUrl'] ??
-                          data['file_url'] ?? data['url'] ?? data['file'])),
+                      data['file_url'] ??
+                      data['url'] ??
+                      data['file'])),
           onSelected: (value) {
             if (value == 'review') _showReviewSpecsModal(orderId, refId, data);
-            if (value == 'file') _openAttachedFile(data);
+            if (value == 'file') _openAttachedFile(orderId, data);
             if (value == 'slip') _showPrintJobSlipModal(refId, data);
             if (value == 'reject') _showRejectOrderModal(orderId, refId, data);
           },
@@ -2869,8 +2914,8 @@ class _DashboardScreenState extends State<_DashboardContent>
   }
 
   // ── MODAL 1: REVIEW SPECS & FILE ───────────────────────────────────────────
-  void _showReviewSpecsModal(
-      String orderId, String refId, Map<String, dynamic> data) {
+  Future<void> _showReviewSpecsModal(
+      String orderId, String refId, Map<String, dynamic> data) async {
     final customer =
         (data['customer'] ?? data['userEmail'] ?? 'Guest').toString();
     final service = (data['service'] ?? 'Standard A4 Print').toString();
@@ -2881,8 +2926,20 @@ class _DashboardScreenState extends State<_DashboardContent>
         : const <Map>[];
     final payment = (data['payment'] ?? 'GCash Online').toString();
     final status = (data['status'] ?? 'Order Submitted').toString();
-    final fileName =
-        systemDisplayText(data['fileName'] ?? data['file'] ?? 'No file attached');
+    final fileName = systemDisplayText(
+        data['fileName'] ?? data['file'] ?? 'No file attached');
+    try {
+      final files = await LoyaltyApi.call(
+          '/api/orders/${Uri.encodeComponent(orderId)}/file');
+      data = {
+        ...data,
+        'fileUrl': files['url'],
+        'gcashReceiptUrl': files['receiptUrl']
+      };
+    } catch (_) {
+      // Legacy file references remain visible while their migration is reviewed.
+    }
+    if (!mounted) return;
     final fileUrl = (data['fileUrl'] ?? data['file_url'] ?? '').toString();
     final note = (data['customerNote'] ?? data['specialInstructions'] ?? '')
         .toString()
@@ -2944,15 +3001,17 @@ class _DashboardScreenState extends State<_DashboardContent>
                       '$quantity ${quantity == 1 ? 'unit' : 'units'}');
                 }),
               ],
-              _buildSpecRow('Status', status),
+              _buildSpecRow('Status', orderStatusLabel(status)),
               _buildSpecRow('Payment', payment),
               if ((data['gcashRef'] ?? '').toString().isNotEmpty)
                 _buildSpecRow('GCash reference', data['gcashRef'].toString()),
               if ((data['gcashReceiptUrl'] ?? '').toString().isNotEmpty)
                 sharedImage(data['gcashReceiptUrl'].toString()),
-              _buildSpecRow('Subtotal', orderAmount(data['subtotal'] ?? data['total'])),
+              _buildSpecRow(
+                  'Subtotal', orderAmount(data['subtotal'] ?? data['total'])),
               _buildSpecRow('Points used', '${data['pointsUsed'] ?? 0}'),
-              _buildSpecRow('Points discount', orderAmount(data['pointsDiscount'] ?? 0)),
+              _buildSpecRow(
+                  'Points discount', orderAmount(data['pointsDiscount'] ?? 0)),
               _buildSpecRow('Points earned', '${data['pointsEarned'] ?? 0}'),
               _buildSpecRow('Total', total, isHighlight: true),
               if (!store && details != null && details.isNotEmpty) ...[
@@ -3023,7 +3082,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                     ),
                     if (fileUrl.isNotEmpty && fileUrl.startsWith('http'))
                       ElevatedButton.icon(
-                        onPressed: () => _openAttachedFile(data),
+                        onPressed: () => _openAttachedFile(orderId, data),
                         icon: const Icon(Icons.open_in_new_rounded,
                             size: 12, color: Colors.white),
                         label: const Text('Open',
@@ -3096,7 +3155,8 @@ class _DashboardScreenState extends State<_DashboardContent>
   }
 
   // ── MODAL 2: OPEN ATTACHED FILE ───────────────────────────────────────────
-  Future<void> _openAttachedFile(Map<String, dynamic> data) async {
+  Future<void> _openAttachedFile(
+      String orderId, Map<String, dynamic> data) async {
     final fileUrl = (data['fileUrl'] ??
             data['file_url'] ??
             data['url'] ??
@@ -3114,8 +3174,14 @@ class _DashboardScreenState extends State<_DashboardContent>
       return;
     }
 
-    final uri = Uri.tryParse(fileUrl);
-    if (uri != null) {
+    try {
+      final result = await LoyaltyApi.call(
+          '/api/orders/${Uri.encodeComponent(orderId)}/file');
+      final uri = Uri.tryParse(result['url'] as String? ?? '');
+      if (uri == null || !['https', 'http'].contains(uri.scheme)) {
+        throw const FormatException(
+            'The file link is unavailable. Please retry.');
+      }
       final launched =
           await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched && mounted) {
@@ -3126,6 +3192,11 @@ class _DashboardScreenState extends State<_DashboardContent>
           ),
         );
       }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loyaltyErrorMessage(error))),
+      );
     }
   }
 
@@ -3201,13 +3272,15 @@ class _DashboardScreenState extends State<_DashboardContent>
               _buildSlipLine('CLIENT:', customer),
               _buildSlipLine('SERVICE:', service),
               _buildSlipLine('QUANTITY:', '$qty pcs'),
-              _buildSlipLine('Subtotal', orderAmount(data['subtotal'] ?? data['total'])),
+              _buildSlipLine(
+                  'Subtotal', orderAmount(data['subtotal'] ?? data['total'])),
               _buildSlipLine('Points used', '${data['pointsUsed'] ?? 0}'),
-              _buildSlipLine('Points discount', orderAmount(data['pointsDiscount'] ?? 0)),
+              _buildSlipLine(
+                  'Points discount', orderAmount(data['pointsDiscount'] ?? 0)),
               _buildSlipLine('Points earned', '${data['pointsEarned'] ?? 0}'),
               _buildSlipLine('TOTAL:', '₱$total'),
               _buildSlipLine('PAYMENT:', payment),
-              _buildSlipLine('STATUS:', status),
+              _buildSlipLine('STATUS:', orderStatusLabel(status)),
               const Divider(color: Color(0xFFBBF7D0), height: 16),
               Align(
                 alignment: Alignment.centerRight,
@@ -3403,11 +3476,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                       return;
                     }
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text('Order $refId marked as Rejected.'),
-                          backgroundColor: const Color(0xFFF43F5E)),
-                    );
+                    _showActionNotice('You rejected order $refId.');
                   },
                   child: const Text('Confirm Reject',
                       style: TextStyle(
@@ -3473,9 +3542,9 @@ class _DashboardScreenState extends State<_DashboardContent>
   Widget _buildCustomerOrdersTab() {
     final cleanEmail = widget.userEmail.trim().toLowerCase();
 
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<List<ProfileRecord>>(
       key: _customerTrackerRefreshKey,
-      stream: _ordersRef.snapshots(),
+      stream: _orderRecords,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -3525,11 +3594,11 @@ class _DashboardScreenState extends State<_DashboardContent>
               child: CircularProgressIndicator(color: Color(0xFF16A34A)));
         }
 
-        final allDocs = snapshot.data!.docs;
+        final allDocs = snapshot.data!;
 
         // Filter strictly to currently authenticated user's orders (email or customer ID)
         final myDocs = allDocs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           if (data['source'] == 'POS') return false;
           final orderEmail = (data['email'] ?? data['userEmail'] ?? '')
               .toString()
@@ -3548,8 +3617,8 @@ class _DashboardScreenState extends State<_DashboardContent>
 
         // Sort newest first by creation timestamp/date
         myDocs.sort((a, b) {
-          final dataA = a.data() as Map<String, dynamic>;
-          final dataB = b.data() as Map<String, dynamic>;
+          final dataA = a.data();
+          final dataB = b.data();
           final timeA = _getOrderTimestamp(dataA);
           final timeB = _getOrderTimestamp(dataB);
           return timeB.compareTo(timeA);
@@ -3559,7 +3628,7 @@ class _DashboardScreenState extends State<_DashboardContent>
         final categoryFiltered = myDocs.where((doc) {
           if (_customerCategoryFilter == 'All Services & Store Items')
             return true;
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final service = (data['service'] ??
                   data['serviceName'] ??
                   data['item_name'] ??
@@ -3571,7 +3640,7 @@ class _DashboardScreenState extends State<_DashboardContent>
 
         // Apply Status Filter Chips
         final filteredDocs = categoryFiltered.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final rawStatus = (data['status'] ?? 'Order Submitted').toString();
           return _matchesCustomerStatusFilter(rawStatus, _customerFilter);
         }).toList();
@@ -3810,7 +3879,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                   children: [
                     'All Orders',
                     'For Approval',
-                    'Approved & Printing',
+                    'Approved & Processing',
                     'Ready for Pickup',
                     'Completed',
                     'Rejected',
@@ -3885,7 +3954,7 @@ class _DashboardScreenState extends State<_DashboardContent>
                 )
               else ...[
                 ...pagedDocs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
+                  final data = doc.data();
                   return _buildTrackedCustomerOrderCard(doc.id, data);
                 }),
                 const SizedBox(height: 10),
@@ -4020,8 +4089,13 @@ class _DashboardScreenState extends State<_DashboardContent>
                         fontSize: 8.5,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF10B981))),
-                InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardsScreen())),
-                  child: const Padding(padding: EdgeInsets.all(6), child: LoyaltyBalance())),
+                InkWell(
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const RewardsScreen())),
+                    child: const Padding(
+                        padding: EdgeInsets.all(6), child: LoyaltyBalance())),
               ],
             ),
           ),
@@ -4124,7 +4198,7 @@ class _DashboardScreenState extends State<_DashboardContent>
       onAction: (action) {
         if (action == 'review')
           _showReviewSpecsModal(docId, displayRefId, data);
-        if (action == 'file') _openAttachedFile(data);
+        if (action == 'file') _openAttachedFile(docId, data);
         if (action == 'slip') _showPrintJobSlipModal(displayRefId, data);
         if (action == 'cancel')
           _confirmCancelCustomerOrder(docId, displayRefId);
@@ -4161,8 +4235,10 @@ class _DashboardScreenState extends State<_DashboardContent>
     if (s.contains('complet') || s.contains('done') || s.contains('finish'))
       return 4;
     if (s.contains('ready') || s.contains('pickup')) return 3;
-    if (s.contains('print') || s.contains('production') || s.contains('prepar'))
-      return 2;
+    if (s.contains('print') ||
+        s.contains('production') ||
+        s.contains('prepar') ||
+        s.contains('process')) return 2;
     if (s.contains('approve') &&
         !s.contains('for approve') &&
         !s.contains('for approval')) return 1;
@@ -4183,8 +4259,8 @@ class _DashboardScreenState extends State<_DashboardContent>
           !s.contains('complet') &&
           !s.contains('reject');
     }
-    if (filter == 'Approved & Printing') {
-      return (s.contains('print') || s.contains('approve')) &&
+    if (filter == 'Approved & Processing') {
+      return isProcessingOrderStatus(rawStatus) &&
           !s.contains('ready') &&
           !s.contains('complet') &&
           !s.contains('reject');
@@ -4375,7 +4451,7 @@ class _DonutChartPainter extends CustomPainter {
     final colors = {
       'Completed': const Color(0xFFF59E0B),
       'Order Submitted': const Color(0xFF8B5CF6),
-      'Printing': const Color(0xFF22C55E),
+      'Processing': const Color(0xFF22C55E),
       'Rejected': const Color(0xFFF43F5E),
       'Cancelled': const Color(0xFF475569),
       'Ready for Pickup': const Color(0xFF10B981),

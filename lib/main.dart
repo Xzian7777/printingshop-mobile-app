@@ -6,6 +6,7 @@ import 'services/auth_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/fcm_service.dart';
+import 'theme/dashboard_theme.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -45,16 +46,7 @@ class _MyAppState extends State<MyApp> {
       navigatorKey: navigatorKey,
       title: 'Kez C-Em Zek Printing Shop',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF070A14),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4F46E5),
-          brightness: Brightness.dark,
-        ),
-        fontFamily: null,
-        useMaterial3: true,
-      ),
+      theme: DashboardTheme.light,
       home: const AuthGate(),
     );
   }

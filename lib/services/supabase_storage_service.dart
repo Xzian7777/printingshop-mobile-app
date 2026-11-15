@@ -1,18 +1,22 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'loyalty_api.dart';
 import 'package:http/http.dart' as http;
 
 class SupabaseStorageService {
-  static const String supabaseUrl = 'https://ymtngztgkrnxfayvavoe.supabase.co';
-  static const String anonKey =
-      'sb_publishable_rrZtHSRZZSSq4pCXUCZhfw_aLHISE51';
-  static const String bucketName = 'kezcemzek-files';
-
   // Upload limits conforming to website specification
   static const int maxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
   static const int maxTotalSizeBytes = 25 * 1024 * 1024; // 25 MB
   static const int maxFilesCount = 5;
   static const int maxFilenameLength = 150;
-  static const List<String> allowedExtensions = ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+  static const List<String> allowedExtensions = [
+    'pdf',
+    'png',
+    'jpg',
+    'jpeg',
+    'doc',
+    'docx'
+  ];
 
   /// Validates a single file against limits
   static String? validateFile(File file, String filename) {
@@ -54,55 +58,49 @@ class SupabaseStorageService {
     return cleaned;
   }
 
-  /// Uploads a file to Supabase Storage and returns its public URL
+  /// Upload through the authenticated shop backend.
   static Future<String> uploadFile({
     required File file,
     required String originalFilename,
     String? orderId,
+    String purpose = 'document',
   }) async {
-    final validationError = validateFile(file, originalFilename);
-    if (validationError != null) {
-      throw Exception(validationError);
+    final error = validateFile(file, originalFilename);
+    if (error != null) throw StateError(error);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw StateError('Sign in before uploading a file.');
+    if (LoyaltyApi.baseUrl.isEmpty) {
+      throw StateError('The shop server URL is missing.');
     }
-
-    final safeFilename = sanitizeFilename(originalFilename);
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final objectPath = 'uploads/${timestamp}_$safeFilename';
-
-    final uri = Uri.parse('$supabaseUrl/storage/v1/object/$bucketName/$objectPath');
-
-    final String ext = safeFilename.split('.').last.toLowerCase();
-    String contentType = 'application/octet-stream';
-    if (ext == 'pdf') {
-      contentType = 'application/pdf';
-    } else if (ext == 'png') {
-      contentType = 'image/png';
-    } else if (ext == 'jpg' || ext == 'jpeg') {
-      contentType = 'image/jpeg';
-    } else if (ext == 'doc') {
-      contentType = 'application/msword';
-    } else if (ext == 'docx') {
-      contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    final prepared = await LoyaltyApi.call('/api/uploads/prepare', method: 'POST', data: {
+      'submissionId': LoyaltyApi.submissionId(),
+      'purpose': purpose,
+      'files': [{'name': sanitizeFilename(originalFilename), 'size': await file.length()}],
+    });
+    final ticket = Map<String, dynamic>.from((prepared['files'] as List).first as Map);
+    if (ticket['result'] is Map) return ticket['result']['fileUrl'] as String;
+    final uploadUri = Uri.parse(ticket['uploadUrl'] as String);
+    if (uploadUri.scheme != 'https' || !uploadUri.path.startsWith('/storage/v1/object/upload/sign/')) {
+      throw StateError('The shop server returned an invalid cloud upload address.');
     }
-
-    final bytes = await file.readAsBytes();
-
-    final response = await http.post(
-      uri,
-      headers: {
-        'apikey': anonKey,
-        'Authorization': 'Bearer $anonKey',
-        'Content-Type': contentType,
-        'x-upsert': 'true',
-      },
-      body: bytes,
-    );
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      // Public URL standard format for Supabase Storage
-      return '$supabaseUrl/storage/v1/object/public/$bucketName/$objectPath';
-    } else {
-      throw Exception('Supabase upload failed (${response.statusCode}): ${response.body}');
+    final request = http.MultipartRequest('PUT', uploadUri)
+      ..files.add(await http.MultipartFile.fromPath('file', file.path,
+          filename: sanitizeFilename(originalFilename)));
+    final response = await http.Response.fromStream(await request.send())
+        .timeout(const Duration(seconds: 120));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Cloud storage upload failed. Please retry.');
     }
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final result = await LoyaltyApi.call('/api/uploads/finalize', method: 'POST',
+            data: {'fileId': ticket['fileId']});
+        return result['fileUrl'] as String;
+      } catch (_) {
+        if (attempt == 2) rethrow;
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+    }
+    throw StateError('Unable to verify the uploaded file. Please retry.');
   }
 }

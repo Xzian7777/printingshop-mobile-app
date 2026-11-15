@@ -10,18 +10,23 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
+    function activeAccount() {
       return isAuthenticated() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '').lower() == request.auth.token.get('email', '').lower() &&
+        !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('archived', false) &&
+        !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isArchived', false) &&
+        !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('disabled', false) &&
+        !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isDisabled', false) &&
+        !(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '').lower() in ['archived', 'disabled']);
+    }
+
+    function isAdmin() {
+      return activeAccount() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     function ownsOrder(data) {
-      return isAuthenticated() && (
-        data.get('customerId', '') == request.auth.uid ||
-        data.get('uid', '') == request.auth.uid ||
-        (request.auth.token.get('email', '') != '' &&
-          data.get('email', data.get('customerEmail', '')).lower() == request.auth.token.email.lower())
-      );
+      return activeAccount() && data.get('customerId', '') == request.auth.uid;
     }
 
     function pendingOrder(data) {
@@ -69,45 +74,63 @@ service cloud.firestore {
         ]) && (resource.data.get('status', '') != 'Cancelled' || request.resource.data.status == 'Cancelled');
     }
 
-    // Existing OTP verification access retained.
     match /pending_users/{email} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+    match /verification_challenges/{challengeId} {
+      allow read, write: if false;
+    }
+    match /account_identity_index/{identityId} {
+      allow read, write: if false;
+    }
+    match /file_ownership/{fileId} {
+      allow read, write: if false;
+    }
+    match /upload_batches/{batchId} {
+      allow read, write: if false;
+    }
+    match /upload_intents/{uploadId} {
+      allow read, write: if false;
+    }
+
+    function ownProfileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'fullName', 'full_name', 'name', 'phone', 'contact', 'updatedAt'
+      ]);
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      // Admin profile management also creates mobile/web mirror documents.
-      allow create: if initialPoints() && (isAdmin() ||
-        (isOwner(userId) && request.resource.data.role == 'customer'));
-      allow update: if profilePointsUnchanged() && (isAdmin() ||
-        (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])));
-      allow delete: if isAdmin();
+      allow read: if isAdmin() || (isOwner(userId) && activeAccount());
+      allow create: if isAdmin() && initialPoints();
+      allow update: if profilePointsUnchanged() && (isAdmin() || (isOwner(userId) && activeAccount() && ownProfileUpdate()));
+      allow delete: if isAdmin() && userId != request.auth.uid;
     }
-
     match /customers/{customerId} {
-      allow read: if isAuthenticated();
-      allow create: if initialPoints() && (isAdmin() || isOwner(customerId));
-      allow update: if profilePointsUnchanged() && (isAdmin() || isOwner(customerId));
+      allow read: if isAdmin() || (activeAccount() && resource.data.get('uid', '') == request.auth.uid);
+      allow create: if isAdmin() && initialPoints();
+      allow update: if profilePointsUnchanged() && (isAdmin() || (activeAccount() && resource.data.get('uid', '') == request.auth.uid && ownProfileUpdate()));
       allow delete: if isAdmin();
     }
-
     match /orders/{orderId} {
       allow read: if ownsOrder(resource.data) || isAdmin();
-      allow create: if ordinaryOrderCreate() && (isAdmin() || ownsOrder(request.resource.data));
-      allow update: if adminOrderUpdate() || customerCancellation();
-      allow delete: if isAdmin() && resource.data.get('pointsUsed', 0) == 0 && resource.data.get('pointsEarned', 0) == 0;
+      allow write: if false;
     }
-
-    // Sibling artifact policies retain their existing access.
-    match /artifacts/printcraft-pro/public/data/{collection}/{document=**} {
-      allow read, write: if isAuthenticated() && collection != 'orders';
-    }
-
     match /artifacts/printcraft-pro/public/data/orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create: if ordinaryOrderCreate() && (isAdmin() || ownsOrder(request.resource.data));
-      allow update: if adminOrderUpdate() || customerCancellation();
-      allow delete: if isAdmin() && resource.data.get('pointsUsed', 0) == 0 && resource.data.get('pointsEarned', 0) == 0 && resource.data.get('source', '') != 'POS';
+      allow read: if ownsOrder(resource.data) || isAdmin();
+      allow write: if false;
+    }
+    match /artifacts/printcraft-pro/public/data/store_products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /artifacts/printcraft-pro/public/data/inventory/{itemId} {
+      allow read, write: if isAdmin();
+    }
+    match /artifacts/printcraft-pro/public/data/rfid_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+    match /artifacts/printcraft-pro/public/data/notification_tokens/{tokenId} {
+      allow read, write: if false;
     }
 
     match /pos_sales/{saleId} {
@@ -172,6 +195,15 @@ service cloud.firestore {
     match /rfid_logs/{logId} {
       allow read, write: if isAdmin();
     }
+    match /rfid_readers/{readerId} {
+      allow read, write: if false;
+    }
+    match /rfid_cards/{cardUid} {
+      allow read, write: if false;
+    }
+    match /rfid_events/{eventId} {
+      allow read, write: if false;
+    }
 
     // Admin order status transactions create shared notification records.
     match /push_jobs/{jobId} {
@@ -229,15 +261,30 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time;
     }
 
+    function ownsConversation(data) {
+      return activeAccount() &&
+        data.get('customerEmail', '').lower() == request.auth.token.get('email', '').lower() &&
+        (data.get('customerId', '') == request.auth.uid ||
+          data.get('customerId', '') == '' || data.get('customerId', '').matches('CUST-.*'));
+    }
     match /conversations/{convId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAdmin() || ownsConversation(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (ownsConversation(resource.data) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerId', 'customerEmail']));
+      allow delete: if isAdmin();
       match /messages/{messageId} {
-        allow read, write: if isAuthenticated();
+        allow read: if isAdmin() || ownsConversation(get(/databases/$(database)/documents/conversations/$(convId)).data);
+        allow create: if (isAdmin() || ownsConversation(getAfter(/databases/$(database)/documents/conversations/$(convId)).data)) &&
+          request.resource.data.senderRole == (isAdmin() ? 'admin' : 'customer') &&
+          request.resource.data.senderId.lower() == request.auth.token.get('email', '').lower();
+        allow update: if isAdmin() || (ownsConversation(get(/databases/$(database)/documents/conversations/$(convId)).data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'readByCustomer', 'readByAdmin', 'readAt']));
+        allow delete: if isAdmin();
       }
     }
-
     match /fcm_tokens/{tokenId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if false;
     }
   }
 }

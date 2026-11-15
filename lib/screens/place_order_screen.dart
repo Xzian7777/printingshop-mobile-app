@@ -1,6 +1,6 @@
 import '../services/loyalty_api.dart';
+import '../services/payment_eligibility.dart';
 import '../widgets/points_selector.dart';
-import '../services/app_notifications.dart';
 import '../widgets/store_checkout_sheet.dart' show gcashQrSource;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/catalog_pricing.dart';
@@ -20,7 +20,9 @@ import 'admin_catalog_view.dart' show sharedImage;
 
 class PlaceOrderScreen extends StatefulWidget {
   final String userEmail;
-  const PlaceOrderScreen({super.key, required this.userEmail});
+  final Future<PaymentEligibility>? paymentEligibility;
+  const PlaceOrderScreen(
+      {super.key, required this.userEmail, this.paymentEligibility});
 
   @override
   State<PlaceOrderScreen> createState() => _PlaceOrderScreenState();
@@ -72,6 +74,8 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
           .map((r) => Map<String, dynamic>.from(r))
           .toList();
   String _paymentMethod = 'GCash Online';
+  bool _cashAllowed = false;
+  String? _paymentEligibilityError;
   String _selectedFileName = 'No file selected';
   int _selectedFileSize = 0;
   File? _selectedFileObj;
@@ -144,7 +148,32 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
   void initState() {
     super.initState();
     _selectedService = _serviceOptions.first;
+    _loadPaymentEligibility();
     _listenCatalog();
+  }
+
+  Future<void> _loadPaymentEligibility() async {
+    try {
+      final result =
+          await (widget.paymentEligibility ?? PaymentEligibility.load());
+      if (mounted)
+        setState(() {
+          _cashAllowed = result.cashOnPickupAllowed;
+          _paymentEligibilityError = null;
+          if (!_cashAllowed && _paymentMethod == 'Cash on Pickup')
+            _paymentMethod = 'GCash Online';
+          if (_cashAllowed && _gcash['isActive'] == false)
+            _paymentMethod = 'Cash on Pickup';
+        });
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _cashAllowed = false;
+          _paymentMethod = 'GCash Online';
+          _paymentEligibilityError =
+              'Unable to check payment options. Check your connection and retry.';
+        });
+    }
   }
 
   void _listenCatalog() {
@@ -195,13 +224,14 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
         if (!mounted || _isSubmitting) return;
         setState(() {
           _gcash = snapshot.data() ?? {};
-          if (_gcash['isActive'] == false) _paymentMethod = 'Cash on Pickup';
+          if (_gcash['isActive'] == false && _cashAllowed)
+            _paymentMethod = 'Cash on Pickup';
         });
       }, onError: (Object e) {
         if (mounted)
           setState(() {
             _gcash = {'isActive': false};
-            _paymentMethod = 'Cash on Pickup';
+            if (_cashAllowed) _paymentMethod = 'Cash on Pickup';
           });
       });
     } catch (e) {
@@ -395,13 +425,17 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
     }
 
     String? serviceError;
+    if (_paymentMethod == 'Cash on Pickup' && !_cashAllowed)
+      serviceError = PaymentEligibility.lockedMessage;
     if (!_catalogLoaded || _serviceData == null)
       serviceError =
           'Services are not available. Please reload the service list.';
     if (_paymentMethod == 'GCash Online' &&
         (_gcash['isActive'] == false ||
             (_gcash['accountNumber'] ?? '').toString().isEmpty))
-      serviceError = 'GCash is unavailable. Please choose Cash on Pickup.';
+      serviceError = _cashAllowed
+          ? 'GCash is unavailable. Please choose Cash on Pickup.'
+          : 'GCash is unavailable. Contact the shop to arrange your first payment.';
     for (final req in _requirements) {
       final label = '${req['label'] ?? req['name'] ?? ''}';
       final value = _requirementValues[label];
@@ -479,6 +513,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                 ? await SupabaseStorageService.uploadFile(
                     file: _receiptFile!,
                     originalFilename: _receiptName,
+                    purpose: 'receipt',
                     orderId: customOrderRef)
                 : '',
         'id': customOrderRef,
@@ -569,56 +604,23 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
         },
       };
 
-      if (_pointsUsed > 0) {
-        _loyaltyKey ??= LoyaltyApi.submissionId();
-        final request = Map<String, dynamic>.from(orderPayload)..remove('createdAt');
-        request['submissionId'] = _loyaltyKey;
-        request['pointsUsed'] = _pointsUsed;
-        request['expectedDiscount'] = _pointsDiscount;
+      _loyaltyKey ??= LoyaltyApi.submissionId();
+      final request = Map<String, dynamic>.from(orderPayload)
+        ..remove('createdAt');
+      request['submissionId'] = _loyaltyKey;
+      request['pointsUsed'] = _pointsUsed;
+      request['expectedDiscount'] = _pointsDiscount;
+      try {
         final saved = await LoyaltyApi.submitOrder(request);
         submittedOrderRef = saved['orderId'];
         _loyaltyKey = null;
-      } else {
-      try {
-        final db = FirebaseFirestore.instance;
-        final orderRef = db
-            .collection('artifacts')
-            .doc('printcraft-pro')
-            .collection('public')
-            .doc('data')
-            .collection('orders')
-            .doc(customOrderRef);
-        await db.runTransaction((tx) async {
-          final current = await tx
-              .get(db.collection('services').doc(orderPayload['serviceId']));
-          if (!current.exists ||
-              current.data()?['archived'] == true ||
-              (current.data()?['updatedAt'] ?? '').toString() !=
-                  orderPayload['serviceVersion'])
-            throw StateError(
-                'The service changed. Reload the service list before ordering.');
-          if (_paymentMethod == 'GCash Online') {
-            final merchant =
-                await tx.get(db.collection('settings').doc('gcash_config'));
-            if (merchant.data()?['isActive'] == false ||
-                merchant.data()?['accountNumber'] !=
-                    orderPayload['merchantAccountNumber'])
-              throw StateError(
-                  'GCash details changed. Please check the current merchant details.');
-          }
-          if ((await tx.get(orderRef)).exists)
-            throw StateError('Order reference already exists. Please retry.');
-          tx.set(orderRef, orderPayload);
-          addNewOrderNotification(tx, db, orderRef.id, orderPayload);
-        });
-      } on FirebaseException catch (firestoreErr) {
-        if (!['unavailable', 'deadline-exceeded'].contains(firestoreErr.code))
-          rethrow;
-        await LocalDbService.instance
-            .insertOrUpdateOrder(orderPayload, isSynced: false);
+      } on TransientApiFailure {
+        if (_pointsUsed > 0) rethrow;
+        await LocalDbService.instance.insertOrUpdateOrder(
+            {...request, 'id': customOrderRef},
+            isSynced: false);
       }
 
-      }
       if (!mounted) return;
 
       showDialog(
@@ -923,8 +925,10 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: InkWell(
-                      onTap: () =>
-                          setState(() => _paymentMethod = 'Cash on Pickup'),
+                      onTap: _cashAllowed
+                          ? () =>
+                              setState(() => _paymentMethod = 'Cash on Pickup')
+                          : null,
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -947,8 +951,10 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                               groupValue: _paymentMethod,
                               activeColor: const Color(0xFF15803D),
                               // ignore: deprecated_member_use
-                              onChanged: (val) =>
-                                  setState(() => _paymentMethod = val!),
+                              onChanged: _cashAllowed
+                                  ? (val) =>
+                                      setState(() => _paymentMethod = val!)
+                                  : null,
                             ),
                             const Expanded(
                               child: Column(
@@ -974,6 +980,19 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                 ],
               ),
               const SizedBox(height: 24),
+              if (!_cashAllowed)
+                const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(PaymentEligibility.lockedMessage,
+                        style:
+                            TextStyle(fontSize: 12, color: Color(0xFF4B7A5E)))),
+              if (_paymentEligibilityError != null) ...[
+                Text(_paymentEligibilityError!,
+                    style: const TextStyle(color: Color(0xFFBE123C))),
+                TextButton(
+                    onPressed: _isSubmitting ? null : _loadPaymentEligibility,
+                    child: const Text('Retry payment options')),
+              ],
               if (_paymentMethod == 'GCash Online') ...[
                 TextButton.icon(
                     onPressed: _pickReceipt,
@@ -1044,13 +1063,13 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        const Expanded(child: Text(
                           'Order Note (Optional)',
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF4B7A5E)),
-                        ),
+                        )),
                         Text(
                           '${_noteController.text.length}/$_maxNoteLength',
                           style: TextStyle(
@@ -1127,14 +1146,21 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                     Text(
                       '₱${_calculatedTotal.toStringAsFixed(2)}',
                       style: const TextStyle(
-                          color: Color(0xFF10B981),
+                          color: Color(0xFF15803D),
                           fontWeight: FontWeight.w900,
                           fontSize: 28),
                     ),
-                    PointsSelector(subtotal: _calculatedTotal, onChanged: (value) => setState(() => _pointsUsed = value), onDiscountChanged: (value) => setState(() => _pointsDiscount = value)),
+                    PointsSelector(
+                        subtotal: _calculatedTotal,
+                        onChanged: (value) =>
+                            setState(() => _pointsUsed = value),
+                        onDiscountChanged: (value) =>
+                            setState(() => _pointsDiscount = value)),
                     const Divider(color: Color(0xFFBBF7D0), height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         const Text('Payment:',
                             style: TextStyle(
@@ -1147,8 +1173,10 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    const Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         Text('Estimated Pickup:',
                             style: TextStyle(
@@ -1170,7 +1198,7 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
-                                    color: Color(0xFF14532D), strokeWidth: 2))
+                                    color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.arrow_forward_rounded,
                                 size: 16, color: Colors.white),
                         label: Text(
@@ -1182,7 +1210,10 @@ class _PlaceOrderScreenState extends State<PlaceOrderScreen> {
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF16A34A),
+                          backgroundColor: const Color(0xFF15803D),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFF15803D),
+                          disabledForegroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),

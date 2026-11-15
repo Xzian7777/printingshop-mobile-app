@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// The dashboard uses light cards, independently of the login screen's theme.
+/// Shared light surfaces and readable text for application screens and dialogs.
 class DashboardTheme {
   static const ink = Color(0xFF172B24);
   static const muted = Color(0xFF52645A);
@@ -28,9 +28,15 @@ class DashboardTheme {
             style: OutlinedButton.styleFrom(foregroundColor: green)),
         elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
-                backgroundColor: green, foregroundColor: Colors.white)),
+                backgroundColor: green,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFDCFCE7),
+                disabledForegroundColor: ink)),
         inputDecorationTheme: const InputDecorationTheme(
             labelStyle: TextStyle(color: muted),
+            floatingLabelStyle: TextStyle(color: green),
+            helperStyle: TextStyle(color: muted),
+            counterStyle: TextStyle(color: muted),
             hintStyle: TextStyle(color: muted)),
       );
 }

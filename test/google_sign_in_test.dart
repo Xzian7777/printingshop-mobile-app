@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:printingshop/services/auth_service.dart';
+import 'package:printingshop/services/loyalty_api.dart';
 import 'package:printingshop/widgets/google_sign_in_button.dart';
 import 'package:printingshop/screens/login_screen.dart';
 import 'package:printingshop/screens/register_screen.dart';
@@ -56,6 +58,41 @@ class _Authentication extends Fake implements FirebaseAuth {
 }
 
 void main() {
+  test('Debug runs use the local backend unless explicitly configured', () {
+    const configured = String.fromEnvironment('API_BASE_URL');
+    const hasConfiguration = bool.hasEnvironment('API_BASE_URL');
+    expect(LoyaltyApi.baseUrl,
+        hasConfiguration ? configured : 'http://127.0.0.1:5000');
+  });
+
+  test('Password profile errors retain server details and use neutral sign-in text', () {
+    expect(signInError(StateError('The shop server URL is missing.')),
+        'The shop server URL is missing.');
+    expect(signInError(const FormatException('Your account is archived.')),
+        'Your account is archived.');
+    expect(signInError(const SocketException('connection failed')),
+        allOf(contains('shop server'), isNot(contains('Google'))));
+    expect(signInError(Exception('unexpected')),
+        allOf(contains('sign-in'), isNot(contains('Google'))));
+    expect(googleSignInError(Exception('unexpected')), contains('Google'));
+  });
+
+  test('Firestore quota failures explain profile availability', () {
+    expect(
+      googleSignInError(FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'resource-exhausted',
+      )),
+      contains('Firestore quota'),
+    );
+    expect(
+      googleSignInError(FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'unavailable',
+      )),
+      contains('account profile'),
+    );
+  });
   test(
       'Linking authenticates the existing owner before linking and preserves UID',
       () async {

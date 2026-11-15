@@ -1,3 +1,4 @@
+import 'loyalty_api.dart';
 import 'auth_service.dart';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -179,64 +180,13 @@ class FcmService {
 
   /// Save token to Firestore matching web backend fcm_tokens schema
   Future<void> _saveTokenToFirestore(String email, String token) async {
-    try {
-      final cleanEmail = email.trim().toLowerCase();
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null ||
-          user.email?.toLowerCase() != cleanEmail ||
-          _currentUserEmail != cleanEmail || !AuthService.isReady(user.uid)) {
-        return;
-      }
-      final nowIso = DateTime.now().toIso8601String();
-
-      // Primary token document matching web backend lookup: fcm_tokens/{token_doc_id}
-      final tokenDocId = token.length > 40
-          ? token
-              .substring(token.length - 40)
-              .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')
-          : token.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-
-      final fcmTokenRef =
-          FirebaseFirestore.instance.collection('fcm_tokens').doc(tokenDocId);
-      await fcmTokenRef.set({
-        'token': token,
-        'email': cleanEmail,
-        'role': _currentRole,
-        'uid': user.uid,
-        'platform': 'android',
-        'device': 'Android Mobile App',
-        'updatedAt': nowIso,
-        'createdAt': nowIso,
-        'active': true,
-      }, SetOptions(merge: true));
-
-      // Also save in artifacts/printcraft-pro/public/data/notification_tokens for fallback
-      final customerId =
-          cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
-      final legacyTokenRef = FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('printcraft-pro')
-          .collection('public')
-          .doc('data')
-          .collection('notification_tokens')
-          .doc(customerId);
-
-      await legacyTokenRef.set({
-        'token': token,
-        'email': cleanEmail,
-        'customerId': customerId,
-        'lastUpdated': FieldValue.serverTimestamp(),
-        'platform': 'android',
-      }, SetOptions(merge: true)).catchError((_) {});
-
-      debugPrint(
-          "Successfully registered FCM token in Firestore for $cleanEmail");
-    } catch (e) {
-      debugPrint("Error saving FCM token to Firestore: $e");
-    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email?.toLowerCase() != email.trim().toLowerCase() || !AuthService.isReady(user.uid)) return;
+    await LoyaltyApi.call('/api/notifications/fcm-token', method: 'POST', data: {
+      'token': token, 'device': 'Android Mobile App', 'platform': 'android',
+    });
   }
 
-  /// Remove user token on sign-out to prevent notifications going to wrong user
   Future<void> removeUserToken(String userEmail) async {
     _currentUserEmail = null;
     _navigationReady = false;
@@ -244,37 +194,13 @@ class FcmService {
     try {
       final token = await _messaging.getToken();
       if (token != null) {
-        final tokenDocId = token.length > 40
-            ? token
-                .substring(token.length - 40)
-                .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')
-            : token.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-        await FirebaseFirestore.instance
-            .collection('fcm_tokens')
-            .doc(tokenDocId)
-            .delete()
-            .catchError((_) {});
+        await LoyaltyApi.call('/api/notifications/fcm-token', method: 'DELETE', data: {'token': token});
       }
-
-      final cleanEmail = userEmail.trim().toLowerCase();
-      final customerId =
-          cleanEmail.contains('@') ? cleanEmail.split('@').first : cleanEmail;
-
-      await FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('printcraft-pro')
-          .collection('public')
-          .doc('data')
-          .collection('notification_tokens')
-          .doc(customerId)
-          .delete()
-          .catchError((_) {});
-
+    } catch (error) {
+      debugPrint('Unable to remove the push registration: $error');
+    } finally {
       await _localNotifications.cancelAll();
       await _messaging.deleteToken();
-      debugPrint("Successfully deleted FCM token for $cleanEmail");
-    } catch (e) {
-      debugPrint("Error removing FCM token from Firestore: $e");
     }
   }
 

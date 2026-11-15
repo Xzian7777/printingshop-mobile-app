@@ -1,6 +1,8 @@
+import '../theme/dashboard_theme.dart';
 import 'rewards_screen.dart';
 import '../services/profile_directory.dart';
 import '../services/admin_repository.dart';
+import '../widgets/rfid_reader_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
@@ -21,7 +23,20 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
   final TextEditingController _searchController = TextEditingController();
   int _currentPage = 1;
   final int _itemsPerPage = 5;
-  late final Stream<List<ProfileRecord>> _profiles = watchProfiles();
+  late Stream<List<ProfileRecord>> _profiles = watchProfiles();
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _balances =
+      FirebaseFirestore.instance.collection('loyalty_accounts').snapshots();
+  late Stream<QuerySnapshot> _logs =
+      _rfidLogsRef.orderBy('timestamp', descending: true).snapshots();
+  final _rewardsKey = GlobalKey();
+
+  void _reload() => setState(() {
+        _profiles = watchProfiles();
+        _balances = FirebaseFirestore.instance
+            .collection('loyalty_accounts')
+            .snapshots();
+        _logs = _rfidLogsRef.orderBy('timestamp', descending: true).snapshots();
+      });
   String _searchQuery = '';
   bool _isSimulating = false;
 
@@ -69,15 +84,18 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
       if (specificCardUid != null && cardUid.isEmpty)
         throw StateError('This customer has no assigned RFID card.');
       if (cardUid.isEmpty) {
-        final profiles = [
-          ...(await FirebaseFirestore.instance.collection('customers').get())
-              .docs,
-          ...(await FirebaseFirestore.instance.collection('users').get()).docs
-        ];
+        final customers =
+            await FirebaseFirestore.instance.collection('customers').get();
+        final users =
+            await FirebaseFirestore.instance.collection('users').get();
+        final profiles = mergeProfiles(
+          [for (final doc in users.docs) ProfileRecord(doc.id, doc.data())],
+          [for (final doc in customers.docs) ProfileRecord(doc.id, doc.data())],
+        );
         final assigned = profiles
-            .where((p) =>
-                p.data()['archived'] != true &&
-                (p.data()['rfidUid'] ?? '').toString().isNotEmpty)
+            .where((profile) =>
+                profile.data()['archived'] != true &&
+                '${profile.data()['rfidUid'] ?? ''}'.isNotEmpty)
             .toList();
         if (assigned.isEmpty) throw StateError('No assigned RFID cards.');
         cardUid = assigned.first.data()['rfidUid'].toString();
@@ -86,8 +104,7 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('✅ RFID card $cardUid identified for $name.'),
+          content: Text('✅ RFID card $cardUid identified for $name.'),
           backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
         ),
@@ -107,20 +124,36 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
   }
 
   @override
-  Widget build(BuildContext context) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-    stream: FirebaseFirestore.instance.collection('loyalty_accounts').snapshots(),
-    builder: (context, snapshot) => _buildCards(context, {for (final doc in snapshot.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[]) doc.id: doc.data()}));
+  Widget build(BuildContext context) => Theme(
+      data: DashboardTheme.light,
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _balances,
+          builder: (context, snapshot) => _buildCards(
+              context,
+              {
+                for (final doc in snapshot.data?.docs ??
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[])
+                  doc.id: doc.data()
+              },
+              balanceError: snapshot.error,
+              balanceLoading:
+                  snapshot.connectionState == ConnectionState.waiting)));
 
-  Widget _buildCards(BuildContext context, Map<String, Map<String, dynamic>> balances) {
+  Widget _buildCards(
+      BuildContext context, Map<String, Map<String, dynamic>> balances,
+      {Object? balanceError, bool balanceLoading = false}) {
     return StreamBuilder<List<ProfileRecord>>(
       stream: _profiles,
       builder: (context, userSnap) {
         return StreamBuilder<QuerySnapshot>(
-          stream:
-              _rfidLogsRef.orderBy('timestamp', descending: true).snapshots(),
+          stream: _logs,
           builder: (context, rfidSnap) {
+            final pointsUnavailable = balanceLoading ||
+                balanceError != null ||
+                userSnap.hasError ||
+                userSnap.connectionState == ConnectionState.waiting;
             final List<Map<String, dynamic>> memberCards = [];
-            final Set<String> seenEmails = {};
+            final Set<String> seenMembers = {};
 
             // 1. Gather all users (customers)
             if (userSnap.hasData) {
@@ -135,18 +168,24 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                         '')
                     .toString()
                     .trim();
-                if (email.isNotEmpty &&
-                    !seenEmails.contains(email.toLowerCase())) {
-                  seenEmails.add(email.toLowerCase());
+                final identity = '${d['uid'] ?? d['loyaltyUid'] ?? doc.id}';
+                if (email.isNotEmpty && seenMembers.add(identity)) {
                   final custPrefix =
                       email.contains('@') ? email.split('@').first : email;
                   final cardUid =
                       (d['rfidUid'] ?? d['cardUid'] ?? '').toString();
-                  final balance = balances['${d['loyaltyUid'] ?? d['uid'] ?? doc.id}'] ?? {};
-                  final pts = (balance['balance'] as num? ?? 0) - (balance['reserved'] as num? ?? 0);
+                  final balance =
+                      balances['${d['uid'] ?? d['loyaltyUid'] ?? doc.id}'] ??
+                          {};
+                  final pts = (balance['balance'] as num? ?? 0) -
+                      (balance['reserved'] as num? ?? 0);
 
                   memberCards.add({
                     'id': doc.id,
+                    'uid': identity,
+                    'registered': true,
+                    'rfidReviewRequired': d['rfidReviewRequired'] == true,
+                    'legacyCustomerIds': d['legacyCustomerIds'] ?? [],
                     'name': name.isNotEmpty ? name : custPrefix,
                     'email': email,
                     'cardUid': cardUid,
@@ -201,7 +240,13 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
             }).toList();
 
             // Total stats
-            final totalCards = memberCards.length;
+            final totalCards = memberCards
+                .where((card) =>
+                    card['registered'] == true &&
+                    '${card['cardUid']}'.isNotEmpty)
+                .map((card) => card['cardUid'])
+                .toSet()
+                .length;
             final totalPoints = memberCards.fold<int>(
                 0, (total, c) => total + (c['points'] as int));
 
@@ -218,7 +263,34 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               children: [
-                FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardsScreen(isAdmin: true))), icon: const Icon(Icons.redeem), label: const Text('Rewards Management')),
+                if (balanceLoading ||
+                    userSnap.connectionState == ConnectionState.waiting ||
+                    rfidSnap.connectionState == ConnectionState.waiting)
+                  const LinearProgressIndicator(),
+                if (balanceError != null ||
+                    userSnap.hasError ||
+                    rfidSnap.hasError)
+                  Card(
+                      child: ListTile(
+                          title: const Text(
+                              'Unable to load loyalty records. Check your connection.'),
+                          trailing: TextButton(
+                              onPressed: _reload, child: const Text('Retry')))),
+                Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                        onPressed: () {
+                          final target = _rewardsKey.currentContext;
+                          if (target != null)
+                            Scrollable.ensureVisible(target,
+                                duration: const Duration(milliseconds: 250));
+                        },
+                        icon: const Icon(Icons.redeem),
+                        label: const Text('Rewards Management'))),
+                KeyedSubtree(
+                    key: _rewardsKey,
+                    child: const RewardsScreen(isAdmin: true, embedded: true)),
+                const SizedBox(height: 24),
                 // Top Header Card
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -326,35 +398,47 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                 const SizedBox(height: 12),
 
                 // 3 Stats Cards Row
-                Row(
-                  children: [
-                    Expanded(
-                        child: _buildMetricCard(
-                            'ACTIVE CARDS',
-                            '$totalCards',
-                            'Member cards',
-                            Icons.credit_card_rounded,
-                            const Color(0xFF15803D))),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: _buildMetricCard(
-                            'AVAILABLE POINTS',
-                            '$totalPoints PTS',
-                            'Accumulated rewards',
-                            Icons.star_rounded,
-                            const Color(0xFFF59E0B))),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: _buildMetricCard(
-                            'COUNTER STATUS',
-                            'Ready',
-                            'RC522 / NFC Counter',
-                            Icons.sensors_rounded,
-                            const Color(0xFF10B981))),
-                  ],
-                ),
+                LayoutBuilder(builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 600
+                      ? 3
+                      : (constraints.maxWidth >= 380 ? 2 : 1);
+                  final width =
+                      (constraints.maxWidth - (columns - 1) * 8) / columns;
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      SizedBox(
+                          width: width,
+                          child: _buildMetricCard(
+                              'ACTIVE CARDS',
+                              '$totalCards',
+                              'Member cards',
+                              Icons.credit_card_rounded,
+                              const Color(0xFF15803D))),
+                      SizedBox(
+                          width: width,
+                          child: _buildMetricCard(
+                              'AVAILABLE POINTS',
+                              pointsUnavailable ? '—' : '$totalPoints PTS',
+                              'Accumulated rewards',
+                              Icons.star_rounded,
+                              const Color(0xFFF59E0B))),
+                      SizedBox(
+                          width: width,
+                          child: _buildMetricCard(
+                              'COUNTER STATUS',
+                              'Ready',
+                              'RC522 / NFC Counter',
+                              Icons.sensors_rounded,
+                              const Color(0xFF10B981))),
+                    ],
+                  );
+                }),
                 const SizedBox(height: 14),
 
+                const RfidReaderPanel(),
+                const SizedBox(height: 14),
                 // Search Bar
                 Container(
                   decoration: BoxDecoration(
@@ -431,80 +515,14 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
                               height: 1, color: Color(0xFF161F36)),
                           itemBuilder: (context, idx) {
                             final card = pagedCards[idx];
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.credit_card,
-                                                size: 13,
-                                                color: Color(0xFF15803D)),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              card['cardUid'].toString().isEmpty
-                                                  ? 'Not assigned'
-                                                  : card['cardUid'].toString(),
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 11.5,
-                                                  color: Color(0xFF15803D),
-                                                  fontFamily: 'monospace'),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(card['name'].toString(),
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 12,
-                                                color: Color(0xFF0F172A))),
-                                        Text(card['email'].toString(),
-                                            style: const TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF4B7A5E))),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF59E0B)
-                                          .withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: const Color(0xFFF59E0B)
-                                              .withValues(alpha: 0.3)),
-                                    ),
-                                    child: Text(
-                                      '⭐ ${card['points']} PTS',
-                                      style: const TextStyle(
-                                          color: Color(0xFFF59E0B),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10.5),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(
-                                        Icons.add_circle_outline_rounded,
-                                        color: Color(0xFF15803D),
-                                        size: 20),
-                                    tooltip: 'Identify Card',
-                                    onPressed: () => _simulateTap(
+                            return LoyaltyMemberCard(
+                                card: card,
+                                pointsUnavailable: pointsUnavailable,
+                                onIdentify: '${card['cardUid']}'.isEmpty
+                                    ? null
+                                    : () => _simulateTap(
                                         card['cardUid'].toString(),
-                                        card['name'].toString()),
-                                  ),
-                                ],
-                              ),
-                            );
+                                        card['name'].toString()));
                           },
                         ),
                       // Pagination Bottom Controls
@@ -588,6 +606,89 @@ class _AdminRfidLoyaltyViewState extends State<AdminRfidLoyaltyView> {
               overflow: TextOverflow.ellipsis),
         ],
       ),
+    );
+  }
+}
+
+class LoyaltyMemberCard extends StatelessWidget {
+  const LoyaltyMemberCard(
+      {super.key,
+      required this.card,
+      required this.pointsUnavailable,
+      this.onIdentify});
+  final Map<String, dynamic> card;
+  final bool pointsUnavailable;
+  final VoidCallback? onIdentify;
+
+  @override
+  Widget build(BuildContext context) {
+    final cardUid = '${card['cardUid'] ?? ''}';
+    final legacyIds = card['legacyCustomerIds'] as List? ?? [];
+    final lastTap = '${card['lastTap'] ?? ''}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Row(children: [
+                  const Icon(Icons.credit_card,
+                      size: 16, color: DashboardTheme.green),
+                  const SizedBox(width: 6),
+                  Expanded(
+                      child: Text(cardUid.isEmpty ? 'Not assigned' : cardUid,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: DashboardTheme.green))),
+                ]),
+                const SizedBox(height: 6),
+                Text('${card['name']}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: DashboardTheme.ink)),
+                Text('${card['email']}',
+                    style: const TextStyle(
+                        fontSize: 12, color: DashboardTheme.muted)),
+                if (card['rfidReviewRequired'] == true) ...[
+                  const SizedBox(height: 6),
+                  const Text('RFID review required',
+                      style: TextStyle(
+                          color: Color(0xFF92400E),
+                          fontWeight: FontWeight.w600)),
+                  if (legacyIds.isNotEmpty)
+                    Text('Legacy records: ${legacyIds.join(', ')}',
+                        style: const TextStyle(
+                            fontSize: 12, color: DashboardTheme.muted)),
+                ],
+                if (lastTap.isNotEmpty && lastTap != 'Recent Active')
+                  Text('Last identified · $lastTap',
+                      style: const TextStyle(
+                          fontSize: 12, color: DashboardTheme.muted)),
+              ])),
+          IconButton(
+              onPressed: onIdentify,
+              tooltip: 'Identify Card',
+              icon: const Icon(Icons.sensors, color: DashboardTheme.green)),
+        ]),
+        const SizedBox(height: 10),
+        Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Text(
+                  pointsUnavailable
+                      ? 'Points unavailable'
+                      : '${card['points']} available points',
+                  style: const TextStyle(
+                      color: Color(0xFF92400E), fontWeight: FontWeight.w700)),
+            )),
+      ]),
     );
   }
 }
